@@ -3030,6 +3030,12 @@
           <!-- QR Code area -->
           <div id="evo-qr-wrap" style="display:none;flex-direction:column;align-items:center;gap:12px;margin-bottom:16px">
             <div style="font-size:12px;color:var(--text2);text-align:center">Abre o WhatsApp → Dispositivos Vinculados → Vincular Dispositivo → Escaneia o QR</div>
+            <!-- Loading state (spinner enquanto aguarda geração do QR) -->
+            <div id="evo-qr-loading" style="display:none;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;background:var(--bg3);border-radius:12px;width:224px;text-align:center">
+              <i class="ti ti-loader-2" style="font-size:40px;color:#25D366;animation:spin 1s linear infinite"></i>
+              <div style="font-size:12px;color:var(--text2);line-height:1.5" id="evo-qr-loading-msg">Iniciando servidor...<br>Aguarde até 30 segundos.</div>
+            </div>
+            <!-- QR image (hidden while loading) -->
             <div style="background:#fff;padding:12px;border-radius:12px;display:inline-block">
               <img id="evo-qr-img" src="" alt="QR Code" style="width:200px;height:200px;display:block">
             </div>
@@ -10731,22 +10737,45 @@ async function checkInstanceState() {
 }
 
 async function generateQRCode() {
-  const cfg        = loadEvoConfig();
-  const INST_NAME  = 'agencia_principal';
-  const INST_TOKEN = 'admin123';
+  const cfg = loadEvoConfig();
   if (!cfg.url || !cfg.key) {
-    showNotification('Credenciais não configuradas.', 'warn'); return;
+    showNotification('Credenciais não configuradas. Salve a URL e a API Key primeiro.', 'warn'); return;
   }
-  const btn  = document.getElementById('evo-qr-btn');
-  const wrap = document.getElementById('evo-qr-wrap');
-  const img  = document.getElementById('evo-qr-img');
-  const setBtn = (html) => { if (btn) { btn.disabled = !!html.includes('loader'); btn.innerHTML = html; } };
+  const INST_NAME  = cfg.instance || 'agencia_principal';
+  const INST_TOKEN = 'admin123';
 
+  const btn       = document.getElementById('evo-qr-btn');
+  const wrap      = document.getElementById('evo-qr-wrap');
+  const img       = document.getElementById('evo-qr-img');
+  const loading   = document.getElementById('evo-qr-loading');
+  const loadingMsg= document.getElementById('evo-qr-loading-msg');
+
+  const setBtn = (html, disabled = true) => {
+    if (!btn) return;
+    btn.disabled  = disabled;
+    btn.innerHTML = html;
+  };
+  const showLoading = (msg) => {
+    if (wrap)    wrap.style.display    = 'flex';
+    if (img)     img.style.display     = 'none';
+    if (loading) loading.style.display = 'flex';
+    if (loadingMsg) loadingMsg.innerHTML = msg;
+  };
+  const showQR = (b64) => {
+    if (loading) loading.style.display = 'none';
+    if (img)     { img.src = b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`; img.style.display = 'block'; }
+    if (wrap)    wrap.style.display = 'flex';
+  };
+  const hideAll = () => {
+    if (loading) loading.style.display = 'none';
+    if (wrap)    wrap.style.display    = 'none';
+  };
+
+  // ── Passo 1: criar instância (ignora 409 = já existe) ─────────────────────
   setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Criando instância...');
-
-  // Passo 1 — criar instância (ignora erro 409 = já existe)
+  showLoading('Criando instância...<br>Aguarde um momento.');
   try {
-    await fetch(`${cfg.url}/instance/create`, {
+    const cr = await fetch(`${cfg.url}/instance/create`, {
       method:  'POST',
       headers: { 'apikey': cfg.key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -10756,39 +10785,97 @@ async function generateQRCode() {
         integration:  'WHATSAPP-BAILEYS'
       })
     });
-  } catch { /* segue mesmo se falhar — instância pode já existir */ }
+    console.log('[WhatsApp] create status:', cr.status);
+  } catch(e) {
+    console.warn('[WhatsApp] create falhou (pode já existir):', e.message);
+  }
 
-  setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> A buscar QR...');
+  // ── Passo 2: buscar QR com até 6 tentativas + delay progressivo ───────────
+  // Railway tem cold start — aguarda 3s antes da 1ª tentativa
+  const MAX_RETRIES   = 6;
+  const INITIAL_DELAY = 3000;
+  const RETRY_DELAY   = 2500;
 
-  // Passo 2 — aguarda 1s e busca QR code
-  await new Promise(r => setTimeout(r, 1000));
-  try {
-    const res  = await fetch(`${cfg.url}/instance/connect/${INST_NAME}`, {
-      headers: { 'apikey': cfg.key }
-    });
-    const data = await res.json();
-    const b64  = data?.base64 || data?.qrcode?.base64 || data?.qrcode?.code || data?.code;
-    if (!b64) {
-      // instância já conectada?
+  await new Promise(r => setTimeout(r, INITIAL_DELAY));
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    setBtn(`<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando QR... (${attempt}/${MAX_RETRIES})`);
+    showLoading(`A gerar QR Code...<br>Tentativa ${attempt} de ${MAX_RETRIES} — aguarde.`);
+
+    try {
+      const res = await fetch(`${cfg.url}/instance/connect/${encodeURIComponent(INST_NAME)}`, {
+        headers: { 'apikey': cfg.key }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Servidor retornou HTTP ${res.status} — verifique a URL e a API Key.`);
+      }
+
+      const data = await res.json();
+      const b64  = data?.base64 || data?.qrcode?.base64 || data?.qrcode?.code || data?.code;
+
+      // QR disponível ✅
+      if (b64) {
+        showQR(b64);
+        setBtn('<i class="ti ti-refresh"></i> Novo QR', false);
+        startQRCountdown(60);
+        setTimeout(checkInstanceState, 20000);
+        return;
+      }
+
+      // Já conectado ✅
       const state = data?.instance?.state || data?.state || '';
       if (state === 'open') {
-        if (wrap) wrap.style.display = 'none';
-        setBtn('<i class="ti ti-refresh"></i> Reconectar (novo QR)');
+        hideAll();
+        setBtn('<i class="ti ti-refresh"></i> Reconectar (novo QR)', false);
         showNotification('✅ WhatsApp já está conectado!', 'success');
         checkInstanceState();
         return;
       }
-      throw new Error('QR não retornado pelo servidor — tenta novamente.');
+
+      lastError = new Error(`QR ainda não disponível (tentativa ${attempt}/${MAX_RETRIES})`);
+      console.warn('[WhatsApp] QR não retornado — dados:', JSON.stringify(data));
+
+    } catch(e) {
+      lastError = e;
+      console.error(`[WhatsApp] Tentativa ${attempt} falhou:`, e.message);
     }
-    if (img)  img.src = b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`;
-    if (wrap) wrap.style.display = 'flex';
-    setBtn('<i class="ti ti-refresh"></i> Novo QR');
-    // atualiza estado automaticamente após 20s (tempo de scan)
-    setTimeout(checkInstanceState, 20000);
-  } catch (e) {
-    setBtn('<i class="ti ti-qrcode"></i> Conectar WhatsApp');
-    showNotification('Erro: ' + e.message, 'error');
+
+    if (attempt < MAX_RETRIES) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY));
+    }
   }
+
+  // Todas as tentativas esgotadas ❌
+  hideAll();
+  setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+  const msg = lastError?.message?.includes('HTTP')
+    ? lastError.message
+    : 'O servidor demorou para responder. Aguarde ~30s e clique em "Tentar Novamente".';
+  showNotification('Erro ao gerar QR: ' + msg, 'error');
+  console.error('[WhatsApp] Todas as tentativas falharam. Último erro:', lastError?.message);
+}
+
+function startQRCountdown(seconds) {
+  const timerEl = document.getElementById('evo-qr-timer');
+  if (!timerEl) return;
+  // cancela countdown anterior se houver
+  if (window._qrCountdownId) clearInterval(window._qrCountdownId);
+  let remaining = seconds;
+  timerEl.style.color = 'var(--text3)';
+  timerEl.textContent = `O QR expira em ${remaining}s — clica "Novo QR" se expirar`;
+  window._qrCountdownId = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(window._qrCountdownId);
+      timerEl.style.color = 'var(--red)';
+      timerEl.textContent = 'QR expirado — clica "Novo QR" para gerar outro';
+    } else {
+      timerEl.style.color = remaining <= 15 ? '#F59E0B' : 'var(--text3)';
+      timerEl.textContent = `O QR expira em ${remaining}s — clica "Novo QR" se expirar`;
+    }
+  }, 1000);
 }
 
 async function disconnectInstance() {
