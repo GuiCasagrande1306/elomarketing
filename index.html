@@ -10662,11 +10662,26 @@ function saveEvoConfig() {
   const url      = document.getElementById('evo-url').value.trim().replace(/\/$/, '');
   const key      = document.getElementById('evo-key').value.trim();
   const instance = document.getElementById('evo-instance').value.trim();
+
+  // Validação básica antes de salvar
+  if (!url || !key || !instance) {
+    showNotification('⚠️ Preencha todos os campos (URL, API Key e Nome da Instância) antes de salvar.', 'warn');
+    return;
+  }
+
   localStorage.setItem('evo_url', url);
   localStorage.setItem('evo_key', key);
   localStorage.setItem('evo_instance', instance);
-  showNotification('Configuração salva!', 'success');
+
+  // Remove highlight de erro nos campos (caso estivessem vermelhos)
+  ['evo-url','evo-key','evo-instance'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.borderColor = '';
+  });
+
+  showNotification('✅ Configuração salva! Verifique o estado da instância.', 'success');
   updateEvoStatus();
+  checkInstanceState();
 }
 
 function updateEvoStatus() {
@@ -10709,10 +10724,22 @@ async function checkInstanceState() {
   }
   if (label) label.textContent = 'A verificar...';
   try {
-    const res  = await fetch(`${cfg.url}/instance/connectionState/${encodeURIComponent(cfg.instance)}`, {
-      headers: { 'apikey': cfg.key }
+    const res = await fetch(`${cfg.url}/instance/connectionState/${encodeURIComponent(cfg.instance)}`, {
+      headers: _evoAuthHeaders(cfg.key)
     });
-    const data = await res.json();
+
+    // 401/403 → API Key inválida
+    if (res.status === 401 || res.status === 403) {
+      if (dot)   { dot.style.background = '#EF4444'; dot.style.boxShadow = 'none'; }
+      if (label) label.textContent = 'API Key inválida (401)';
+      if (sub)   { sub.style.color = 'var(--red)'; }
+      const keyInput = document.getElementById('evo-key');
+      if (keyInput) keyInput.style.borderColor = 'var(--red)';
+      console.error('[WhatsApp] checkState 401 — API Key incorreta');
+      return;
+    }
+
+    const data  = await res.json();
     const state = data?.instance?.state || data?.state || 'unknown';
     if (state === 'open') {
       if (dot)   { dot.style.background = '#22D36A'; dot.style.boxShadow = '0 0 6px #22D36A'; }
@@ -10736,19 +10763,41 @@ async function checkInstanceState() {
   }
 }
 
-async function generateQRCode() {
-  const cfg = loadEvoConfig();
-  if (!cfg.url || !cfg.key) {
-    showNotification('Credenciais não configuradas. Salve a URL e a API Key primeiro.', 'warn'); return;
-  }
-  const INST_NAME  = cfg.instance || 'agencia_principal';
-  const INST_TOKEN = 'admin123';
+// Helpers reutilizáveis para o painel de WhatsApp
+function _evoAuthHeaders(key) {
+  // Evolution API v2 usa cabeçalho 'apikey'
+  // (se sua instância usar Bearer, troque aqui por: 'Authorization': `Bearer ${key}`)
+  return { 'apikey': key };
+}
 
-  const btn       = document.getElementById('evo-qr-btn');
-  const wrap      = document.getElementById('evo-qr-wrap');
-  const img       = document.getElementById('evo-qr-img');
-  const loading   = document.getElementById('evo-qr-loading');
-  const loadingMsg= document.getElementById('evo-qr-loading-msg');
+async function generateQRCode() {
+  // ── Valida configuração antes de qualquer requisição ─────────────────────
+  const cfg = loadEvoConfig();
+
+  if (!cfg.url) {
+    showNotification('⚠️ URL do servidor não configurada. Preencha e salve em Integrações → Evolution API.', 'warn');
+    document.getElementById('evo-url')?.focus();
+    return;
+  }
+  if (!cfg.key || cfg.key === 'COLE-SUA-CHAVE-AQUI') {
+    showNotification('⚠️ API Key não configurada. Preencha e salve em Integrações → Evolution API.', 'warn');
+    document.getElementById('evo-key')?.focus();
+    return;
+  }
+  if (!cfg.instance) {
+    showNotification('⚠️ Nome da instância não configurado. Preencha e salve em Integrações → Evolution API.', 'warn');
+    document.getElementById('evo-instance')?.focus();
+    return;
+  }
+
+  const INST_NAME  = cfg.instance;   // usa exatamente o valor salvo pelo usuário
+  const INST_TOKEN = cfg.key;        // usa a mesma API key como token da instância
+
+  const btn        = document.getElementById('evo-qr-btn');
+  const wrap       = document.getElementById('evo-qr-wrap');
+  const img        = document.getElementById('evo-qr-img');
+  const loading    = document.getElementById('evo-qr-loading');
+  const loadingMsg = document.getElementById('evo-qr-loading-msg');
 
   const setBtn = (html, disabled = true) => {
     if (!btn) return;
@@ -10756,10 +10805,10 @@ async function generateQRCode() {
     btn.innerHTML = html;
   };
   const showLoading = (msg) => {
-    if (wrap)    wrap.style.display    = 'flex';
-    if (img)     img.style.display     = 'none';
-    if (loading) loading.style.display = 'flex';
-    if (loadingMsg) loadingMsg.innerHTML = msg;
+    if (wrap)       wrap.style.display    = 'flex';
+    if (img)        img.style.display     = 'none';
+    if (loading)    loading.style.display = 'flex';
+    if (loadingMsg) loadingMsg.innerHTML  = msg;
   };
   const showQR = (b64) => {
     if (loading) loading.style.display = 'none';
@@ -10770,6 +10819,19 @@ async function generateQRCode() {
     if (loading) loading.style.display = 'none';
     if (wrap)    wrap.style.display    = 'none';
   };
+  // Para qualquer erro de auth (401/403): para tudo e orienta o usuário
+  const handleAuthError = (status) => {
+    hideAll();
+    setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+    showNotification(
+      `❌ API Key inválida (HTTP ${status}). Acesse Integrações → Evolution API, corrija a API Key e clique em Salvar.`,
+      'error'
+    );
+    // Destaca o campo API Key
+    const keyInput = document.getElementById('evo-key');
+    if (keyInput) { keyInput.style.borderColor = 'var(--red)'; keyInput.focus(); }
+    console.error(`[WhatsApp] Auth falhou ${status} — key usada: "${cfg.key.substring(0,8)}..."`);
+  };
 
   // ── Passo 1: criar instância (ignora 409 = já existe) ─────────────────────
   setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Criando instância...');
@@ -10777,7 +10839,7 @@ async function generateQRCode() {
   try {
     const cr = await fetch(`${cfg.url}/instance/create`, {
       method:  'POST',
-      headers: { 'apikey': cfg.key, 'Content-Type': 'application/json' },
+      headers: { ..._evoAuthHeaders(cfg.key), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         instanceName: INST_NAME,
         token:        INST_TOKEN,
@@ -10785,7 +10847,9 @@ async function generateQRCode() {
         integration:  'WHATSAPP-BAILEYS'
       })
     });
-    console.log('[WhatsApp] create status:', cr.status);
+    console.log('[WhatsApp] create status:', cr.status, '| instância:', INST_NAME);
+    // 401/403 na criação → auth inválida, para tudo
+    if (cr.status === 401 || cr.status === 403) { handleAuthError(cr.status); return; }
   } catch(e) {
     console.warn('[WhatsApp] create falhou (pode já existir):', e.message);
   }
@@ -10805,11 +10869,14 @@ async function generateQRCode() {
 
     try {
       const res = await fetch(`${cfg.url}/instance/connect/${encodeURIComponent(INST_NAME)}`, {
-        headers: { 'apikey': cfg.key }
+        headers: _evoAuthHeaders(cfg.key)
       });
 
+      // 401/403 → auth inválida — para imediatamente, sem retentar
+      if (res.status === 401 || res.status === 403) { handleAuthError(res.status); return; }
+
       if (!res.ok) {
-        throw new Error(`Servidor retornou HTTP ${res.status} — verifique a URL e a API Key.`);
+        throw new Error(`HTTP ${res.status} ao buscar QR — verifique a URL do servidor.`);
       }
 
       const data = await res.json();
