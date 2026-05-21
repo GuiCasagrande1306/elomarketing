@@ -3047,6 +3047,9 @@
             <button id="evo-qr-btn" class="btn btn-primary" onclick="generateQRCode()">
               <i class="ti ti-qrcode"></i> Conectar WhatsApp
             </button>
+            <button class="btn btn-ghost btn-sm" onclick="diagnosEvoConnection()" style="color:var(--accent2);border-color:rgba(108,99,255,0.3)">
+              <i class="ti ti-stethoscope"></i> Diagnosticar Conexão
+            </button>
             <button class="btn btn-ghost btn-sm" onclick="disconnectInstance()" style="color:var(--red);border-color:rgba(239,68,68,0.3)">
               <i class="ti ti-logout"></i> Desconectar Instância
             </button>
@@ -10768,6 +10771,74 @@ function _evoAuthHeaders(key) {
   // Evolution API v2 usa cabeçalho 'apikey'
   // (se sua instância usar Bearer, troque aqui por: 'Authorization': `Bearer ${key}`)
   return { 'apikey': key };
+}
+
+async function diagnosEvoConnection() {
+  const cfg = loadEvoConfig();
+  const lines = [];
+  const add = (icon, text) => lines.push(`${icon} ${text}`);
+
+  add('🔍', `URL: ${cfg.url || '(vazio)'}`);
+  add('🔑', `API Key: ${cfg.key ? cfg.key.substring(0,6) + '••••••••' : '(vazio)'}`);
+  add('📋', `Instância: ${cfg.instance || '(vazio)'}`);
+  lines.push('');
+
+  if (!cfg.url || !cfg.key || !cfg.instance) {
+    add('❌', 'Configuração incompleta — preencha todos os campos e clique em Salvar.');
+    alert(lines.join('\n'));
+    return;
+  }
+
+  // Testa a URL base (sem auth) para verificar se o servidor responde
+  add('⏳', 'Testando servidor...');
+  const diagEl = document.createElement('div');
+  const ENDPOINT = `${cfg.url}/instance/fetchInstances`;
+  const results = [];
+
+  // Tenta 3 formatos de autenticação
+  const formats = [
+    { label: 'apikey header (Evolution v2)',    headers: { 'apikey': cfg.key } },
+    { label: 'Authorization Bearer',            headers: { 'Authorization': `Bearer ${cfg.key}` } },
+    { label: 'Sem autenticação (health check)', headers: {} }
+  ];
+
+  for (const fmt of formats) {
+    try {
+      const r = await fetch(ENDPOINT, { headers: fmt.headers });
+      const text = await r.text();
+      let preview = text.substring(0, 120);
+      results.push(`[${fmt.label}] → HTTP ${r.status}\n   Resposta: ${preview}`);
+    } catch(e) {
+      results.push(`[${fmt.label}] → ERRO de rede: ${e.message}`);
+    }
+  }
+
+  // Tenta endpoint raiz sem auth
+  try {
+    const r = await fetch(cfg.url);
+    results.push(`[Raiz /] → HTTP ${r.status}`);
+  } catch(e) {
+    results.push(`[Raiz /] → ERRO: ${e.message}`);
+  }
+
+  const msg = [
+    '=== DIAGNÓSTICO EVOLUTION API ===',
+    `URL: ${cfg.url}`,
+    `Key (6 chars): ${cfg.key.substring(0,6)}...`,
+    `Instância: ${cfg.instance}`,
+    '',
+    '--- Resultados dos testes ---',
+    ...results,
+    '',
+    'COMO ENCONTRAR SUA API KEY:',
+    '1. Acesse railway.com → seu projeto',
+    '2. Clique no serviço Evolution API',
+    '3. Aba "Variables"',
+    '4. Copie o valor de AUTHENTICATION_API_KEY'
+  ].join('\n');
+
+  console.log('[WhatsApp Diagnóstico]\n' + msg);
+  alert(msg);
 }
 
 async function generateQRCode() {
