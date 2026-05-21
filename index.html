@@ -1748,6 +1748,20 @@
   /* ADMIN BADGE */
   .admin-crown { color:#F59E0B;font-size:11px;margin-left:4px;vertical-align:middle; }
 
+  /* PROFILE MODAL */
+  #profile-modal { position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px); }
+  #profile-modal.hidden { display:none; }
+  .profile-card { background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;width:340px;max-width:90vw; }
+  .profile-av-wrap { display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:20px; }
+  .profile-av { width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;overflow:hidden;cursor:pointer;position:relative;transition:var(--trans); }
+  .profile-av:hover { opacity:0.85; }
+  .profile-av img { width:100%;height:100%;object-fit:cover;border-radius:50%; }
+  .profile-av-overlay { position:absolute;inset:0;background:rgba(0,0,0,0.38);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s;border-radius:50%; }
+  .profile-av:hover .profile-av-overlay { opacity:1; }
+  .profile-av-hint { font-size:11px;color:var(--text3); }
+  .user-card { cursor:pointer;border-radius:8px;padding:6px 4px;transition:var(--trans); }
+  .user-card:hover { background:var(--bg4); }
+
   /* WELCOME TOAST */
   #welcome-toast {
     position:fixed;top:20px;right:20px;z-index:10000;
@@ -2129,6 +2143,46 @@
   </div>
 </div>
 
+<!-- PROFILE MODAL -->
+<div id="profile-modal" class="hidden">
+  <div class="profile-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h3 style="font-size:16px;font-weight:700"><i class="ti ti-user-circle" style="margin-right:6px;color:var(--accent)"></i>Meu Perfil</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeProfileModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="profile-av-wrap">
+      <div class="profile-av" id="profile-av-preview" onclick="document.getElementById('profile-photo-input').click()">
+        <span id="profile-av-initials"></span>
+        <div class="profile-av-overlay"><i class="ti ti-camera" style="color:#fff;font-size:18px"></i></div>
+      </div>
+      <div class="profile-av-hint"><i class="ti ti-camera" style="font-size:10px;margin-right:3px"></i>Clique no avatar para trocar a foto</div>
+      <input type="file" id="profile-photo-input" accept="image/*" style="display:none" onchange="handleProfilePhoto(this)">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Nome</label>
+      <input type="text" id="profile-name" class="form-input" placeholder="Seu nome">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Nova senha</label>
+      <input type="password" id="profile-new-pin" class="form-input" placeholder="Deixe em branco para não alterar">
+    </div>
+    <div class="form-group" style="margin-bottom:6px">
+      <label class="form-label">Confirmar nova senha</label>
+      <input type="password" id="profile-confirm-pin" class="form-input" placeholder="Repita a nova senha">
+    </div>
+    <div id="profile-error" style="font-size:12px;color:var(--red);margin-bottom:12px;min-height:16px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeProfileModal()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveProfile()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;text-align:center">
+      <button class="btn btn-ghost btn-sm" style="color:var(--red);width:100%" onclick="closeProfileModal();doLogout()">
+        <i class="ti ti-logout"></i> Sair da conta
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="logo-area">
@@ -2213,13 +2267,13 @@
   </div>
 
   <div class="sidebar-bottom">
-    <div class="user-card">
+    <div class="user-card" onclick="openProfileModal()" title="Meu Perfil">
       <div class="avatar" id="sb-user-initials">—</div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="user-name" id="sb-user-name">—</div>
         <div class="user-role" id="sb-user-role">—</div>
       </div>
-      <button class="btn-logout" onclick="doLogout()" title="Sair"><i class="ti ti-logout"></i></button>
+      <i class="ti ti-chevron-right" style="font-size:13px;color:var(--text3);flex-shrink:0"></i>
     </div>
   </div>
 </nav>
@@ -5493,7 +5547,15 @@ function updateSidebarUser(user) {
   const initEl = document.getElementById('sb-user-initials');
   const nameEl = document.getElementById('sb-user-name');
   const roleEl = document.getElementById('sb-user-role');
-  if (initEl) { initEl.textContent = user.initials; initEl.style.background = user.color; }
+  if (initEl) {
+    if (user.photo) {
+      initEl.style.background = '#333';
+      initEl.innerHTML = `<img src="${user.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    } else {
+      initEl.innerHTML = user.initials;
+      initEl.style.background = user.color;
+    }
+  }
   if (nameEl) {
     nameEl.innerHTML = user.isAdmin
       ? `${user.name} <i class="ti ti-crown admin-crown"></i>`
@@ -5517,6 +5579,88 @@ function doLogout() {
   if (filterWrap) filterWrap.style.display = 'none';
   cleanupSupabase();
 }
+
+// ── PROFILE MODAL ─────────────────────────────────────────────────────────────
+let _profilePhotoData = null;
+
+function openProfileModal() {
+  if (!currentUser) return;
+  _profilePhotoData = null;
+  document.getElementById('profile-name').value = currentUser.name;
+  document.getElementById('profile-new-pin').value = '';
+  document.getElementById('profile-confirm-pin').value = '';
+  document.getElementById('profile-error').textContent = '';
+  document.getElementById('profile-photo-input').value = '';
+  const avEl   = document.getElementById('profile-av-preview');
+  const initEl = document.getElementById('profile-av-initials');
+  if (currentUser.photo) {
+    avEl.style.background = '#333';
+    initEl.innerHTML = `<img src="${currentUser.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  } else {
+    avEl.style.background = currentUser.color;
+    initEl.textContent = currentUser.initials;
+  }
+  document.getElementById('profile-modal').classList.remove('hidden');
+}
+
+function closeProfileModal() {
+  document.getElementById('profile-modal').classList.add('hidden');
+}
+
+function handleProfilePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _profilePhotoData = e.target.result;
+    const avEl   = document.getElementById('profile-av-preview');
+    const initEl = document.getElementById('profile-av-initials');
+    avEl.style.background = '#333';
+    initEl.innerHTML = `<img src="${_profilePhotoData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveProfile() {
+  const name       = document.getElementById('profile-name').value.trim();
+  const newPin     = document.getElementById('profile-new-pin').value;
+  const confirmPin = document.getElementById('profile-confirm-pin').value;
+  const errEl      = document.getElementById('profile-error');
+  if (!name)                            { errEl.textContent = 'O nome não pode ficar em branco.'; return; }
+  if (newPin && newPin !== confirmPin)  { errEl.textContent = 'As senhas não coincidem.'; return; }
+  if (newPin && newPin.length < 4)      { errEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
+  errEl.textContent = '';
+  const parts = name.split(' ').filter(Boolean);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length-1][0]).toUpperCase()
+    : name.slice(0,2).toUpperCase();
+  const idx = USERS.findIndex(u => u.id === currentUser.id);
+  if (idx >= 0) {
+    USERS[idx].name     = name;
+    USERS[idx].initials = initials;
+    if (newPin)             USERS[idx].pin   = newPin;
+    if (_profilePhotoData)  USERS[idx].photo = _profilePhotoData;
+  }
+  currentUser = USERS[idx];
+  const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
+  profiles[currentUser.id] = { name: currentUser.name, initials, pin: currentUser.pin, photo: currentUser.photo || null };
+  localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
+  updateSidebarUser(currentUser);
+  closeProfileModal();
+}
+
+function _loadUserProfiles() {
+  const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
+  USERS.forEach(u => {
+    const p = profiles[u.id];
+    if (!p) return;
+    if (p.name)     u.name     = p.name;
+    if (p.initials) u.initials = p.initials;
+    if (p.pin)      u.pin      = p.pin;
+    if (p.photo)    u.photo    = p.photo;
+  });
+}
+_loadUserProfiles();
 
 // ── BACKUP: EXPORT / IMPORT ──────────────────────────────────────────────────
 function showNotification(msg, type) {
