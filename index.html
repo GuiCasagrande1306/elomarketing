@@ -1680,47 +1680,69 @@
     font-family: var(--mono);
   }
 
-  /* ===== LOGIN SCREEN ===== */
+  /* ===== LOGIN SCREEN — NETFLIX STYLE ===== */
   .pre-auth .sidebar, .pre-auth .main { display: none !important; }
-  #login-screen { position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg); }
+  #login-screen {
+    position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    background:#0f0f0f;
+  }
   #login-screen.hidden { display:none; }
-  .login-card {
-    background: rgba(26,30,40,0.92);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid var(--border2);
-    border-radius: 20px;
-    padding: 40px 36px;
-    width: 420px;
-    text-align: center;
+  .login-nf-wrap {
+    display:flex;flex-direction:column;align-items:center;
+    padding:24px 20px;width:100%;
   }
-  .login-logo { display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px; }
-  .login-logo-icon { width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:20px; }
-  .login-logo-title { font-size:20px;font-weight:700;text-align:left; }
-  .login-logo-sub { font-size:11px;color:var(--text3);text-align:left; }
-  .login-subtitle { font-size:13px;color:var(--text3);margin-bottom:20px; }
-  .login-users { display:flex;gap:10px;margin-bottom:20px; }
+  .login-nf-logo { margin-bottom:44px; }
+  .login-nf-title {
+    font-size:26px;font-weight:600;color:#e5e5e5;letter-spacing:-0.2px;
+    margin-bottom:40px;text-align:center;
+  }
+  .login-nf-grid {
+    display:flex;flex-wrap:wrap;gap:24px 20px;
+    justify-content:center;margin-bottom:40px;
+  }
   .login-user {
-    flex:1;background:var(--bg3);border:1.5px solid var(--border);border-radius:14px;
-    padding:16px 8px;cursor:pointer;transition:var(--trans);text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+    cursor:pointer;width:112px;
   }
-  .login-user:hover { background:var(--bg4);border-color:rgba(108,99,255,0.4); }
-  .login-user.selected { border-color:var(--accent);background:rgba(108,99,255,0.12); }
-  .login-user-av {
-    width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
-    justify-content:center;font-weight:700;font-size:14px;margin:0 auto 10px;
+  .login-nf-av {
+    width:96px;height:96px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:34px;font-weight:800;color:#fff;overflow:hidden;
+    border:3px solid transparent;
+    transition:border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
-  .login-user-name { font-size:13px;font-weight:600;margin-bottom:2px; }
-  .login-user-role { font-size:10px;color:var(--text3); }
-  .login-pin-wrap { margin-bottom:20px; }
-  .login-pin-wrap input {
-    width:100%;background:var(--bg3);border:1px solid var(--border);
-    border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);
-    font-family:var(--mono);font-size:15px;letter-spacing:2px;text-align:center;
-    outline:none;transition:var(--trans);
+  .login-nf-av img { width:100%;height:100%;object-fit:cover; }
+  .login-user:hover .login-nf-av {
+    border-color:#fff;transform:scale(1.07);
   }
-  .login-pin-wrap input:focus { border-color:var(--accent); }
-  .login-error { font-size:12px;color:var(--red);margin-top:6px;min-height:18px; }
+  .login-user.selected .login-nf-av {
+    border-color:var(--accent);transform:scale(1.07);
+    box-shadow:0 0 0 2px var(--accent),0 0 28px rgba(108,99,255,0.5);
+  }
+  .login-nf-name {
+    font-size:14px;color:#808080;font-weight:500;
+    text-align:center;transition:color 0.15s;line-height:1.3;
+  }
+  .login-user:hover .login-nf-name,
+  .login-user.selected .login-nf-name { color:#e5e5e5; }
+  .login-nf-role { font-size:10px;color:#555;text-align:center; }
+  .login-nf-pin-section {
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    width:100%;max-width:300px;
+    transition:opacity 0.3s ease, transform 0.3s ease;
+  }
+  .login-nf-pin-section.nf-hidden { opacity:0;pointer-events:none;transform:translateY(14px); }
+  .login-nf-pin-section.nf-visible { opacity:1;pointer-events:all;transform:translateY(0); }
+  .login-nf-who { font-size:15px;color:#e5e5e5;font-weight:600; }
+  #login-pin {
+    width:100%;background:#2a2a2a;border:1px solid #444;border-radius:6px;
+    padding:13px 16px;color:#fff;font-size:15px;letter-spacing:3px;text-align:center;
+    outline:none;transition:border-color 0.2s;font-family:var(--mono);
+    box-sizing:border-box;
+  }
+  #login-pin:focus { border-color:var(--accent); }
+  .login-error { font-size:12px;color:var(--red);margin-top:-4px;min-height:18px;text-align:center; }
   .login-btn { width:100%; }
   @keyframes loginShake {
     0%,100% { transform:translateX(0); }
@@ -2095,51 +2117,28 @@
 
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
-  <div class="login-card">
-    <div class="login-logo">
-      <svg viewBox="-4 -2 210 54" xmlns="http://www.w3.org/2000/svg" style="height:52px;width:auto;display:block;">
+  <div class="login-nf-wrap" id="login-nf-wrap">
+    <div class="login-nf-logo">
+      <svg viewBox="-4 -2 210 54" xmlns="http://www.w3.org/2000/svg" style="height:56px;width:auto;display:block;">
         <rect x="1" y="6" width="14" height="32" rx="4.5" fill="#4EC3E8" transform="rotate(-11,8,22)"/>
         <rect x="19" y="0" width="19" height="44" rx="6" fill="#ffffff" transform="rotate(-11,28.5,22)"/>
         <text x="50" y="33" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="32" fill="#ffffff">elo</text>
         <text x="51" y="45" font-family="system-ui,-apple-system,sans-serif" font-size="10.5" font-weight="500" fill="#4EC3E8" letter-spacing="3.2">marketing</text>
       </svg>
     </div>
-    <div class="login-subtitle">Selecione o seu perfil para continuar</div>
-    <div class="login-users">
-      <div class="login-user" data-uid="guilherme" onclick="selectLoginUser('guilherme')">
-        <div class="login-user-av" style="background:linear-gradient(135deg,#6C63FF,#A78BFA)">GU</div>
-        <div class="login-user-name">Guilherme <i class="ti ti-crown" style="color:#F59E0B;font-size:10px"></i></div>
-        <div class="login-user-role">Administrador</div>
-      </div>
-      <div class="login-user" data-uid="henrique" onclick="selectLoginUser('henrique')">
-        <div class="login-user-av" style="background:linear-gradient(135deg,#F59E0B,#D97706)">HE</div>
-        <div class="login-user-name">Henrique <i class="ti ti-crown" style="color:#F59E0B;font-size:10px"></i></div>
-        <div class="login-user-role">Administrador</div>
-      </div>
-      <div class="login-user" data-uid="amanda" onclick="selectLoginUser('amanda')">
-        <div class="login-user-av" style="background:linear-gradient(135deg,#F472B6,#DB2777)">AM</div>
-        <div class="login-user-name">Amanda</div>
-        <div class="login-user-role">Colaborador</div>
-      </div>
-      <div class="login-user" data-uid="jaqueline" onclick="selectLoginUser('jaqueline')">
-        <div class="login-user-av" style="background:linear-gradient(135deg,#38BDF8,#0284C7)">JA</div>
-        <div class="login-user-name">Jaqueline</div>
-        <div class="login-user-role">Colaborador</div>
-      </div>
-      <div class="login-user" data-uid="bernardo" onclick="selectLoginUser('bernardo')">
-        <div class="login-user-av" style="background:linear-gradient(135deg,#FB923C,#EA580C)">BE</div>
-        <div class="login-user-name">Bernardo</div>
-        <div class="login-user-role">Colaborador</div>
-      </div>
+    <div class="login-nf-title">Quem está usando?</div>
+    <div class="login-nf-grid" id="login-profiles-grid">
+      <!-- rendered by renderLoginScreen() -->
     </div>
-    <div class="login-pin-wrap">
+    <div class="login-nf-pin-section nf-hidden" id="login-pin-section">
+      <div class="login-nf-who" id="login-nf-who"></div>
       <input type="password" id="login-pin" maxlength="20" placeholder="Senha"
              onkeydown="if(event.key==='Enter')doLogin()">
       <div class="login-error" id="login-error"></div>
+      <button class="btn btn-primary login-btn" onclick="doLogin()">
+        <i class="ti ti-login"></i> Entrar
+      </button>
     </div>
-    <button class="btn btn-primary login-btn" onclick="doLogin()">
-      <i class="ti ti-login"></i> Entrar
-    </button>
   </div>
 </div>
 
@@ -5459,18 +5458,40 @@ function initAuth() {
   document.getElementById('login-screen').classList.remove('hidden');
 }
 
+function renderLoginScreen() {
+  const grid = document.getElementById('login-profiles-grid');
+  if (!grid) return;
+  grid.innerHTML = USERS.map(u => {
+    const avContent = u.photo
+      ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover">`
+      : u.initials;
+    const avBg = u.photo ? 'background:#333' : `background:${u.color}`;
+    const crown = u.isAdmin ? `<i class="ti ti-crown" style="color:#F59E0B;font-size:9px;margin-left:3px;vertical-align:middle"></i>` : '';
+    return `<div class="login-user" data-uid="${u.id}" onclick="selectLoginUser('${u.id}')">
+      <div class="login-nf-av" style="${avBg}">${avContent}</div>
+      <div class="login-nf-name">${u.name}${crown}</div>
+      <div class="login-nf-role">${u.role}</div>
+    </div>`;
+  }).join('');
+}
+
 function selectLoginUser(uid) {
   pendingLoginUser = uid;
   document.querySelectorAll('.login-user').forEach(el => {
     el.classList.toggle('selected', el.dataset.uid === uid);
   });
+  const user = USERS.find(u => u.id === uid);
+  const whoEl = document.getElementById('login-nf-who');
+  if (whoEl && user) whoEl.textContent = `Olá, ${user.name}!`;
+  const pinSection = document.getElementById('login-pin-section');
+  if (pinSection) { pinSection.classList.remove('nf-hidden'); pinSection.classList.add('nf-visible'); }
   document.getElementById('login-pin').value = '';
   document.getElementById('login-pin').focus();
   document.getElementById('login-error').textContent = '';
 }
 
 function doLogin() {
-  const card  = document.querySelector('.login-card');
+  const card  = document.getElementById('login-nf-wrap');
   const btn   = document.querySelector('.login-btn');
   const shake = () => { card.classList.remove('login-shake'); void card.offsetWidth; card.classList.add('login-shake'); };
   const setBtnLoading = (loading) => {
@@ -5573,6 +5594,8 @@ function doLogout() {
   document.getElementById('login-pin').value = '';
   document.getElementById('login-error').textContent = '';
   document.querySelectorAll('.login-user').forEach(el => el.classList.remove('selected'));
+  const pinSection = document.getElementById('login-pin-section');
+  if (pinSection) { pinSection.classList.add('nf-hidden'); pinSection.classList.remove('nf-visible'); }
   const exportBtn = document.getElementById('topbar-export-btn');
   if (exportBtn) exportBtn.style.display = 'none';
   const filterWrap = document.getElementById('collab-filter-wrap');
@@ -5661,6 +5684,7 @@ function _loadUserProfiles() {
   });
 }
 _loadUserProfiles();
+renderLoginScreen();
 
 // ── BACKUP: EXPORT / IMPORT ──────────────────────────────────────────────────
 function showNotification(msg, type) {
