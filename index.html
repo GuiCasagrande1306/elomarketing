@@ -2102,9 +2102,19 @@
         <div class="login-user-name">Henrique <i class="ti ti-crown" style="color:#F59E0B;font-size:10px"></i></div>
         <div class="login-user-role">Administrador</div>
       </div>
-      <div class="login-user" data-uid="colaborador1" onclick="selectLoginUser('colaborador1')">
-        <div class="login-user-av" style="background:linear-gradient(135deg,#22D3A0,#0D9488)">C1</div>
-        <div class="login-user-name">Colaborador</div>
+      <div class="login-user" data-uid="amanda" onclick="selectLoginUser('amanda')">
+        <div class="login-user-av" style="background:linear-gradient(135deg,#F472B6,#DB2777)">AM</div>
+        <div class="login-user-name">Amanda</div>
+        <div class="login-user-role">Colaborador</div>
+      </div>
+      <div class="login-user" data-uid="jaqueline" onclick="selectLoginUser('jaqueline')">
+        <div class="login-user-av" style="background:linear-gradient(135deg,#38BDF8,#0284C7)">JA</div>
+        <div class="login-user-name">Jaqueline</div>
+        <div class="login-user-role">Colaborador</div>
+      </div>
+      <div class="login-user" data-uid="bernardo" onclick="selectLoginUser('bernardo')">
+        <div class="login-user-av" style="background:linear-gradient(135deg,#FB923C,#EA580C)">BE</div>
+        <div class="login-user-name">Bernardo</div>
         <div class="login-user-role">Colaborador</div>
       </div>
     </div>
@@ -2278,7 +2288,9 @@
           <option value="all">Todos</option>
           <option value="guilherme">Guilherme</option>
           <option value="henrique">Henrique</option>
-          <option value="colaborador1">Colaborador</option>
+          <option value="amanda">Amanda</option>
+          <option value="jaqueline">Jaqueline</option>
+          <option value="bernardo">Bernardo</option>
         </select>
       </span>
       <button class="btn btn-primary btn-sm" onclick="openModal()">
@@ -3228,7 +3240,9 @@
         <select id="cl-form-owner" class="form-select">
           <option value="guilherme">Guilherme</option>
           <option value="henrique">Henrique</option>
-          <option value="colaborador1">Colaborador</option>
+          <option value="amanda">Amanda</option>
+          <option value="jaqueline">Jaqueline</option>
+          <option value="bernardo">Bernardo</option>
         </select>
       </div>
       <div class="form-group">
@@ -3418,7 +3432,9 @@
         <select id="task-owner" class="form-select">
           <option value="guilherme">Guilherme</option>
           <option value="henrique">Henrique</option>
-          <option value="colaborador1">Colaborador</option>
+          <option value="amanda">Amanda</option>
+          <option value="jaqueline">Jaqueline</option>
+          <option value="bernardo">Bernardo</option>
         </select>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -5372,7 +5388,9 @@ function setSyncStatus(status) {
 const USERS = [
   { id:'guilherme',   initials:'GU', name:'Guilherme', role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', isAdmin:true  },
   { id:'henrique',    initials:'HE', name:'Henrique',  role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#F59E0B,#D97706)', isAdmin:true  },
-  { id:'colaborador1',initials:'C1', name:'Colaborador',role:'Colaborador',  pin:'V6UkjcYtEM', color:'linear-gradient(135deg,#22D3A0,#0D9488)', isAdmin:false }
+  { id:'amanda',      initials:'AM', name:'Amanda',     role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false },
+  { id:'jaqueline',   initials:'JA', name:'Jaqueline',  role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false },
+  { id:'bernardo',    initials:'BE', name:'Bernardo',   role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false }
 ];
 
 let currentUser = null;
