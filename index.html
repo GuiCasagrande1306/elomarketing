@@ -586,6 +586,22 @@
   /* MINI STAT */
   .mini-stat { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
   .mini-stat:last-child { border-bottom: none; }
+
+  /* ── Permissões de Equipe ─────────────────────────────────────────────────── */
+  .perm-member-row { display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border); }
+  .perm-member-row:last-child { border-bottom:none;padding-bottom:0; }
+  .perm-member-av { width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0; }
+  .perm-member-info { flex:1;min-width:0; }
+  .perm-member-name { font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px; }
+  .perm-pages-grid { display:flex;flex-wrap:wrap;gap:6px; }
+  .perm-page-chip { display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all 0.15s;user-select:none; }
+  .perm-page-chip input[type=checkbox] { display:none; }
+  .perm-page-chip.on  { background:rgba(108,99,255,0.18);border-color:rgba(108,99,255,0.45);color:var(--accent); }
+  .perm-page-chip.off { background:var(--bg3);border-color:var(--border);color:var(--text3); }
+  .perm-page-chip.on:hover  { background:rgba(108,99,255,0.28); }
+  .perm-page-chip.off:hover { background:var(--bg4);color:var(--text2); }
+  .perm-save-row { display:flex;justify-content:flex-end;margin-top:10px; }
+  .perm-unsaved-dot { width:7px;height:7px;border-radius:50%;background:var(--amber);display:inline-block;margin-right:5px;flex-shrink:0; }
   .mini-stat-label { font-size: 12px; color: var(--text2); }
   .mini-stat-value { font-size: 12px; font-weight: 600; font-family: var(--mono); }
 
@@ -1887,6 +1903,7 @@
   .bal-platform-icon.meta   { background:rgba(24,119,242,0.15);color:#1877F2; }
   .bal-platform-icon.google { background:rgba(66,133,244,0.15);color:#4285F4; }
   .bal-platform-icon.ga4   { background:rgba(251,188,4,0.15);color:#E37400; }
+  .bal-platform-icon.gads  { background:rgba(66,133,244,0.15);color:#4285F4; }
   .ga4-pill-ok       { display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(34,211,160,0.12);color:var(--green);border:1px solid rgba(34,211,160,0.25); }
   .ga4-pill-pending  { display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(148,163,184,0.12);color:var(--text3);border:1px solid var(--border); }
   .ga4-pill-warn     { display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(245,158,11,0.15);color:var(--amber);border:1px solid rgba(245,158,11,0.3); }
@@ -2111,6 +2128,47 @@
 
   /* CRM Modal tweaks */
   #crm-modal .modal { width: 520px; }
+/* ── Monday-style Task Board ─────────────────────────────────────── */
+.monday-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.monday-search{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:13px;color:var(--text);outline:none;width:200px;transition:border-color .2s}
+.monday-search:focus{border-color:var(--accent)}
+.monday-filter-sel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);outline:none;cursor:pointer}
+.monday-group{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.monday-group-hdr{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);transition:background .15s}
+.monday-group-hdr:hover{background:var(--bg3)}
+.monday-group-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.monday-group-name{font-size:13px;font-weight:700;color:var(--text);flex:1}
+.monday-group-cnt{font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px}
+.monday-table{width:100%;border-collapse:collapse}
+.monday-th{text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
+.monday-tr{border-bottom:1px solid rgba(255,255,255,0.04);transition:background .1s}
+.monday-tr:last-child{border-bottom:none}
+.monday-tr:hover{background:rgba(255,255,255,0.025)}
+.monday-td{padding:9px 12px;font-size:13px;color:var(--text2);vertical-align:middle}
+.m-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
+.m-check:hover{border-color:var(--accent)}
+.m-check.done{background:var(--green);border-color:var(--green)}
+.m-title{font-size:13px;font-weight:500;color:var(--text);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;display:block}
+.m-title:hover{color:var(--accent2)}
+.m-title.done-txt{text-decoration:line-through;opacity:.45}
+.m-client{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(108,99,255,.12);color:var(--accent2);border:1px solid rgba(108,99,255,.2);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.m-avatar{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
+.m-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.m-status{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;white-space:nowrap;width:100%;text-align:center;transition:opacity .15s,transform .1s;background:none;outline:none}
+.m-status:hover{opacity:.8;transform:scale(.97)}
+.m-prio{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:opacity .15s;white-space:nowrap}
+.m-prio:hover{opacity:.75}
+.m-due{font-size:12px;color:var(--text3);white-space:nowrap}
+.m-due.overdue{color:var(--red);font-weight:600}
+.m-due.soon{color:var(--amber);font-weight:600}
+.monday-add-row{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:12px;color:var(--text3);cursor:pointer;border-top:1px solid var(--border);transition:background .1s,color .1s}
+.monday-add-row:hover{background:var(--bg3);color:var(--text)}
+.m-dropdown{position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9999;min-width:155px;overflow:hidden;animation:fadeIn .1s ease}
+.m-dd-item{display:flex;align-items:center;gap:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);transition:background .1s}
+.m-dd-item:hover{background:var(--bg3)}
+.m-dd-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.m-timer{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap;font-family:monospace;letter-spacing:.02em}
+.m-timer-running{color:#60A5FA;font-weight:700}
 </style>
 </head>
 <body class="pre-auth">
@@ -2818,49 +2876,33 @@
 
     <!-- ===== TAREFAS ===== -->
     <div class="page" id="page-tarefas">
-      <div class="grid-2">
-        <div class="card" id="task-list">
-          <div class="card-header"><div class="card-title"><i class="ti ti-checkbox"></i> Tarefas Pendentes</div><button class="btn btn-primary btn-sm" onclick="openTaskModal()"><i class="ti ti-plus"></i> Nova</button></div>
-          <div class="task-item" data-owner="colaborador1"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-text"><div style="font-weight:500;font-size:12px">Revisar criativos — Psicologia Saúde</div><div style="font-size:10px;color:var(--text3)">CTR abaixo de 1%</div></div><span class="badge badge-red">Urgente</span></div>
-          <div class="task-item" data-owner="guilherme"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-text"><div style="font-weight:500;font-size:12px">Gerar relatório — Instituto Lara</div><div style="font-size:10px;color:var(--text3)">Vence em 3 dias</div></div><span class="badge badge-amber">Esta semana</span></div>
-          <div class="task-item" data-owner="colaborador1"><div class="task-check done" onclick="toggleTask(this)"><i class="ti ti-check" style="font-size:9px"></i></div><div class="task-text" style="opacity:0.5"><div style="font-weight:500;font-size:12px;text-decoration:line-through">Importar CSV Abril — Cl. Medicina</div></div><span class="badge badge-gray">Feito</span></div>
-          <div class="task-item" data-owner="henrique"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-text"><div style="font-weight:500;font-size:12px">Aumentar budget — Odonto Digital</div><div style="font-size:10px;color:var(--text3)">ROAS excelente</div></div><span class="badge badge-blue">Planejado</span></div>
+      <!-- Toolbar -->
+      <div class="monday-toolbar">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input type="text" class="monday-search" id="task-search" placeholder="🔍 Buscar tarefa..." oninput="renderTasksGrid()">
+          <select class="monday-filter-sel" id="task-filter-owner" onchange="renderTasksGrid()">
+            <option value="">Todos os responsáveis</option>
+          </select>
+          <select class="monday-filter-sel" id="task-filter-client" onchange="renderTasksGrid()">
+            <option value="">Todos os clientes</option>
+          </select>
+          <select class="monday-filter-sel" id="task-filter-status" onchange="renderTasksGrid()">
+            <option value="">Todos os status</option>
+            <option value="Não Iniciada">Não Iniciada</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Travado">Travado</option>
+            <option value="Pronto">Pronto</option>
+          </select>
         </div>
-        <div class="card" style="background:rgba(108,99,255,0.05);border-color:rgba(108,99,255,0.2)">
-          <div class="card-header"><div class="card-title"><i class="ti ti-sparkles" style="color:var(--accent2)"></i> Recomendações da IA</div></div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--red)"><div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:4px">Ação urgente</div><div style="font-size:12px;color:var(--text2)">Frequência 5,2 na campanha "Ansiedade" — pausar ou renovar criativo.</div></div>
-            <div style="background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--amber)"><div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:4px">Otimização</div><div style="font-size:12px;color:var(--text2)">Campanha Drª Roberta com CPA 35% abaixo da meta — expandir público.</div></div>
-            <div style="background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--green)"><div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px">Oportunidade</div><div style="font-size:12px;color:var(--text2)">23 leads qualificados do Odonto sem resposta há 48h.</div></div>
-          </div>
-        </div>
+        <button class="btn btn-primary btn-sm" onclick="openTaskModal()">
+          <i class="ti ti-plus"></i> Nova Tarefa
+        </button>
       </div>
-
-      <!-- Tarefas Concluídas -->
-      <div class="completed-section">
-        <div class="completed-header">
-          <div class="completed-title">
-            <i class="ti ti-checks" style="color:var(--green)"></i>
-            Tarefas Concluídas
-            <span class="badge badge-green" id="completed-count">0</span>
-          </div>
-          <div class="completed-filter">
-            <span class="completed-filter-label">Filtrar por data:</span>
-            <input type="date" id="completed-date-filter" class="completed-date-input"
-                   oninput="filterCompletedTasks(this.value)"
-                   onchange="filterCompletedTasks(this.value)">
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('completed-date-filter').value=''; filterCompletedTasks('')" title="Limpar filtro">
-              <i class="ti ti-x"></i>
-            </button>
-          </div>
-        </div>
-        <div id="completed-tasks-list" class="completed-tasks-list">
-          <div id="completed-empty-state" class="completed-empty">
-            <i class="ti ti-circle-check" style="font-size:26px;color:var(--text3);margin-bottom:6px;display:block"></i>
-            Nenhuma tarefa concluída ainda.<br>Marque uma tarefa como feita para ela aparecer aqui.
-          </div>
-        </div>
-      </div>
+      <!-- Board dinâmico -->
+      <div id="monday-board"></div>
+      <!-- Listas legadas ocultas (mantidas para compatibilidade de saveTasks/loadTasks) -->
+      <div id="task-list" style="display:none"></div>
+      <div id="completed-tasks-list" style="display:none"></div>
     </div>
 
     <!-- ===== ALERTAS ===== -->
@@ -2937,16 +2979,20 @@
               <span id="evo-status-badge" class="badge badge-gray">Verificando...</span>
             </div>
             <div class="form-group" style="margin-bottom:8px">
-              <label class="form-label">URL do Servidor</label>
-              <input type="text" id="evo-url" class="form-input" oninput="updateEvoStatus()">
-            </div>
-            <div class="form-group" style="margin-bottom:8px">
-              <label class="form-label">API Key</label>
-              <input type="password" id="evo-key" class="form-input" oninput="updateEvoStatus()">
+              <label class="form-label">URL do Servidor Evolution (Railway)</label>
+              <input type="text" id="evo-url" class="form-input" placeholder="https://evolution-api-production-xxxx.up.railway.app" oninput="updateEvoStatus()">
             </div>
             <div class="form-group" style="margin-bottom:12px">
-              <label class="form-label">Nome da Instância</label>
-              <input type="text" id="evo-instance" class="form-input" oninput="updateEvoStatus()">
+              <label class="form-label">API Key <span style="font-weight:400;color:var(--text3)">(AUTHENTICATION_API_KEY do Railway)</span></label>
+              <input type="password" id="evo-key" class="form-input" oninput="updateEvoStatus()">
+            </div>
+            <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text3);line-height:1.6">
+              <i class="ti ti-info-circle" style="color:#25D366;margin-right:4px"></i>
+              <strong style="color:var(--text2)">Instâncias por usuário</strong><br>
+              Cada membro da equipe tem sua instância isolada gerada automaticamente:<br>
+              <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:10px">elo_guilherme</code>
+              <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:10px">elo_amanda</code>
+              <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:10px">elo_bernardo</code> …
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" style="flex:1" onclick="saveEvoConfig()"><i class="ti ti-device-floppy"></i> Salvar</button>
@@ -3018,7 +3064,7 @@
             <div id="evo-conn-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text3);flex-shrink:0"></div>
             <div>
               <div id="evo-conn-label" style="font-size:13px;font-weight:600">A verificar...</div>
-              <div id="evo-conn-sub" style="font-size:11px;color:var(--text3)">Instância: <span id="evo-conn-instance">—</span></div>
+              <div id="evo-conn-sub" style="font-size:11px;color:var(--text3)">Sua instância: <span id="evo-conn-instance" style="font-family:monospace">—</span></div>
             </div>
           </div>
 
@@ -3102,6 +3148,8 @@
 
     <!-- ===== CONFIGURAÇÕES ===== -->
     <div class="page" id="page-configuracoes">
+      <!-- Gerenciamento de Equipe (renderizado via JS — visível apenas para admins) -->
+      <div id="perm-section" style="margin-bottom:20px"></div>
       <div class="grid-12">
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="card">
@@ -3389,6 +3437,24 @@
         </div>
       </div>
 
+      <!-- ── Google Ads ──────────────────────────────────────────────── -->
+      <div class="form-group">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label class="form-label" style="margin:0">
+            <svg width="13" height="13" viewBox="0 0 512 512" style="margin-right:4px;vertical-align:-2px" fill="#4285F4"><path d="M256 48C141.12 48 48 141.12 48 256s93.12 208 208 208 208-93.12 208-208S370.88 48 256 48zm-32 304l-80-80 22.4-22.4 57.6 57.6 121.6-121.6 22.4 22.4-144 144z"/></svg>
+            Google Ads — Customer ID
+          </label>
+          <span id="gads-form-badge" style="display:none;font-size:10px;font-weight:600;color:#4285F4;background:rgba(66,133,244,0.10);border:1px solid rgba(66,133,244,0.35);padding:2px 8px;border-radius:20px">✓ Vinculado</span>
+        </div>
+        <input type="text" id="cl-form-gads-customer-id" class="form-input"
+          placeholder="Ex: 123-456-7890"
+          oninput="onGadsCustomerIdInput(this.value)"
+          autocomplete="off">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">
+          Encontre em Google Ads → Configurações da conta → ID do cliente (formato: XXX-XXX-XXXX)
+        </div>
+      </div>
+
       <!-- ── Conexão de Mídias Sociais ─────────────────────────────── -->
       <div class="form-group">
         <div class="social-connect-section">
@@ -3457,47 +3523,86 @@
 
 <!-- MODAL: NOVA TAREFA -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
-  <div class="modal">
+  <div class="modal" style="width:480px">
     <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-checkbox" style="color:var(--accent2); margin-right:6px"></i>Nova Tarefa</div>
+      <div class="modal-title"><i class="ti ti-checkbox" style="color:var(--accent2);margin-right:6px"></i><span id="task-modal-title">Nova Tarefa</span></div>
       <button class="modal-close" onclick="closeModal()" aria-label="Fechar"><i class="ti ti-x"></i></button>
     </div>
     <form id="task-form" onsubmit="event.preventDefault(); saveTask();">
+      <!-- Título -->
       <div class="form-group">
-        <label class="form-label" for="task-title">Título da Tarefa</label>
+        <label class="form-label" for="task-title">Título da Tarefa *</label>
         <input type="text" id="task-title" class="form-input" placeholder="Ex: Revisar criativos da semana" autocomplete="off" required>
       </div>
+      <!-- Descrição -->
       <div class="form-group">
         <label class="form-label" for="task-description">Descrição</label>
-        <textarea id="task-description" class="form-input" rows="3" placeholder="Detalhes, contexto, links de referência..."></textarea>
+        <textarea id="task-description" class="form-input" rows="2" placeholder="Detalhes, links, contexto..."></textarea>
       </div>
-      <div class="form-group">
-        <label class="form-label">Criticidade</label>
-        <div class="crit-pills" id="task-criticality">
-          <button type="button" class="crit-pill" data-crit="baixa">Baixa</button>
-          <button type="button" class="crit-pill active" data-crit="media">Média</button>
-          <button type="button" class="crit-pill" data-crit="alta">Alta</button>
-          <button type="button" class="crit-pill" data-crit="critica">Crítica</button>
+      <!-- Linha: Cliente + Responsável -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="task-client">Cliente</label>
+          <select id="task-client" class="form-select">
+            <option value="">Sem cliente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-owner">Responsável</label>
+          <select id="task-owner" class="form-select">
+            <option value="guilherme">Guilherme</option>
+            <option value="henrique">Henrique</option>
+            <option value="amanda">Amanda</option>
+            <option value="jaqueline">Jaqueline</option>
+            <option value="bernardo">Bernardo</option>
+          </select>
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="task-deadline">Data e Hora de Entrega</label>
-        <input type="datetime-local" id="task-deadline" class="form-input form-datetime">
+      <!-- Linha: Status + Prioridade -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="task-status">Status</label>
+          <select id="task-status" class="form-select">
+            <option value="Não Iniciada">Não Iniciada</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Travado">Travado</option>
+            <option value="Pronto">Pronto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-priority">Prioridade</label>
+          <select id="task-priority" class="form-select">
+            <option value="Baixa">Baixa</option>
+            <option value="Média" selected>Média</option>
+            <option value="Alta">Alta</option>
+            <option value="Crítica">Crítica</option>
+          </select>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="task-owner">Responsável</label>
-        <select id="task-owner" class="form-select">
-          <option value="guilherme">Guilherme</option>
-          <option value="henrique">Henrique</option>
-          <option value="amanda">Amanda</option>
-          <option value="jaqueline">Jaqueline</option>
-          <option value="bernardo">Bernardo</option>
-        </select>
+      <!-- Linha: Prazo + Grupo -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="task-duedate">Prazo de Entrega</label>
+          <input type="date" id="task-duedate" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-group">Grupo</label>
+          <select id="task-group" class="form-select">
+            <option value="semana">Demandas da Semana</option>
+            <option value="concluidos">Concluídos</option>
+          </select>
+        </div>
       </div>
+      <!-- Botão excluir (visível só no modo edição) -->
+      <div id="task-delete-btn-wrap" style="display:none;margin-top:10px">
+        <button type="button" onclick="deleteFromModal()" style="width:100%;padding:9px;background:rgba(248,113,113,.10);color:#F87171;border:1px solid rgba(248,113,113,.28);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .15s"><i class="ti ti-trash"></i> Excluir Tarefa</button>
+      </div>
+      <!-- Botões -->
       <div style="display:flex;gap:8px;margin-top:8px">
         <button type="button" class="btn btn-ghost" style="flex:1" onclick="closeModal()">Cancelar</button>
         <button type="submit" class="btn btn-primary" style="flex:1"><i class="ti ti-check"></i> Salvar Tarefa</button>
       </div>
+      <input type="hidden" id="task-edit-id" value="">
     </form>
   </div>
 </div>
@@ -3717,6 +3822,18 @@ const pageConfig = {
 };
 
 function navigate(page, el) {
+  // ── Guarda de rota: colaboradores só acessam páginas liberadas ──────────────
+  if (currentUser && !currentUser.isAdmin) {
+    const allowed = currentUser.allowedPages || [];
+    if (!allowed.includes(page)) {
+      showNotification(`⛔ Sem acesso à página "${ALL_PAGES.find(p=>p.key===page)?.label || page}".`, 'error');
+      // Redireciona para dashboard (sempre permitido como fallback)
+      const dash = document.querySelector('.nav-item[onclick*="dashboard"]');
+      if (page !== 'dashboard' && dash) { navigate('dashboard', dash); }
+      return;
+    }
+  }
+
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -3725,22 +3842,22 @@ function navigate(page, el) {
   const cfg = pageConfig[page] || {};
   document.getElementById('topbar-title').textContent = cfg.title || page;
   document.getElementById('topbar-sub').textContent = cfg.sub || '';
-  if (page === 'dashboard')   renderDashboard();
-  if (page === 'relatorios')  populateReportSelects();
-  if (page === 'integracoes') loadEvoFields();
-  if (page === 'alertas')     renderBalanceMonitor();
-  if (page === 'contas')      renderContasPage();
-  if (page === 'templates')   renderTemplatesPage();
-  if (page === 'campanhas')   { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
-  if (page === 'calendar')    { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
-  if (page === 'esteira')     { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
-  if (page === 'crm')         _crmInitAndRender();
+  if (page === 'dashboard')     renderDashboard();
+  if (page === 'relatorios')    populateReportSelects();
+  if (page === 'integracoes')   loadEvoFields();
+  if (page === 'alertas')       renderBalanceMonitor();
+  if (page === 'contas')        renderContasPage();
+  if (page === 'templates')     renderTemplatesPage();
+  if (page === 'configuracoes') renderTeamPermissions();
+  if (page === 'campanhas')     { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
+  if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
+  if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
+  if (page === 'crm')           _crmInitAndRender();
   // Ao abrir Tarefas, busca dados frescos do servidor (sincroniza entre usuários)
-  if (page === 'tarefas')     loadTasksFromDB().catch(() => {});
+  if (page === 'tarefas') { loadTasks(); _populateTaskFilters(); }
   /* Auto-sync Meta Ads na primeira visita à página de clientes por sessão */
   if (page === 'clientes' && !navigate._clientsSynced) {
     navigate._clientsSynced = true;
-    // Pequeno delay para o render inicial dos cards acontecer primeiro
     setTimeout(() => sincronizarTodosMeta(), 400);
   }
 }
@@ -3963,9 +4080,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCalendarMonth();
   renderDetailsEmpty();
   renderCreatives();
-  document.querySelectorAll('#task-criticality .crit-pill').forEach(btn => {
-    btn.addEventListener('click', () => selectCrit(btn));
-  });
   resetTaskForm();
   loadTasks();
   loadClients();
@@ -3977,6 +4091,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initGA4Config();
   renderDashboard(); // Popula Dashboard com dados reais na carga inicial
   renderTemplatesPage(); // Popula página de templates (builtins + localStorage)
+  // Sync async: atualiza fotos e nomes na tela de login sem bloquear o carregamento
+  loadUserProfilesFromAPI();
 });
 
 /* ========== CALENDÁRIO EDITORIAL ========== */
@@ -4607,116 +4723,43 @@ function tkTimeStr(d) {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function toggleTask(checkEl) {
-  const item        = checkEl.closest('.task-item');
-  const taskId      = item.dataset.taskId;
-  const becomingDone = !checkEl.classList.contains('done');
+function toggleTask(el) { } // legado - não usado
 
-  if (becomingDone) {
-    const now        = new Date();
-    const dateKey    = tkDateKey(now);
-    const timeStr    = tkTimeStr(now);
-    const completedAt = now.toISOString();
-
-    checkEl.classList.add('done');
-    checkEl.innerHTML = '<i class="ti ti-check" style="font-size:9px"></i>';
-    item.dataset.date          = dateKey;
-    item.dataset.completedTime = timeStr;
-
-    const textDiv = item.querySelector('.task-text');
-    textDiv.style.opacity = '0.5';
-    const titleEl = textDiv.querySelector('div');
-    if (titleEl) titleEl.style.textDecoration = 'line-through';
-
-    if (!item.querySelector('.task-completed-at')) {
-      const stamp = document.createElement('div');
-      stamp.className = 'task-completed-at';
-      stamp.innerHTML = `<i class="ti ti-check"></i> Concluído às ${timeStr}`;
-      textDiv.appendChild(stamp);
-    }
-
-    document.getElementById('completed-tasks-list').prepend(item);
-    if (taskId) updateTaskInDB(taskId, { status: 'done', completed_at: completedAt });
-
-  } else {
-    checkEl.classList.remove('done');
-    checkEl.innerHTML = '';
-    delete item.dataset.date;
-    delete item.dataset.completedTime;
-
-    const textDiv = item.querySelector('.task-text');
-    textDiv.style.opacity = '';
-    const titleEl = textDiv.querySelector('div');
-    if (titleEl) titleEl.style.textDecoration = '';
-    item.querySelector('.task-completed-at')?.remove();
-
-    const taskList = document.getElementById('task-list');
-    taskList.insertBefore(item, taskList.querySelector('.card-header').nextSibling);
-    if (taskId) updateTaskInDB(taskId, { status: 'active', completed_at: null });
-  }
-
-  saveTasks();
-  updateNavBadges();
-  filterCompletedTasks(document.getElementById('completed-date-filter')?.value || '');
-}
-
-function filterCompletedTasks(selectedDate) {
-  const uid = document.getElementById('collab-filter')?.value || 'all';
-  const items = document.querySelectorAll('#completed-tasks-list .task-item');
-  items.forEach(item => {
-    const dateOk  = !selectedDate || item.dataset.date === selectedDate;
-    const ownerOk = uid === 'all' || !item.dataset.owner || item.dataset.owner === uid;
-    item.style.display = (dateOk && ownerOk) ? '' : 'none';
-  });
-  updateCompletedCount();
-}
+function filterCompletedTasks(date) { } // legado - não usado
 
 function updateCompletedCount() {
-  const all     = [...document.querySelectorAll('#completed-tasks-list .task-item')];
-  const visible = all.filter(el => el.style.display !== 'none').length;
-  const countEl = document.getElementById('completed-count');
-  if (countEl) countEl.textContent = String(visible);
-  const emptyState = document.getElementById('completed-empty-state');
-  if (emptyState) emptyState.style.display = visible === 0 ? '' : 'none';
+  const el = document.getElementById('completed-count');
+  if (el) el.textContent = TASKS_DATA.filter(t => normalizeTaskStatus(t.status) === 'Pronto').length;
 }
 
 function updateNavBadges() {
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-
-  let urgentCount = 0;
-  document.querySelectorAll('#task-list .task-item').forEach(el => {
-    const dl = el.dataset.deadline;
-    if (dl && new Date(dl).getTime() <= endOfToday.getTime()) urgentCount++;
-  });
-
+  const today = new Date(); today.setHours(23,59,59,999);
+  const urgentCount = TASKS_DATA.filter(t => {
+    if (t.status === 'Pronto') return false;
+    const dl = t.dueDate || t.deadline;
+    return dl && new Date(dl) <= today;
+  }).length;
   const tb = document.getElementById('nav-badge-tarefas');
-  if (tb) {
-    tb.textContent    = urgentCount;
-    tb.className      = 'nav-badge amber';
-    tb.style.display  = urgentCount > 0 ? '' : 'none';
-  }
+  if (tb) { tb.textContent = urgentCount; tb.className = 'nav-badge amber'; tb.style.display = urgentCount > 0 ? '' : 'none'; }
 }
 
 function saveTasks() {
-  const activeItems    = document.querySelectorAll('#task-list .task-item');
-  const completedItems = document.querySelectorAll('#completed-tasks-list .task-item');
-  const active = [...activeItems].map(el => ({ html: el.outerHTML }));
-  const done   = [...completedItems].map(el => ({
-    html: el.outerHTML,
-    date: el.dataset.date || '',
-    ct:   el.dataset.completedTime || ''
-  }));
-  localStorage.setItem('tp_tasks_active', JSON.stringify(active));
-  localStorage.setItem('tp_tasks_done',   JSON.stringify(done));
+  localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  // Mantém compatibilidade com código legado que ainda lê #task-list
+  const tl = document.getElementById('task-list');
+  const cl = document.getElementById('completed-tasks-list');
+  if (tl) tl.innerHTML = '';
+  if (cl) cl.innerHTML = '';
 }
 
 function loadTasks() {
-  // Exibe dados do localStorage imediatamente (UX rápida)
-  reloadTasksFromStorage();
-  updateCompletedCount();
+  // Carrega do localStorage v2 (novo formato)
+  const raw = localStorage.getItem('tp_tasks_v2');
+  if (raw) {
+    try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) TASKS_DATA = parsed; } catch(e) {}
+  }
+  renderTasksGrid();
   updateNavBadges();
-  // Atualiza em background com dados frescos do servidor (fonte de verdade compartilhada)
   loadTasksFromDB().catch(() => {});
 }
 
@@ -5046,27 +5089,69 @@ function tkEscape(s) {
 function resetTaskForm() {
   document.getElementById('task-title').value = '';
   document.getElementById('task-description').value = '';
-  document.querySelectorAll('#task-criticality .crit-pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.crit === 'media');
-  });
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  document.getElementById('task-deadline').value = tkFmtLocal(d);
+  document.getElementById('task-status').value = 'Não Iniciada';
+  document.getElementById('task-priority').value = 'Média';
+  document.getElementById('task-duedate').value = '';
+  document.getElementById('task-edit-id').value = '';
+  document.getElementById('task-modal-title').textContent = 'Nova Tarefa';
+  const _delWrap = document.getElementById('task-delete-btn-wrap');
+  if (_delWrap) _delWrap.style.display = 'none';
   const ownerSel = document.getElementById('task-owner');
   if (ownerSel && currentUser) ownerSel.value = currentUser.id;
+  // Popula clientes no select
+  const clientSel = document.getElementById('task-client');
+  if (clientSel) {
+    clientSel.innerHTML = '<option value="">Sem cliente</option>';
+    (CLIENTS.list || []).forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      clientSel.appendChild(o);
+    });
+  }
 }
 
-function openTaskModal() {
+function openTaskModal(groupKey) {
   resetTaskForm();
+  if (groupKey) {
+    const grpSel = document.getElementById('task-group');
+    if (grpSel) grpSel.value = groupKey;
+  }
   openModal();
   setTimeout(() => document.getElementById('task-title').focus(), 50);
 }
 
-function selectCrit(btn) {
-  btn.parentElement.querySelectorAll('.crit-pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
+function openEditTaskModal(taskId) {
+  const task = TASKS_DATA.find(t => t.id === taskId);
+  if (!task) return;
+  resetTaskForm();
+  document.getElementById('task-modal-title').textContent = 'Editar Tarefa';
+  document.getElementById('task-title').value       = task.title || '';
+  document.getElementById('task-description').value = task.description || '';
+  document.getElementById('task-status').value      = normalizeTaskStatus(task.status);
+  document.getElementById('task-priority').value    = normalizeTaskPriority(task);
+  document.getElementById('task-duedate').value     = (task.dueDate || task.deadline || '').substring(0,10);
+  document.getElementById('task-owner').value       = task.assignedTo || task.owner || '';
+  document.getElementById('task-client').value      = task.client || '';
+  document.getElementById('task-group').value       = task.group || 'semana';
+  document.getElementById('task-edit-id').value     = taskId;
+  const _delWrap2 = document.getElementById('task-delete-btn-wrap');
+  if (_delWrap2) _delWrap2.style.display = '';
+  openModal();
+  setTimeout(() => document.getElementById('task-title').focus(), 50);
 }
+
+function deleteFromModal() {
+  const editId = document.getElementById('task-edit-id').value;
+  if (!editId) return;
+  if (!confirm('Excluir esta tarefa permanentemente?')) return;
+  closeModal();
+  TASKS_DATA = TASKS_DATA.filter(t => t.id !== editId);
+  deleteTaskInDB(editId);
+  saveTasks(); renderTasksGrid(); updateNavBadges();
+  showNotification('Tarefa excluída.', 'ok');
+}
+
+function selectCrit(btn) { } // legado - não usado
 
 const CRIT_MAP = {
   baixa:   { label: 'Baixa',   badge: 'badge-blue'  },
@@ -5075,88 +5160,65 @@ const CRIT_MAP = {
   critica: { label: 'Crítica', badge: 'badge-red'   }
 };
 
-function buildTaskItem(task) {
-  const meta = CRIT_MAP[task.criticality || 'media'];
-  const subParts = [];
-  if (task.description) subParts.push(tkEscape(task.description));
-  if (task.deadline) {
-    const dt = new Date(task.deadline);
-    if (!isNaN(dt)) {
-      const fmt = dt.toLocaleString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }).replace('.','');
-      subParts.push(`<i class="ti ti-clock" style="font-size:9px;vertical-align:-1px"></i> ${fmt}`);
-    }
-  }
-  const subHtml = subParts.length
-    ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${subParts.join(' • ')}</div>`
-    : '';
-
-  const item = document.createElement('div');
-  item.className = 'task-item';
-  item.dataset.owner    = task.owner || '';
-  item.dataset.taskId   = task.id;
-  item.dataset.deadline = task.deadline || '';
-
-  if (task.status === 'done') {
-    const timeStr = task.completed_at
-      ? (task.completed_at.includes('T') ? task.completed_at.split('T')[1].slice(0,5) : task.completed_at)
-      : '';
-    const dateStr = task.completed_at
-      ? (task.completed_at.includes('T') ? task.completed_at.split('T')[0] : task.completed_at)
-      : '';
-    item.dataset.date          = dateStr;
-    item.dataset.completedTime = timeStr;
-    item.innerHTML = `
-      <div class="task-check done" onclick="toggleTask(this)"><i class="ti ti-check" style="font-size:9px"></i></div>
-      <div class="task-text" style="opacity:0.5">
-        <div style="font-weight:500;font-size:12px;text-decoration:line-through">${tkEscape(task.title)}</div>
-        ${subHtml}
-        <div class="task-completed-at"><i class="ti ti-check"></i> Concluído às ${timeStr}</div>
-      </div>
-      <span class="badge ${meta.badge}">${meta.label}</span>`;
-  } else {
-    item.innerHTML = `
-      <div class="task-check" onclick="toggleTask(this)"></div>
-      <div class="task-text">
-        <div style="font-weight:500;font-size:12px">${tkEscape(task.title)}</div>
-        ${subHtml}
-      </div>
-      <span class="badge ${meta.badge}">${meta.label}</span>`;
-  }
-  return item;
-}
+function buildTaskItem(task) { return document.createElement('div'); } // legado - não usado
 
 function saveTask() {
   const title = document.getElementById('task-title').value.trim();
   if (!title) { document.getElementById('task-title').focus(); return; }
-  const desc     = document.getElementById('task-description').value.trim();
-  const crit     = document.querySelector('#task-criticality .crit-pill.active')?.dataset.crit || 'media';
-  const deadline = document.getElementById('task-deadline').value || null;
-  const owner    = document.getElementById('task-owner')?.value || currentUser?.id || 'admin';
+  const editId     = document.getElementById('task-edit-id').value;
+  const isEdit     = !!editId;
+  const newStatus  = document.getElementById('task-status').value;
+  const existing   = isEdit ? TASKS_DATA.find(t => t.id === editId) : null;
+  const prevStatus = existing ? normalizeTaskStatus(existing.status) : null;
 
-  const task = {
-    id:          crypto.randomUUID(),
+  // ── Timer automation ──────────────────────────────────────────────────
+  let timerStartedAt = existing?.timerStartedAt || null;
+  let timeSpent      = existing?.timeSpent      || 0;
+  if (newStatus === 'Em Andamento' && prevStatus !== 'Em Andamento') {
+    timerStartedAt = new Date().toISOString();
+    _startTimerTick();
+  } else if (newStatus !== 'Em Andamento' && prevStatus === 'Em Andamento' && timerStartedAt) {
+    timeSpent += (Date.now() - new Date(timerStartedAt).getTime()) / 1000;
+    timerStartedAt = null;
+  }
+
+  // ── Group automation ──────────────────────────────────────────────────
+  const group = newStatus === 'Pronto'
+    ? 'concluidos'
+    : (document.getElementById('task-group')?.value || 'semana');
+
+  const taskObj = {
+    id:          isEdit ? editId : crypto.randomUUID(),
     title,
-    description: desc,
-    criticality: crit,
-    deadline,
-    owner,
-    status:      'active',
-    completed_at: null,
-    created_at:  new Date().toISOString()
+    description: document.getElementById('task-description').value.trim(),
+    status:      newStatus,
+    priority:    document.getElementById('task-priority').value,
+    dueDate:     document.getElementById('task-duedate').value || null,
+    deadline:    document.getElementById('task-duedate').value || null,
+    assignedTo:  document.getElementById('task-owner').value,
+    owner:       document.getElementById('task-owner').value,
+    client:      document.getElementById('task-client').value,
+    group,
+    criticality: {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'}[document.getElementById('task-priority').value] || 'media',
+    created_at:  isEdit ? (existing?.created_at || new Date().toISOString()) : new Date().toISOString(),
+    ...(newStatus === 'Pronto' && { completed_at: existing?.completed_at || new Date().toISOString() }),
+    timeSpent,
+    timerStartedAt,
   };
-
-  const item   = buildTaskItem(task);
-  const list   = document.getElementById('task-list');
-  const header = list.querySelector('.card-header');
-  list.insertBefore(item, header ? header.nextSibling : null);
-
-  createTaskInDB(task);
+  if (isEdit) {
+    const idx = TASKS_DATA.findIndex(t => t.id === editId);
+    if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
+    updateTaskInDB(editId, taskObj);
+  } else {
+    TASKS_DATA.unshift(taskObj);
+    createTaskInDB(taskObj);
+  }
   saveTasks();
+  renderTasksGrid();
   updateNavBadges();
-  refreshTaskOwnerChips();
-  filterByCollaborator(document.getElementById('collab-filter')?.value || 'all');
   closeModal();
   resetTaskForm();
+  showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
 }
 
 /* ==========================================================================
@@ -5172,10 +5234,14 @@ const PROD_CONFIG = {
   supabaseUrl:      'https://SEU-PROJETO.supabase.co',
   supabaseAnonKey:  'SUA-CHAVE',
 
-  // ── Evolution API (WhatsApp) ──────────────────────────────────────────────
-  evolutionUrl:     'https://evolution-api-production-b01b.up.railway.app',
-  evolutionKey:     'COLE-SUA-CHAVE-AQUI',
-  evolutionInstance:'Elo Marketing',
+  // ── Backend Render (proxy para Evolution API / WhatsApp) ─────────────────
+  // Substitua pela URL gerada após o deploy no Render.com
+  renderUrl: 'https://elomarketing-api.onrender.com',
+
+  // ── Evolution API — credenciais ficam no .env do Render (não no frontend) ─
+  // URL e API Key são salvas pelo admin em Integrações → Evolution API → Salvar
+  // e ficam no MongoDB; o Render as lê de lá (ou do .env como fallback).
+  evolutionUrl: 'https://evolution-api-production-b01b.up.railway.app',
 
   // ── OpenAI — Gerar Análise IA na página de Relatórios ─────────────────────
   // Cole aqui a sua chave OpenAI (sk-proj-...). Deixe vazio para usar análise local.
@@ -5276,37 +5342,22 @@ function deleteClientFromDB(id) {
 // localStorage é usado como cache local para UX rápida.
 
 async function loadTasksFromDB() {
-  // Tenta API primeiro; fallback para localStorage
   const data = await _apiFetch('/api/tasks');
-  if (!data || !Array.isArray(data)) {
-    // API indisponível — usa cache local
-    reloadTasksFromStorage();
-    return false;
-  }
-
-  const taskList      = document.getElementById('task-list');
-  const completedList = document.getElementById('completed-tasks-list');
-  if (!taskList || !completedList) return false;
-
-  taskList.querySelectorAll('.task-item').forEach(el => el.remove());
-  completedList.querySelectorAll('.task-item').forEach(el => el.remove());
-
-  data.forEach(task => {
-    const item = buildTaskItem(task);
-    if (task.status === 'done') {
-      completedList.appendChild(item);
-    } else {
-      const header = taskList.querySelector('.card-header');
-      taskList.insertBefore(item, header ? header.nextSibling : null);
-    }
-  });
-
-  // Salva no localStorage como cache offline
-  saveTasks();
-  updateCompletedCount();
-  if (currentUser) filterByCollaborator(_collabUid());
-  refreshTaskOwnerChips();
+  if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
+  TASKS_DATA = data.map(t => ({
+    ...t,
+    status:         normalizeTaskStatus(t.status),
+    priority:       normalizeTaskPriority(t),
+    group:          t.group || 'semana',
+    assignedTo:     t.assignedTo || t.owner || '',
+    timeSpent:      t.timeSpent      || 0,
+    timerStartedAt: t.timerStartedAt || null,
+  }));
+  localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  if (_hasRunningTimers()) _startTimerTick();
+  renderTasksGrid();
   updateNavBadges();
+  if (currentUser) filterByCollaborator(_collabUid());
   return true;
 }
 
@@ -5314,15 +5365,8 @@ function createTaskInDB(task) {
   if (!currentUser) return;
   _apiFetch('/api/tasks', {
     method: 'POST',
-    body:   JSON.stringify({ ...task, updated_by: currentUser.id, created_by: currentUser.id })
-  }).then(r => {
-    if (r?.ok) console.log('[Tasks] criada no servidor:', task.id);
-    else       console.warn('[Tasks] falha ao criar:', task.id);
-  });
-  // Supabase (legado — mantido se configurado)
-  if (db && currentUser) {
-    db.from('tarefas').insert({ ...task, updated_by: currentUser.id }).catch(() => {});
-  }
+    body: JSON.stringify({ ...task, updated_by: currentUser.id, created_by: currentUser.id })
+  }).then(r => { if (!r?.ok) console.warn('[Tasks] falha ao criar:', task.id); });
 }
 
 function updateTaskInDB(id, updates) {
@@ -5476,12 +5520,37 @@ function setSyncStatus(status) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Páginas padrão liberadas para colaboradores recém-criados (sem registro no banco ainda)
+const _DEFAULT_COLLAB_PAGES = [
+  'dashboard','clientes','esteira','campanhas','creatives',
+  'calendar','tarefas','alertas'
+];
+
 const USERS = [
   { id:'guilherme',   initials:'GU', name:'Guilherme', role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', isAdmin:true  },
   { id:'henrique',    initials:'HE', name:'Henrique',  role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#F59E0B,#D97706)', isAdmin:true  },
-  { id:'amanda',      initials:'AM', name:'Amanda',     role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false },
-  { id:'jaqueline',   initials:'JA', name:'Jaqueline',  role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false },
-  { id:'bernardo',    initials:'BE', name:'Bernardo',   role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false }
+  { id:'amanda',      initials:'AM', name:'Amanda',     role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] },
+  { id:'jaqueline',   initials:'JA', name:'Jaqueline',  role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] },
+  { id:'bernardo',    initials:'BE', name:'Bernardo',   role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] }
+];
+
+// Mapa completo de páginas para o sistema de permissões
+const ALL_PAGES = [
+  { key:'dashboard',     label:'Dashboard',              icon:'ti-layout-dashboard'  },
+  { key:'clientes',      label:'Clientes',               icon:'ti-users'             },
+  { key:'esteira',       label:'Esteira de Otimizações', icon:'ti-layout-kanban'     },
+  { key:'contas',        label:'Contas de Anúncio',      icon:'ti-credit-card'       },
+  { key:'campanhas',     label:'Campanhas',              icon:'ti-speakerphone'      },
+  { key:'creatives',     label:'Criativos',              icon:'ti-video'             },
+  { key:'calendar',      label:'Calendário',             icon:'ti-calendar-event'    },
+  { key:'leads',         label:'Leads / WhatsApp',       icon:'ti-brand-whatsapp'    },
+  { key:'crm',           label:'CRM Comercial',          icon:'ti-layout-kanban'     },
+  { key:'relatorios',    label:'Relatórios',             icon:'ti-file-analytics'    },
+  { key:'tarefas',       label:'Tarefas',                icon:'ti-checkbox'          },
+  { key:'alertas',       label:'Alertas',               icon:'ti-bell'              },
+  { key:'integracoes',   label:'Integrações',            icon:'ti-plug'              },
+  { key:'templates',     label:'Templates',              icon:'ti-template'          },
+  { key:'configuracoes', label:'Configurações',          icon:'ti-settings'          },
 ];
 
 let currentUser = null;
@@ -5528,7 +5597,7 @@ function selectLoginUser(uid) {
   document.getElementById('login-error').textContent = '';
 }
 
-function doLogin() {
+async function doLogin() {
   const card  = document.getElementById('login-nf-wrap');
   const btn   = document.querySelector('.login-btn');
   const shake = () => { card.classList.remove('login-shake'); void card.offsetWidth; card.classList.add('login-shake'); };
@@ -5538,6 +5607,13 @@ function doLogin() {
     btn.innerHTML = loading
       ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Acessando...'
       : '<i class="ti ti-login"></i> Entrar';
+  };
+  const failLogin = (msg) => {
+    setBtnLoading(false);
+    document.getElementById('login-error').textContent = msg;
+    shake();
+    document.getElementById('login-pin').value = '';
+    document.getElementById('login-pin').focus();
   };
 
   if (!pendingLoginUser) {
@@ -5553,25 +5629,47 @@ function doLogin() {
 
   const pin  = document.getElementById('login-pin').value;
   const user = USERS.find(u => u.id === pendingLoginUser);
-  if (!user || pin !== user.pin) {
-    document.getElementById('login-error').textContent = 'Senha incorreta.';
-    shake();
-    document.getElementById('login-pin').value = '';
-    document.getElementById('login-pin').focus();
-    return;
-  }
+  if (!user) { failLogin('Usuário não encontrado.'); return; }
 
   setBtnLoading(true);
+
+  // ── Verifica PIN no servidor (PINs alterados são armazenados como bcrypt hash) ──
+  try {
+    const base = _apiBase();
+    if (base) {
+      const result = await _apiFetch('/api/users/' + user.id, {
+        method: 'POST',
+        body: JSON.stringify({ pin })
+      });
+      if (result?.hasHash === true) {
+        // Servidor tem hash bcrypt — usa decisão do servidor
+        if (!result.valid) { failLogin('Senha incorreta.'); return; }
+        // PIN correto validado pelo servidor — efetua login
+        try {
+          loginUser(user);
+          setTimeout(() => setBtnLoading(false), 4000);
+        } catch(err) {
+          setTimeout(() => { document.getElementById('login-error').textContent = ''; loginUser(user); }, 1500);
+        }
+        return;
+      }
+      // hasHash === false → PIN padrão (nunca foi alterado) — cai no fallback local
+    }
+  } catch(e) {
+    console.warn('[Login] Verificação servidor falhou, usando modo offline:', e.message);
+  }
+
+  // ── Fallback: comparação local (PIN padrão hardcoded ou modo offline) ──
+  if (pin !== user.pin) { failLogin('Senha incorreta.'); return; }
+
   try {
     loginUser(user);
-    // Botão desaparece com a tela — reset preventivo caso algo falhe
     setTimeout(() => setBtnLoading(false), 4000);
   } catch(err) {
     console.warn('[Login] erro inesperado:', err.message);
     document.getElementById('login-error').textContent = 'Erro ao conectar. Tentando modo de segurança...';
     setBtnLoading(false);
     shake();
-    // Fallback: força login offline após 1,5 s
     setTimeout(() => {
       document.getElementById('login-error').textContent = '';
       loginUser(user);
@@ -5590,6 +5688,8 @@ function loginUser(user) {
   const exportBtn = document.getElementById('topbar-export-btn');
   if (exportBtn) exportBtn.style.display = user.isAdmin ? '' : 'none';
   updateBackupLastInfo();
+  // Carrega tokens centralizados do servidor (compartilhados entre dispositivos)
+  loadAppConfig();
   // Popula as opções dinamicamente a partir de USERS
   const sel = document.getElementById('collab-filter');
   if (sel) {
@@ -5604,6 +5704,8 @@ function loginUser(user) {
   popularSelectCampanhaCliente();
   filtrarEExibirCampanhas();
   initSupabaseSync();
+  // Aplica permissões de página na sidebar imediatamente após o login
+  applySidebarPermissions();
 }
 
 function updateSidebarUser(user) {
@@ -5678,11 +5780,23 @@ function handleProfilePhoto(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    _profilePhotoData = e.target.result;
-    const avEl   = document.getElementById('profile-av-preview');
-    const initEl = document.getElementById('profile-av-initials');
-    avEl.style.background = '#333';
-    initEl.innerHTML = `<img src="${_profilePhotoData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    // Redimensiona para max 200×200 px (mantém proporção, JPEG 85%)
+    // antes de salvar — imagens grandes como base64 ultrapassariam o limite do MongoDB
+    const img = new Image();
+    img.onload = () => {
+      const MAX   = 200;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      _profilePhotoData = canvas.toDataURL('image/jpeg', 0.85);
+      const avEl   = document.getElementById('profile-av-preview');
+      const initEl = document.getElementById('profile-av-initials');
+      avEl.style.background = '#333';
+      initEl.innerHTML = `<img src="${_profilePhotoData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -5696,10 +5810,12 @@ function saveProfile() {
   if (newPin && newPin !== confirmPin)  { errEl.textContent = 'As senhas não coincidem.'; return; }
   if (newPin && newPin.length < 4)      { errEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
   errEl.textContent = '';
+
   const parts = name.split(' ').filter(Boolean);
   const initials = parts.length >= 2
     ? (parts[0][0] + parts[parts.length-1][0]).toUpperCase()
     : name.slice(0,2).toUpperCase();
+
   const idx = USERS.findIndex(u => u.id === currentUser.id);
   if (idx >= 0) {
     USERS[idx].name     = name;
@@ -5708,11 +5824,40 @@ function saveProfile() {
     if (_profilePhotoData)  USERS[idx].photo = _profilePhotoData;
   }
   currentUser = USERS[idx];
+
+  // ── Persiste em localStorage (fallback offline) ──
   const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
   profiles[currentUser.id] = { name: currentUser.name, initials, pin: currentUser.pin, photo: currentUser.photo || null };
   localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
   updateSidebarUser(currentUser);
   closeProfileModal();
+
+  // ── Persiste no servidor: foto + nome compartilhados com toda a equipe ──
+  const payload = {
+    name:     currentUser.name,
+    initials,
+    photo:    currentUser.photo || ''
+  };
+  if (newPin) payload.pin = newPin; // backend faz o hash com bcrypt
+
+  _apiFetch('/api/users/' + currentUser.id, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  }).then(resp => {
+    if (resp?.ok) {
+      showNotification(
+        newPin
+          ? 'Perfil e senha salvos! Foto sincronizada com a equipe ✅'
+          : 'Perfil salvo! Foto sincronizada com a equipe ✅',
+        'success'
+      );
+      loadUserProfilesFromAPI(); // atualiza avatares na tela de login para todos
+    } else {
+      showNotification('Perfil salvo localmente. Falha ao sincronizar com o servidor.', 'warn');
+    }
+  }).catch(() => {
+    showNotification('Perfil salvo localmente (sem conexão com servidor).', 'warn');
+  });
 }
 
 function _loadUserProfiles() {
@@ -5720,10 +5865,11 @@ function _loadUserProfiles() {
   USERS.forEach(u => {
     const p = profiles[u.id];
     if (!p) return;
-    if (p.name)     u.name     = p.name;
-    if (p.initials) u.initials = p.initials;
-    if (p.pin)      u.pin      = p.pin;
-    if (p.photo)    u.photo    = p.photo;
+    if (p.name)         u.name         = p.name;
+    if (p.initials)     u.initials     = p.initials;
+    if (p.pin)          u.pin          = p.pin;
+    if (p.photo)        u.photo        = p.photo;
+    if (Array.isArray(p.allowedPages)) u.allowedPages = p.allowedPages;
   });
 }
 _loadUserProfiles();
@@ -6739,8 +6885,14 @@ function openNewClientModal(id) {
   document.getElementById('cl-form-ga4-property-id').value  = '';
   const ga4Badge = document.getElementById('ga4-form-badge');
   if (ga4Badge) ga4Badge.style.display = 'none';
+  const _gadsInput = document.getElementById('cl-form-gads-customer-id');
+  if (_gadsInput) _gadsInput.value = '';
+  const gadsBadge = document.getElementById('gads-form-badge');
+  if (gadsBadge) gadsBadge.style.display = 'none';
   metaDdSetValue('');
   carregarContasMeta();
+  // Controle de acesso: somente admins podem editar IDs de conta
+  _applyMetaGa4EditAccess();
   setClientImportance(0);
   resetSocialConnectUI();
   const rows = document.getElementById('cl-inv-rows');
@@ -6774,6 +6926,12 @@ function openNewClientModal(id) {
         document.getElementById('cl-form-ga4-property-id').value = c.ga4_property_id;
         const b = document.getElementById('ga4-form-badge');
         if (b) b.style.display = '';
+      }
+      if (c.google_ads_customer_id) {
+        const _gadsEl = document.getElementById('cl-form-gads-customer-id');
+        if (_gadsEl) _gadsEl.value = c.google_ads_customer_id;
+        const _gadsBadge = document.getElementById('gads-form-badge');
+        if (_gadsBadge) _gadsBadge.style.display = '';
       }
       // Show badge if values already saved
       if (c.meta_balance || c.meta_spend7d) {
@@ -7446,7 +7604,10 @@ function saveNewClient() {
   const whatsapp           = document.getElementById('cl-form-whatsapp').value.trim().replace(/\D/g, '');
   const dia_otimizacao     = document.getElementById('cl-form-dia-otimizacao')?.value || '';
   const categoria          = document.getElementById('cl-form-categoria')?.value || 'elo_marketing';
-  const meta_ad_account_id = document.getElementById('cl-form-meta-account').value.trim();
+  const _canEditApiIds     = currentUser?.isAdmin;
+  const meta_ad_account_id = _canEditApiIds
+    ? document.getElementById('cl-form-meta-account').value.trim()
+    : (clEditingId ? (CLIENTS.list.find(c => c.id === clEditingId)?.meta_ad_account_id || '') : '');
   const investments = [...document.querySelectorAll('#cl-inv-rows .invest-row')].map(row => ({
     month: row.querySelector('.cl-inv-month').value,
     value: parseCurrencyInput(row.querySelector('.cl-inv-value'))
@@ -7465,7 +7626,12 @@ function saveNewClient() {
   const meta_balance      = parseFloat((document.getElementById('cl-form-meta-balance').value || '').replace(/\./g,'').replace(',','.')) || 0;
   const meta_spend7d      = parseFloat((document.getElementById('cl-form-meta-spend7d').value || '').replace(/\./g,'').replace(',','.')) || 0;
   const metodo_pagamento  = document.getElementById('cl-form-metodo-pagamento').value || '';
-  const ga4_property_id   = (document.getElementById('cl-form-ga4-property-id').value || '').trim().replace(/[^0-9]/g,'');
+  const ga4_property_id   = _canEditApiIds
+    ? (document.getElementById('cl-form-ga4-property-id').value || '').trim().replace(/[^0-9]/g,'')
+    : (clEditingId ? (CLIENTS.list.find(c => c.id === clEditingId)?.ga4_property_id || '') : '');
+  const google_ads_customer_id = _canEditApiIds
+    ? (document.getElementById('cl-form-gads-customer-id')?.value || '').trim()
+    : (clEditingId ? (CLIENTS.list.find(c => c.id === clEditingId)?.google_ads_customer_id || '') : '');
 
   // Social token fields
   const fb_page_id            = (document.getElementById('sc-fb-page-id')?.value    || '').trim();
@@ -7480,12 +7646,12 @@ function saveNewClient() {
 
   if (clEditingId) {
     const idx = CLIENTS.list.findIndex(c => c.id === clEditingId);
-    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, dia_otimizacao, ...socialFields });
+    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
   } else {
     CLIENTS.list.push({
       id: `cl-${CLIENTS.nextId++}`,
       name, segment, categoria, importance: clImportanceVal, objective, owner, goal, budget, investment,
-      avatar: initials, whatsapp, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id,
+      avatar: initials, whatsapp, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
       color: CL_COLORS[(CLIENTS.list.length) % CL_COLORS.length],
       investments, dia_otimizacao,
       ultima_otimizacao: '', historico_otimizacoes: [],
@@ -9262,7 +9428,7 @@ function evalBalanceAlert(platformData, clientBudget) {
   return { level: 'ok', msg: 'Normal', detail: null };
 }
 
-function buildBalClientBlock(client, metaAlert, googleAlert, metaData) {
+function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
   const seg     = CL_SEGMENTS[client.segment] || { label:'—', color:'var(--text3)', bg:'var(--bg3)' };
   const pacing  = calcPacing(client);
   const budgetUsedPct = pacing.investPct !== null ? Math.round(pacing.investPct * 100) : null;
@@ -9277,7 +9443,7 @@ function buildBalClientBlock(client, metaAlert, googleAlert, metaData) {
                   : metaData?.payType === 'postpaid' && !(client.meta_balance > 0);
 
   // Determine block severity class
-  const levels  = [metaAlert.level, googleAlert.level];
+  const levels  = [metaAlert.level, gadsAlert.level];
   const blockCls = levels.includes('critical') ? 'has-critical'
                  : levels.includes('moderate') ? 'has-moderate' : '';
 
@@ -9367,7 +9533,9 @@ function buildBalClientBlock(client, metaAlert, googleAlert, metaData) {
       ? `<span style="color:var(--red)">Campanha pode pausar em menos de 48h — recarregue o saldo agora!</span>`
       : dataFim
         ? `<span style="color:${isModerate ? 'var(--amber)' : 'var(--green)'}">Previsão de Término: estimado para <b>${dataFim}</b> · Autonomia de <b>${diasRestantes} dias</b></span>`
-        : `<span style="color:var(--text3)">Sem histórico de gastos para estimar autonomia</span>`;
+        : balance > 0
+          ? `<span style="color:var(--text3)">Saldo disponível — informe o gasto médio no cadastro para calcular autonomia</span>`
+          : `<span style="color:var(--text3)">Configure o saldo inicial no cadastro do cliente para ativar o monitor</span>`;
 
     return `
       <div class="bal-platform-row">
@@ -9423,7 +9591,70 @@ function buildBalClientBlock(client, metaAlert, googleAlert, metaData) {
   }
 
   const metaRow   = isPostpaid ? postpaidMetaRow() : prepaidMetaRow();
-  const googleRow = platformRow('Google Analytics 4', 'G', 'ga4', '#E37400', googleAlert);
+
+  // ── Google Ads row ─────────────────────────────────────────────────────────
+  function gadsRow() {
+    if (!client.google_ads_customer_id) {
+      return `
+        <div class="bal-platform-row">
+          <div class="bal-platform-icon gads">G</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+              <span style="font-size:11px;font-weight:600;color:var(--text)">Google Ads</span>
+              <span class="bal-alert-pill pending"><i class="ti ti-clock" style="font-size:10px"></i>Não Vinculado</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Adicione o Customer ID do Google Ads no cadastro do cliente para ativar o monitoramento</div>
+          </div>
+        </div>`;
+    }
+    const isCritical = gadsAlert.level === 'critical';
+    const isModerate = gadsAlert.level === 'moderate';
+    const badgeCls   = isCritical ? 'critical' : isModerate ? 'warning' : 'active';
+    const badgeTxt   = isCritical ? '❌ Conta Pausada'
+                     : isModerate ? '⚠️ Orçamento Excedido'
+                     :              '✅ Google Ads Ativo';
+
+    const budget   = gadsData?.budget || client.budget || 0;
+    const spent    = gadsData?.amountSpent || client.investment || 0;
+    const rate     = gadsData?.spend7d || gadsData?.dailySpend || 0;
+    const pct      = budget > 0 ? Math.min(Math.round((spent / budget) * 100), 100) : 0;
+    const barColor = isCritical ? 'var(--red)' : isModerate ? 'var(--amber)' : '#4285F4';
+
+    const remaining    = budget - spent;
+    const daysUntilEnd = rate > 0 && remaining > 0 ? Math.ceil(remaining / rate) : 0;
+    const closingDate  = daysUntilEnd > 0 ? dateAddDays(daysUntilEnd) : null;
+
+    const statusLine = isCritical
+      ? `<span style="color:var(--red)">Anúncios pausados — verifique a conta no Google Ads</span>`
+      : isModerate
+        ? `<span style="color:var(--amber)">Gasto ultrapassou o orçamento planejado de ${fmtBRL2(budget)}</span>`
+        : closingDate
+          ? `<span style="color:var(--green)">Fechamento estimado pelo ritmo atual: <b>${closingDate}</b></span>`
+          : `<span style="color:var(--text3)">Sem dados suficientes para estimar fechamento</span>`;
+
+    return `
+      <div class="bal-platform-row">
+        <div class="bal-platform-icon gads">G</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:600;color:var(--text)">Google Ads</span>
+            <span class="bal-card-badge ${badgeCls}">${badgeTxt}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">
+            Gasto Acumulado: <b style="color:var(--text)">${fmtBRL2(spent)}</b>
+            ${budget > 0 ? `· orçamento planejado: <b style="color:var(--text)">${fmtBRL2(budget)}</b>` : ''}
+          </div>
+          <div style="font-size:10px;margin-top:2px">${statusLine}</div>
+          ${budget > 0 ? `
+          <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+            <div class="bal-progress-track"><div class="bal-progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
+            <span style="font-size:9px;color:var(--text3);white-space:nowrap">${pct}%</span>
+          </div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  const googleRow = gadsRow();
 
   // ── Barra de Meta de Faturamento (Delivery / E-commerce) ───────────────────
   const isFaturamentoSeg = client.segment === 'delivery' || client.segment === 'ecommerce';
@@ -9652,18 +9883,25 @@ async function renderBalanceMonitor() {
 
   for (const c of clients) {
     let metaData   = null;
-    let googleData = null;
-
-    let ga4Data = null;
+    let gadsData   = null;
+    let ga4Data    = null;
 
     if (BAL_SIM_MODE) {
       const sim = BAL_SIM_DATA[c.name] || {
         meta: { balance: Math.random() > 0.5 ? Math.round(Math.random()*800) : 0, dailySpend: Math.round(50+Math.random()*150), amountSpent: Math.round(200+Math.random()*800), status: Math.random()>0.85?2:1, payType: Math.random()>0.5?'prepaid':'postpaid' },
         ga4:  null
       };
-      metaData   = sim.meta;
-      googleData = sim.google || null; // legacy compat
-      ga4Data    = sim.ga4    || null;
+      metaData = sim.meta;
+      ga4Data  = sim.ga4 || null;
+      // Google Ads sim: usa dados do cadastro do cliente como proxy
+      gadsData = c.google_ads_customer_id ? {
+        amountSpent: c.investment || 0,
+        budget:      c.budget     || 0,
+        spend7d:     c.meta_spend7d > 0 ? c.meta_spend7d : ((c.investment||0) / Math.max(1, new Date().getDate())),
+        dailySpend:  (c.investment||0) / Math.max(1, new Date().getDate()),
+        budgetPct:   c.budget > 0 ? ((c.investment||0) / c.budget) * 100 : 0,
+        status:      'ENABLED',
+      } : null;
 
       // ── Sim: injeta faturamento (Meta Ads > GA4) em goal.realized ────────────
       const simSeg = c.segment;
@@ -9695,12 +9933,12 @@ async function renderBalanceMonitor() {
         }
       }
     } else {
-      // Fetch Meta e GA4 em paralelo
-      [metaData, ga4Data] = await Promise.all([
+      // Fetch Meta, GA4 e Google Ads em paralelo
+      [metaData, ga4Data, gadsData] = await Promise.all([
         fetchMetaAccountStatus(c),
-        c.ga4_property_id ? fetchGA4Stats(c) : Promise.resolve(null)
+        c.ga4_property_id ? fetchGA4Stats(c) : Promise.resolve(null),
+        fetchGadsAccountStatus(c)
       ]);
-      googleData = null;
 
       // ── Faturamento para delivery / e-commerce ────────────────────────────
       // Prioridade: Meta Ads action_values (pixel purchase) > GA4 purchaseRevenue
@@ -9717,16 +9955,17 @@ async function renderBalanceMonitor() {
       }
     }
 
-    // Fallback: usa saldo pré-pago real (meta_balance) + gasto diário real (investment / dias)
+    // Fallback: cria metaData para clientes pré-pagos sem dados da API.
+    // Abrange tanto clientes com saldo cadastrado quanto recém-criados (saldo = 0).
     // IMPORTANTE: nunca usar budget-investment como saldo — esse é o orçamento mensal restante,
     // não o saldo da conta Meta. Use o campo meta_balance para o saldo real da conta.
-    if (!metaData && c.meta_balance > 0 && c.investment > 0) {
-      const daysPassed      = new Date().getDate();
-      const gastoDiarioReal = c.investment / daysPassed; // spend_total / dias_passados
-      const budgetPct       = c.budget > 0 ? (c.investment / c.budget) * 100 : 0;
-      // spend7d pode vir de c.meta_spend7d se o cliente tiver esse campo sincronizado
-      const spend7d = c.meta_spend7d > 0 ? c.meta_spend7d : undefined;
-      metaData = { balance: c.meta_balance, dailySpend: gastoDiarioReal, spend7d, amountSpent: c.investment || 0, status: 1, payType: 'prepaid', budgetPct };
+    const _isPrepagoClient = c.metodo_pagamento === 'pre_pago' || c.meta_balance > 0;
+    if (!metaData && _isPrepagoClient) {
+      const daysPassed      = Math.max(1, new Date().getDate());
+      const gastoDiarioReal = c.investment > 0 ? c.investment / daysPassed : 0;
+      const budgetPct       = c.budget > 0 && c.investment > 0 ? (c.investment / c.budget) * 100 : 0;
+      const spend7d         = c.meta_spend7d > 0 ? c.meta_spend7d : undefined;
+      metaData = { balance: c.meta_balance || 0, dailySpend: gastoDiarioReal, spend7d, amountSpent: c.investment || 0, status: 1, payType: 'prepaid', budgetPct };
     }
 
     // ── Auto-salva o método de pagamento detectado se o cliente ainda não tiver ──
@@ -9756,16 +9995,13 @@ async function renderBalanceMonitor() {
       console.log(`[payOverride] ${c.name}: payType forçado para '${metaData.payType}'`);
     }
 
-    const metaAlert   = evalBalanceAlert(metaData, c.budget);
-    // GA4 substitui o placeholder "Google Ads em breve"
-    const googleAlert = (ga4Data || c.ga4_property_id)
-      ? evalGA4Status(ga4Data, c)
-      : { level: 'pending', msg: '⚠️ GA4 Não Vinculado', detail: 'Adicione o Property ID no cadastro do cliente' };
+    const metaAlert  = evalBalanceAlert(metaData, c.budget);
+    const gadsAlert  = evalGadsStatus(gadsData, c);
 
-    // Severidade: GA4 'pending'/'ok' não sobe para moderate/critical — só Meta conta
+    // Severidade: Google Ads 'pending'/'ok' não sobe acima de Meta — Meta é prioridade
     const worstLevel = metaAlert.level === 'critical' ? 'critical'
                      : metaAlert.level === 'moderate' ? 'moderate'
-                     : googleAlert.level === 'moderate' ? 'moderate' : 'ok';
+                     : gadsAlert.level === 'moderate' ? 'moderate' : 'ok';
     if (worstLevel === 'critical') nCritical++;
     else if (worstLevel === 'moderate') nModerate++;
     else nOk++;
@@ -9787,7 +10023,7 @@ async function renderBalanceMonitor() {
                   : metaData?.payType === 'prepaid'           ? 'prepaid'
                   : c.meta_balance > 0                        ? 'prepaid'  // legacy: tem saldo pré-pago cadastrado
                   : 'postpaid';
-    blocks.push({ html: buildBalClientBlock(c, metaAlert, googleAlert, metaData), level: worstLevel, payType });
+    blocks.push({ html: buildBalClientBlock(c, metaAlert, gadsAlert, gadsData, metaData), level: worstLevel, payType });
   }
 
   // Persiste métodos de pagamento detectados automaticamente
@@ -9920,12 +10156,21 @@ function loadGA4Token() {
 }
 
 function saveGA4Config() {
+  if (!currentUser?.isAdmin) {
+    showNotification('⛔ Apenas administradores podem configurar o token GA4.', 'error');
+    return;
+  }
   const token = (document.getElementById('ga4-access-token')?.value || '').trim();
   if (!token) { showNotification('Cole o Access Token GA4 antes de salvar.', 'warn'); return; }
   localStorage.setItem('ga4_access_token', token);
   const badge = document.getElementById('ga4-status-badge');
   if (badge) { badge.textContent = 'Configurado ✅'; badge.className = 'badge badge-green'; }
   showNotification('Token GA4 salvo! Clique em Verificar para testar.', 'success');
+  // Salva no servidor (compartilhado entre todos os dispositivos)
+  _apiFetch('/api/config', {
+    method: 'PUT',
+    body: JSON.stringify({ key: 'ga4_access_token', value: token })
+  }).catch(() => {});
 }
 
 async function verifyGA4Token() {
@@ -10053,6 +10298,46 @@ async function fetchGA4Stats(client) {
     console.warn('[fetchGA4] Erro de rede:', err.message);
     return { error: err.message };
   }
+}
+
+// ── Google Ads: avalia dados e retorna objeto de alerta ─────────────────────
+function evalGadsStatus(gadsData, client) {
+  if (!client.google_ads_customer_id) {
+    return { level: 'pending', msg: 'Google Ads Não Vinculado', detail: 'Adicione o ID do cliente Google Ads no cadastro' };
+  }
+  if (!gadsData) {
+    return { level: 'pending', msg: 'Google Ads sem dados', detail: null };
+  }
+  const { budgetPct, status } = gadsData;
+  if (status === 'SUSPENDED' || status === 'REMOVED') {
+    return { level: 'critical', msg: 'Conta Pausada', detail: 'Verifique o status no Google Ads Manager' };
+  }
+  if ((budgetPct || 0) > 100) {
+    return { level: 'moderate', msg: 'Orçamento Excedido', detail: `Gasto ultrapassou o budget planejado (${Math.round(budgetPct)}%)` };
+  }
+  return { level: 'ok', msg: 'Google Ads Ativo', detail: null };
+}
+
+// ── Google Ads: busca dados de gasto/orçamento (usa dados do cadastro como proxy) ──
+// A integração direta com a Google Ads API requer OAuth e developer token.
+// Por enquanto usa os campos investment/budget do cliente como fonte de dados.
+async function fetchGadsAccountStatus(client) {
+  if (!client.google_ads_customer_id) return null;
+  const budget     = client.budget     || 0;
+  const spent      = client.investment || 0;
+  const daysPassed = Math.max(1, new Date().getDate());
+  const dailySpend = spent > 0 ? spent / daysPassed : 0;
+  const spend7d    = client.meta_spend7d > 0 ? client.meta_spend7d : dailySpend;
+  const budgetPct  = budget > 0 ? (spent / budget) * 100 : 0;
+  return {
+    amountSpent: spent,
+    budget,
+    spend7d,
+    dailySpend,
+    budgetPct,
+    status: 'ENABLED',
+    payType: 'postpaid',
+  };
 }
 
 // Avalia os dados GA4 e retorna objeto de alerta para exibição no card.
@@ -10187,6 +10472,10 @@ function onGA4PropertyInput(val) {
   if (badge) badge.style.display = val.replace(/\D/g,'').length >= 6 ? '' : 'none';
   const hint = document.getElementById('cl-ga4-hint');
   if (hint) hint.textContent = val ? `Property ID: ${val.replace(/\D/g,'')}` : 'Encontre o Property ID em GA4 → Admin → Detalhes da Propriedade';
+}
+function onGadsCustomerIdInput(val) {
+  const badge = document.getElementById('gads-form-badge');
+  if (badge) badge.style.display = val.replace(/[^0-9]/g,'').length >= 8 ? '' : 'none';
 }
 
 /* ========== META MARKETING API ========== */
@@ -10529,11 +10818,20 @@ function initMetaConfig() {
   const token = loadMetaToken();
   const input = document.getElementById('meta-access-token');
   const badge = document.getElementById('meta-status-badge');
-  if (input) input.value = token;
+  const isAdmin = currentUser?.isAdmin;
+  if (input) {
+    input.value = isAdmin ? token : '';
+    input.disabled = !isAdmin;
+    input.placeholder = isAdmin ? 'EAAxxxxx...' : '🔒 Visível apenas para admins';
+    input.style.opacity = isAdmin ? '' : '0.5';
+  }
   if (badge) {
     badge.textContent = token ? 'Configurado' : 'Não configurado';
     badge.className   = `badge ${token ? 'badge-green' : 'badge-gray'}`;
   }
+  // Botão Salvar Token: só para admins
+  const saveBtn = document.querySelector('[onclick="saveMetaConfig()"]');
+  if (saveBtn) saveBtn.style.display = isAdmin ? '' : 'none';
   if (token) carregarContasMeta();
 }
 
@@ -10541,14 +10839,27 @@ function initGA4Config() {
   const token = loadGA4Token();
   const input = document.getElementById('ga4-access-token');
   const badge = document.getElementById('ga4-status-badge');
-  if (input) input.value = token;
+  const isAdmin = currentUser?.isAdmin;
+  if (input) {
+    input.value = isAdmin ? token : '';
+    input.disabled = !isAdmin;
+    input.placeholder = isAdmin ? 'ya29.xxxxx...' : '🔒 Visível apenas para admins';
+    input.style.opacity = isAdmin ? '' : '0.5';
+  }
   if (badge) {
     badge.textContent = token ? 'Configurado ✅' : 'Não configurado';
     badge.className   = `badge ${token ? 'badge-green' : 'badge-gray'}`;
   }
+  // Botão Salvar Token: só para admins
+  const saveGA4Btn = document.querySelector('[onclick="saveGA4Config()"]');
+  if (saveGA4Btn) saveGA4Btn.style.display = isAdmin ? '' : 'none';
 }
 
 function saveMetaConfig() {
+  if (!currentUser?.isAdmin) {
+    showNotification('⛔ Apenas administradores podem configurar o token Meta.', 'error');
+    return;
+  }
   const token = document.getElementById('meta-access-token').value.trim();
   localStorage.setItem('meta_access_token', token);
   META_AD_ACCOUNTS = []; // invalidate cache on token change
@@ -10558,7 +10869,14 @@ function saveMetaConfig() {
     badge.className   = `badge ${token ? 'badge-green' : 'badge-gray'}`;
   }
   showNotification(token ? 'Token salvo. Carregando contas...' : 'Token removido.', token ? 'ok' : 'warn');
-  if (token) carregarContasMeta(true);
+  if (token) {
+    carregarContasMeta(true);
+    // Salva no servidor (compartilhado entre todos os dispositivos)
+    _apiFetch('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ key: 'meta_access_token', value: token })
+    }).catch(() => {});
+  }
 }
 
 async function atualizarDadosMeta(cliente) {
@@ -10576,46 +10894,103 @@ async function atualizarDadosMeta(cliente) {
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const daysPassed  = today.getDate();
   const timePct     = daysPassed / daysInMonth;
+  const acctId      = cliente.meta_ad_account_id;
+  const enc         = encodeURIComponent(token);
 
   try {
-    const url = `https://graph.facebook.com/v19.0/${cliente.meta_ad_account_id}/insights` +
-      `?access_token=${encodeURIComponent(token)}&date_preset=this_month` +
-      `&fields=spend,actions,action_values&level=account`;
-    const res  = await fetch(url);
-    const json = await res.json();
+    // ── 4 chamadas paralelas à Meta Graph API ─────────────────────────────────
+    // 1) Insights mês vigente  → gasto, ações, conversões
+    // 2) Detalhes da conta     → funding_source_details, balance (detecção de pagamento)
+    // 3) Insights últimos 7d   → média diária para cálculo de autonomia pré-pago
+    // 4) Transações recentes   → confirmação cartão vs boleto/PIX
+    const [insRes, acctRes, ins7dRes, txRes] = await Promise.all([
+      fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
+            `?access_token=${enc}&date_preset=this_month` +
+            `&fields=spend,actions,action_values&level=account`),
+      fetch(`https://graph.facebook.com/v19.0/${acctId}` +
+            `?fields=funding_source_details,balance,account_status,currency` +
+            `&access_token=${enc}`),
+      fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
+            `?date_preset=last_7d&fields=spend&level=account` +
+            `&access_token=${enc}`),
+      fetch(`https://graph.facebook.com/v19.0/${acctId}/transactions` +
+            `?limit=5&fields=type,payment_method_type,description,amount,status` +
+            `&access_token=${enc}`)
+    ]);
+
+    const json      = await insRes.json();
+    const acctJson  = await acctRes.json();
+    const ins7dJson = await ins7dRes.json();
+    const txJson    = await txRes.json();
 
     if (json.error) {
       showNotification(`Meta API: ${json.error.message}`, 'error');
       return null;
     }
 
+    // ── Spend / ações / conversões mês vigente ────────────────────────────────
     const data         = json.data?.[0] || {};
     const spend        = parseFloat(data.spend || '0');
     const actions      = data.actions      || [];
-    const actionValues = data.action_values || [];  // valores monetários das conversões (R$)
+    const actionValues = data.action_values || [];
 
-    // ── DEBUG: loga arrays completos para inspecionar as chaves reais da API ──
     console.log(`%c[Meta API] ${cliente.name} — actions brutas:`, 'color:#E37400;font-weight:bold');
-    console.log(JSON.stringify(actions, null, 2));
     console.table(actions.map(a => ({ action_type: a.action_type, value: a.value })));
     console.log(`%c[Meta API] ${cliente.name} — action_values (R$):`, 'color:#22D3A0;font-weight:bold');
     console.table(actionValues.map(a => ({ action_type: a.action_type, value: a.value })));
 
-    const goalInfo   = CL_GOAL_MAP[cliente.segment];
+    // ── Saldo da conta (detecção de pré-pago) ─────────────────────────────────
+    // CONTAS PRÉ-PAGAS: funding_source_details.display_amount = saldo em carteira
+    // CONTAS PÓS-PAGAS: display_amount = limite disponível (pode estar zerado)
+    // Regra: FSD > balance como último recurso (para pré-pagas, balance = gasto acumulado)
+    let balance = 0;
+    const fsd = !acctJson.error ? acctJson.funding_source_details : null;
+
+    if (fsd?.display_amount != null && parseFloat(fsd.display_amount) > 0) {
+      const raw = parseFloat(fsd.display_amount);
+      balance   = raw >= 200 ? raw / 100 : raw;     // centavos → BRL se ≥ 200
+      console.log(`[MetaSync] ${cliente.name}: saldo via FSD: R$${balance}`);
+    }
+    if (balance < 100 && !acctJson.error && acctJson.balance != null) {
+      const raw = parseFloat(acctJson.balance);
+      const candidate = raw >= 200 ? raw / 100 : raw;
+      if (candidate >= 100) {
+        balance = candidate;
+        console.log(`[MetaSync] ${cliente.name}: saldo via balance field: R$${balance}`);
+      }
+    }
+
+    // ── Gasto médio últimos 7 dias → cálculo de autonomia ────────────────────
+    let gastoMedio7d = 0;
+    if (!ins7dJson?.error && ins7dJson?.data?.length > 0) {
+      const total7d = parseFloat(ins7dJson.data[0].spend || '0');
+      gastoMedio7d  = total7d > 0 ? +(total7d / 7).toFixed(2) : 0;
+      console.log(`[MetaSync] ${cliente.name}: gasto 7d=${total7d} → média/dia=R$${gastoMedio7d}`);
+    }
+
+    // ── Override auditado (para contas com API inconsistente) ─────────────────
+    const overridden   = applyBalanceOverride(acctId, balance, gastoMedio7d);
+    const finalBalance = overridden.balance;
+    const finalSpend7d = overridden.spend7d;
+
+    // ── Detecção automática de forma de pagamento ─────────────────────────────
+    // Hierarquia: PAYMENT_METHOD_OVERRIDES → FSD.type → transactions → FSD.display_amount
+    const txData          = (!txJson?.error && txJson?.data) ? txJson.data : [];
+    const metodoDetectado = detectPaymentMethodFromData(acctId, fsd, txData);
+    console.log(`[MetaSync] ${cliente.name}: metodo_pagamento detectado → ${metodoDetectado}`);
+
+    // ── Realized / faturamento ────────────────────────────────────────────────
+    const goalInfo = CL_GOAL_MAP[cliente.segment];
     let realized = 0;
     let faturamentoMetaAds = 0;
 
     if (goalInfo && (actions.length > 0 || actionValues.length > 0)) {
       if (cliente.segment === 'ecommerce' || cliente.segment === 'delivery') {
-        // Para delivery/ecommerce: usa action_values (R$) — pick-first evita 3× duplicação
         faturamentoMetaAds = _pickMetricByPriority(actionValues, _META_SALE_PRIORITY, parseFloat);
         realized = faturamentoMetaAds;
         console.log(`%c[Meta sync] ${cliente.name} — faturamento via action_values: R$ ${faturamentoMetaAds.toFixed(2)}`, 'color:#6C63FF;font-weight:bold');
       } else {
-        // ── Lead consolidado: usa _calcLeadsTotal (mesma fórmula do relatório) ──
-        //    cadastros nativos + mensagens iniciadas WhatsApp/Messenger
         realized = _calcLeadsTotal(actions);
-
         console.log(
           `%c[Meta sync] ${cliente.name}`,
           'color:#22D3A0;font-weight:bold',
@@ -10625,22 +11000,30 @@ async function atualizarDadosMeta(cliente) {
       }
     }
 
-    // Update client in memory
+    // ── Persiste todos os campos no cliente ───────────────────────────────────
     const idx = CLIENTS.list.findIndex(c => c.id === cliente.id);
     if (idx >= 0) {
-      CLIENTS.list[idx].investment = spend;
-      // Salva faturamento Meta Ads para delivery/ecommerce
-      if (faturamentoMetaAds > 0) {
-        CLIENTS.list[idx].faturamentoMetaAds = faturamentoMetaAds;
+      const cl = CLIENTS.list[idx];
+      cl.investment = spend;
+      // Saldo e média 7d — só sobrescreve se a API retornou valor real
+      if (finalBalance > 0) cl.meta_balance = finalBalance;
+      if (finalSpend7d > 0) cl.meta_spend7d  = finalSpend7d;
+      // Forma de pagamento — só auto-detecta se ainda não foi definida (patches têm prioridade)
+      if (!cl.metodo_pagamento || cl.metodo_pagamento === '') {
+        cl.metodo_pagamento = metodoDetectado;
       }
-      if (realized > 0 && CLIENTS.list[idx].goal) {
-        // Arredonda para 2 casas (não inteiro — faturamento em R$ tem centavos)
-        CLIENTS.list[idx].goal.realized = Math.round(realized * 100) / 100;
+      if (faturamentoMetaAds > 0) cl.faturamentoMetaAds = faturamentoMetaAds;
+      if (realized > 0 && cl.goal) {
+        cl.goal.realized = Math.round(realized * 100) / 100;
       }
       saveClients();
     }
 
-    return { spend, realized, faturamentoMetaAds, timePct, daysPassed, daysInMonth };
+    return {
+      spend, realized, faturamentoMetaAds, timePct, daysPassed, daysInMonth,
+      meta_balance: finalBalance, meta_spend7d: finalSpend7d,
+      metodo_pagamento: metodoDetectado
+    };
   } catch (err) {
     showNotification(`Falha ao conectar com Meta API: ${err.message}`, 'error');
     return null;
@@ -10658,9 +11041,13 @@ async function sincronizarMeta(clientId) {
   renderPacingAlerts();
 
   if (result) {
-    const budgetPct = cliente.budget > 0 ? Math.round((result.spend / cliente.budget) * 100) : '—';
+    const budgetPct  = cliente.budget > 0 ? Math.round((result.spend / cliente.budget) * 100) : '—';
+    const balInfo    = result.meta_balance > 0
+      ? ` | Saldo: ${fmtBRL(result.meta_balance)} (~${result.meta_spend7d > 0 ? Math.floor(result.meta_balance / result.meta_spend7d) + 'd' : '—'})`
+      : '';
+    const payInfo    = result.metodo_pagamento === 'pre_pago' ? ' 💰 Pré-pago' : result.metodo_pagamento === 'cartao' ? ' 💳 Cartão' : '';
     showNotification(
-      `${cliente.name} atualizado — Gasto: ${fmtBRL(result.spend)} (${budgetPct}% do orçamento, dia ${result.daysPassed}/${result.daysInMonth})`,
+      `${cliente.name} atualizado — Gasto: ${fmtBRL(result.spend)} (${budgetPct}% | dia ${result.daysPassed}/${result.daysInMonth})${balInfo}${payInfo}`,
       'ok'
     );
   }
@@ -10722,9 +11109,15 @@ async function sincronizarTodosMeta() {
   const results = await Promise.all(clientes.map(c => atualizarDadosMeta(c).catch(() => null)));
   const ok = results.filter(Boolean).length;
 
+  // Contabiliza formas de pagamento detectadas e saldos obtidos
+  const withBalance  = results.filter(r => r?.meta_balance > 0).length;
+  const prePagos     = results.filter(r => r?.metodo_pagamento === 'pre_pago').length;
+  const cartoes      = results.filter(r => r?.metodo_pagamento === 'cartao').length;
+
   renderClients();
   renderGoalAlerts();
   renderPacingAlerts();
+  renderBalanceMonitor?.();
 
   /* Restaura botão */
   if (btn) {
@@ -10732,45 +11125,52 @@ async function sincronizarTodosMeta() {
     btn.innerHTML = '<i class="ti ti-refresh"></i> Sincronizar Todos';
   }
 
-  showNotification(`Sincronização concluída: ${ok}/${clientes.length} cliente(s) atualizados.`, 'ok');
+  const payInfo = prePagos + cartoes > 0
+    ? ` | 💰 ${prePagos} pré-pago, 💳 ${cartoes} cartão`
+    : '';
+  const balInfo = withBalance > 0 ? ` | ${withBalance} saldo(s) obtido(s)` : '';
+  showNotification(
+    `Sincronização concluída: ${ok}/${clientes.length} cliente(s) atualizados${payInfo}${balInfo}.`,
+    'ok'
+  );
 }
 
+// Apenas URL e key ficam no frontend (salvas no MongoDB pelo admin).
+// O instanceName é gerado no backend: elo_${userId}.
 const EVO_DEFAULTS = {
-  url:      PROD_CONFIG.evolutionUrl,
-  key:      PROD_CONFIG.evolutionKey,
-  instance: PROD_CONFIG.evolutionInstance,
+  url: PROD_CONFIG.evolutionUrl,
 };
 
 function loadEvoConfig() {
   return {
-    url:      localStorage.getItem('evo_url')      || EVO_DEFAULTS.url,
-    key:      localStorage.getItem('evo_key')      || EVO_DEFAULTS.key,
-    instance: localStorage.getItem('evo_instance') || EVO_DEFAULTS.instance
+    url: localStorage.getItem('evo_url') || EVO_DEFAULTS.url,
+    key: localStorage.getItem('evo_key') || '',
   };
 }
 
 function saveEvoConfig() {
-  const url      = document.getElementById('evo-url').value.trim().replace(/\/$/, '');
-  const key      = document.getElementById('evo-key').value.trim();
-  const instance = document.getElementById('evo-instance').value.trim();
+  const url = document.getElementById('evo-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('evo-key').value.trim();
 
-  // Validação básica antes de salvar
-  if (!url || !key || !instance) {
-    showNotification('⚠️ Preencha todos os campos (URL, API Key e Nome da Instância) antes de salvar.', 'warn');
+  if (!url || !key) {
+    showNotification('⚠️ Preencha URL do servidor e API Key antes de salvar.', 'warn');
     return;
   }
 
+  // Persiste localmente
   localStorage.setItem('evo_url', url);
   localStorage.setItem('evo_key', key);
-  localStorage.setItem('evo_instance', instance);
 
-  // Remove highlight de erro nos campos (caso estivessem vermelhos)
-  ['evo-url','evo-key','evo-instance'].forEach(id => {
+  // Persiste no MongoDB — Render backend lerá de lá para chamar a Evolution API
+  _apiFetch('/api/config', { method:'PUT', body: JSON.stringify({ key: 'evolution_url', value: url }) });
+  _apiFetch('/api/config', { method:'PUT', body: JSON.stringify({ key: 'evolution_key', value: key }) });
+
+  ['evo-url','evo-key'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.borderColor = '';
   });
 
-  showNotification('✅ Configuração salva! Verifique o estado da instância.', 'success');
+  showNotification('✅ Configuração salva e sincronizada com o servidor!', 'success');
   updateEvoStatus();
   checkInstanceState();
 }
@@ -10779,7 +11179,7 @@ function updateEvoStatus() {
   const badge = document.getElementById('evo-status-badge');
   if (!badge) return;
   const cfg = loadEvoConfig();
-  if (cfg.url && cfg.key && cfg.instance) {
+  if (cfg.url && cfg.key) {
     badge.className = 'badge badge-green';
     badge.textContent = 'Configurado ✅';
   } else {
@@ -10792,52 +11192,56 @@ function loadEvoFields() {
   const cfg = loadEvoConfig();
   const u = document.getElementById('evo-url');
   const k = document.getElementById('evo-key');
-  const i = document.getElementById('evo-instance');
-  if (u) u.value = cfg.url;
-  if (k) k.value = cfg.key;
-  if (i) i.value = cfg.instance;
+  if (u) u.value = cfg.url || '';
+  if (k) k.value = cfg.key || '';
   updateEvoStatus();
   checkInstanceState();
   initGA4Config();
 }
 
 async function checkInstanceState() {
-  const cfg = loadEvoConfig();
   const dot   = document.getElementById('evo-conn-dot');
   const label = document.getElementById('evo-conn-label');
   const sub   = document.getElementById('evo-conn-sub');
   const inst  = document.getElementById('evo-conn-instance');
   const btn   = document.getElementById('evo-qr-btn');
-  if (inst) inst.textContent = cfg.instance || '—';
-  if (!cfg.url || !cfg.key || !cfg.instance) {
-    if (label) label.textContent = 'Não configurado';
+
+  const userId = currentUser?.id;
+
+  // Mostra instância do usuário logado
+  if (inst) inst.textContent = userId ? `elo_${userId}` : '—';
+
+  if (!userId || !PROD_CONFIG.renderUrl) {
+    if (label) label.textContent = userId ? 'Backend Render não configurado' : 'Não autenticado';
     return;
   }
+
   if (label) label.textContent = 'A verificar...';
   try {
-    const res = await fetch(`${cfg.url}/instance/connectionState/${encodeURIComponent(cfg.instance)}`, {
-      headers: _evoAuthHeaders(cfg.key)
-    });
+    const data = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
 
-    // 401/403 → API Key inválida
-    if (res.status === 401 || res.status === 403) {
-      if (dot)   { dot.style.background = '#EF4444'; dot.style.boxShadow = 'none'; }
-      if (label) label.textContent = 'API Key inválida (401)';
-      if (sub)   { sub.style.color = 'var(--red)'; }
-      const keyInput = document.getElementById('evo-key');
-      if (keyInput) keyInput.style.borderColor = 'var(--red)';
-      console.error('[WhatsApp] checkState 401 — API Key incorreta');
+    if (!data) {
+      if (dot)   dot.style.background = '#EF4444';
+      if (label) label.textContent = 'Sem resposta do servidor';
       return;
     }
 
-    const data  = await res.json();
-    const state = data?.instance?.state || data?.state || 'unknown';
+    // 401 → chave errada
+    if (data.error && (data.error.includes('401') || data.error.toLowerCase().includes('inválida'))) {
+      if (dot)   { dot.style.background = '#EF4444'; dot.style.boxShadow = 'none'; }
+      if (label) label.textContent = 'API Key inválida — verifique Integrações';
+      if (sub)   sub.style.color = 'var(--red)';
+      return;
+    }
+
+    const state = data.state || 'disconnected';
     if (state === 'open') {
       if (dot)   { dot.style.background = '#22D36A'; dot.style.boxShadow = '0 0 6px #22D36A'; }
       if (label) label.textContent = 'Conectado ✅';
       if (sub)   sub.style.color = 'var(--green)';
       if (btn)   btn.innerHTML = '<i class="ti ti-qrcode"></i> Reconectar (novo QR)';
-      document.getElementById('evo-qr-wrap').style.display = 'none';
+      const qrWrap = document.getElementById('evo-qr-wrap');
+      if (qrWrap) qrWrap.style.display = 'none';
     } else if (state === 'connecting') {
       if (dot)   { dot.style.background = '#F59E0B'; dot.style.boxShadow = '0 0 6px #F59E0B'; }
       if (label) label.textContent = 'A conectar... Gera o QR Code';
@@ -10854,103 +11258,61 @@ async function checkInstanceState() {
   }
 }
 
-// Helpers reutilizáveis para o painel de WhatsApp
-function _evoAuthHeaders(key) {
-  // Evolution API v2 usa cabeçalho 'apikey'
-  // (se sua instância usar Bearer, troque aqui por: 'Authorization': `Bearer ${key}`)
-  return { 'apikey': key };
-}
-
 async function diagnosEvoConnection() {
-  const cfg = loadEvoConfig();
-  const lines = [];
-  const add = (icon, text) => lines.push(`${icon} ${text}`);
-
-  add('🔍', `URL: ${cfg.url || '(vazio)'}`);
-  add('🔑', `API Key: ${cfg.key ? cfg.key.substring(0,6) + '••••••••' : '(vazio)'}`);
-  add('📋', `Instância: ${cfg.instance || '(vazio)'}`);
-  lines.push('');
-
-  if (!cfg.url || !cfg.key || !cfg.instance) {
-    add('❌', 'Configuração incompleta — preencha todos os campos e clique em Salvar.');
-    alert(lines.join('\n'));
-    return;
-  }
-
-  // Testa a URL base (sem auth) para verificar se o servidor responde
-  add('⏳', 'Testando servidor...');
-  const diagEl = document.createElement('div');
-  const ENDPOINT = `${cfg.url}/instance/fetchInstances`;
-  const results = [];
-
-  // Tenta 3 formatos de autenticação
-  const formats = [
-    { label: 'apikey header (Evolution v2)',    headers: { 'apikey': cfg.key } },
-    { label: 'Authorization Bearer',            headers: { 'Authorization': `Bearer ${cfg.key}` } },
-    { label: 'Sem autenticação (health check)', headers: {} }
+  const userId = currentUser?.id;
+  const renderBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
+  const lines = [
+    '=== DIAGNÓSTICO WHATSAPP ===',
+    `Usuário logado: ${userId || '(não logado)'}`,
+    `Instância esperada: ${userId ? 'elo_' + userId : '—'}`,
+    `Backend Render: ${renderBase || '(não configurado em PROD_CONFIG.renderUrl)'}`,
+    '',
   ];
 
-  for (const fmt of formats) {
+  if (!renderBase) {
+    lines.push('❌ Configure PROD_CONFIG.renderUrl com a URL do Render.');
+    alert(lines.join('\n')); return;
+  }
+
+  lines.push('⏳ Testando backend Render...');
+
+  try {
+    const r = await fetch(`${renderBase}/health`);
+    lines.push(`[GET /health] → HTTP ${r.status}`);
+  } catch(e) {
+    lines.push(`[GET /health] → ERRO: ${e.message}`);
+  }
+
+  if (userId) {
     try {
-      const r = await fetch(ENDPOINT, { headers: fmt.headers });
-      const text = await r.text();
-      let preview = text.substring(0, 120);
-      results.push(`[${fmt.label}] → HTTP ${r.status}\n   Resposta: ${preview}`);
+      const r = await fetch(`${renderBase}/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
+      const txt = await r.text();
+      lines.push(`[GET /api/whatsapp/state] → HTTP ${r.status}`);
+      lines.push(`  Resposta: ${txt.substring(0, 200)}`);
     } catch(e) {
-      results.push(`[${fmt.label}] → ERRO de rede: ${e.message}`);
+      lines.push(`[GET /api/whatsapp/state] → ERRO: ${e.message}`);
     }
   }
 
-  // Tenta endpoint raiz sem auth
-  try {
-    const r = await fetch(cfg.url);
-    results.push(`[Raiz /] → HTTP ${r.status}`);
-  } catch(e) {
-    results.push(`[Raiz /] → ERRO: ${e.message}`);
-  }
+  lines.push('');
+  lines.push('CONFIGURAÇÃO NO RENDER:');
+  lines.push('• Env EVOLUTION_API_URL = URL do Railway');
+  lines.push('• Env EVOLUTION_API_KEY = AUTHENTICATION_API_KEY do Railway');
 
-  const msg = [
-    '=== DIAGNÓSTICO EVOLUTION API ===',
-    `URL: ${cfg.url}`,
-    `Key (6 chars): ${cfg.key.substring(0,6)}...`,
-    `Instância: ${cfg.instance}`,
-    '',
-    '--- Resultados dos testes ---',
-    ...results,
-    '',
-    'COMO ENCONTRAR SUA API KEY:',
-    '1. Acesse railway.com → seu projeto',
-    '2. Clique no serviço Evolution API',
-    '3. Aba "Variables"',
-    '4. Copie o valor de AUTHENTICATION_API_KEY'
-  ].join('\n');
-
-  console.log('[WhatsApp Diagnóstico]\n' + msg);
-  alert(msg);
+  console.log('[WhatsApp Diagnóstico]\n' + lines.join('\n'));
+  alert(lines.join('\n'));
 }
 
 async function generateQRCode() {
-  // ── Valida configuração antes de qualquer requisição ─────────────────────
-  const cfg = loadEvoConfig();
-
-  if (!cfg.url) {
-    showNotification('⚠️ URL do servidor não configurada. Preencha e salve em Integrações → Evolution API.', 'warn');
-    document.getElementById('evo-url')?.focus();
+  const userId = currentUser?.id;
+  if (!userId) {
+    showNotification('⚠️ Faça login antes de conectar o WhatsApp.', 'warn');
     return;
   }
-  if (!cfg.key || cfg.key === 'COLE-SUA-CHAVE-AQUI') {
-    showNotification('⚠️ API Key não configurada. Preencha e salve em Integrações → Evolution API.', 'warn');
-    document.getElementById('evo-key')?.focus();
+  if (!PROD_CONFIG.renderUrl) {
+    showNotification('⚠️ Backend Render não configurado em PROD_CONFIG.renderUrl.', 'warn');
     return;
   }
-  if (!cfg.instance) {
-    showNotification('⚠️ Nome da instância não configurado. Preencha e salve em Integrações → Evolution API.', 'warn');
-    document.getElementById('evo-instance')?.focus();
-    return;
-  }
-
-  const INST_NAME  = cfg.instance;   // usa exatamente o valor salvo pelo usuário
-  const INST_TOKEN = cfg.key;        // usa a mesma API key como token da instância
 
   const btn        = document.getElementById('evo-qr-btn');
   const wrap       = document.getElementById('evo-qr-wrap');
@@ -10959,9 +11321,7 @@ async function generateQRCode() {
   const loadingMsg = document.getElementById('evo-qr-loading-msg');
 
   const setBtn = (html, disabled = true) => {
-    if (!btn) return;
-    btn.disabled  = disabled;
-    btn.innerHTML = html;
+    if (!btn) return; btn.disabled = disabled; btn.innerHTML = html;
   };
   const showLoading = (msg) => {
     if (wrap)       wrap.style.display    = 'flex';
@@ -10978,109 +11338,71 @@ async function generateQRCode() {
     if (loading) loading.style.display = 'none';
     if (wrap)    wrap.style.display    = 'none';
   };
-  // Para qualquer erro de auth (401/403): para tudo e orienta o usuário
-  const handleAuthError = (status) => {
+
+  setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Conectando...', true);
+  showLoading(`Iniciando instância <strong>elo_${userId}</strong>...<br>Aguarde até 30 segundos.`);
+
+  try {
+    // Uma única chamada ao backend Render — ele cria a instância e busca o QR
+    const data = await _renderFetch('/api/whatsapp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+
+    if (!data) {
+      hideAll();
+      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+      showNotification('❌ Sem resposta do servidor Render. Verifique se está online.', 'error');
+      return;
+    }
+
+    // Erro de autenticação na Evolution API
+    if (data.error && (data.error.includes('401') || data.error.toLowerCase().includes('inválida'))) {
+      hideAll();
+      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+      showNotification('❌ API Key inválida (401). Acesse Integrações → Evolution API e corrija a chave.', 'error');
+      const keyInput = document.getElementById('evo-key');
+      if (keyInput) { keyInput.style.borderColor = 'var(--red)'; keyInput.focus(); }
+      return;
+    }
+
+    // Outro erro genérico
+    if (data.error) {
+      hideAll();
+      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+      showNotification('Erro: ' + data.error, 'error');
+      return;
+    }
+
+    // Já conectado
+    if (data.state === 'open') {
+      hideAll();
+      setBtn('<i class="ti ti-refresh"></i> Reconectar (novo QR)', false);
+      showNotification('✅ WhatsApp já está conectado!', 'success');
+      checkInstanceState();
+      return;
+    }
+
+    // QR disponível
+    if (data.qr) {
+      showQR(data.qr);
+      setBtn('<i class="ti ti-refresh"></i> Novo QR', false);
+      startQRCountdown(60);
+      setTimeout(checkInstanceState, 20000);
+      return;
+    }
+
+    // QR não retornado após todas as tentativas
     hideAll();
     setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
-    showNotification(
-      `❌ API Key inválida (HTTP ${status}). Acesse Integrações → Evolution API, corrija a API Key e clique em Salvar.`,
-      'error'
-    );
-    // Destaca o campo API Key
-    const keyInput = document.getElementById('evo-key');
-    if (keyInput) { keyInput.style.borderColor = 'var(--red)'; keyInput.focus(); }
-    console.error(`[WhatsApp] Auth falhou ${status} — key usada: "${cfg.key.substring(0,8)}..."`);
-  };
+    showNotification('QR não disponível. O servidor pode estar aquecendo — tente novamente em 30s.', 'warn');
 
-  // ── Passo 1: criar instância (ignora 409 = já existe) ─────────────────────
-  setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Criando instância...');
-  showLoading('Criando instância...<br>Aguarde um momento.');
-  try {
-    const cr = await fetch(`${cfg.url}/instance/create`, {
-      method:  'POST',
-      headers: { ..._evoAuthHeaders(cfg.key), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instanceName: INST_NAME,
-        token:        INST_TOKEN,
-        qrcode:       true,
-        integration:  'WHATSAPP-BAILEYS'
-      })
-    });
-    console.log('[WhatsApp] create status:', cr.status, '| instância:', INST_NAME);
-    // 401/403 na criação → auth inválida, para tudo
-    if (cr.status === 401 || cr.status === 403) { handleAuthError(cr.status); return; }
   } catch(e) {
-    console.warn('[WhatsApp] create falhou (pode já existir):', e.message);
+    hideAll();
+    setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+    showNotification('Erro ao gerar QR: ' + e.message, 'error');
+    console.error('[WhatsApp] generateQRCode error:', e.message);
   }
-
-  // ── Passo 2: buscar QR com até 6 tentativas + delay progressivo ───────────
-  // Railway tem cold start — aguarda 3s antes da 1ª tentativa
-  const MAX_RETRIES   = 6;
-  const INITIAL_DELAY = 3000;
-  const RETRY_DELAY   = 2500;
-
-  await new Promise(r => setTimeout(r, INITIAL_DELAY));
-
-  let lastError = null;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    setBtn(`<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando QR... (${attempt}/${MAX_RETRIES})`);
-    showLoading(`A gerar QR Code...<br>Tentativa ${attempt} de ${MAX_RETRIES} — aguarde.`);
-
-    try {
-      const res = await fetch(`${cfg.url}/instance/connect/${encodeURIComponent(INST_NAME)}`, {
-        headers: _evoAuthHeaders(cfg.key)
-      });
-
-      // 401/403 → auth inválida — para imediatamente, sem retentar
-      if (res.status === 401 || res.status === 403) { handleAuthError(res.status); return; }
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ao buscar QR — verifique a URL do servidor.`);
-      }
-
-      const data = await res.json();
-      const b64  = data?.base64 || data?.qrcode?.base64 || data?.qrcode?.code || data?.code;
-
-      // QR disponível ✅
-      if (b64) {
-        showQR(b64);
-        setBtn('<i class="ti ti-refresh"></i> Novo QR', false);
-        startQRCountdown(60);
-        setTimeout(checkInstanceState, 20000);
-        return;
-      }
-
-      // Já conectado ✅
-      const state = data?.instance?.state || data?.state || '';
-      if (state === 'open') {
-        hideAll();
-        setBtn('<i class="ti ti-refresh"></i> Reconectar (novo QR)', false);
-        showNotification('✅ WhatsApp já está conectado!', 'success');
-        checkInstanceState();
-        return;
-      }
-
-      lastError = new Error(`QR ainda não disponível (tentativa ${attempt}/${MAX_RETRIES})`);
-      console.warn('[WhatsApp] QR não retornado — dados:', JSON.stringify(data));
-
-    } catch(e) {
-      lastError = e;
-      console.error(`[WhatsApp] Tentativa ${attempt} falhou:`, e.message);
-    }
-
-    if (attempt < MAX_RETRIES) {
-      await new Promise(r => setTimeout(r, RETRY_DELAY));
-    }
-  }
-
-  // Todas as tentativas esgotadas ❌
-  hideAll();
-  setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
-  const msg = lastError?.message?.includes('HTTP')
-    ? lastError.message
-    : 'O servidor demorou para responder. Aguarde ~30s e clique em "Tentar Novamente".';
-  showNotification('Erro ao gerar QR: ' + msg, 'error');
-  console.error('[WhatsApp] Todas as tentativas falharam. Último erro:', lastError?.message);
 }
 
 function startQRCountdown(seconds) {
@@ -11105,80 +11427,102 @@ function startQRCountdown(seconds) {
 }
 
 async function disconnectInstance() {
-  const cfg = loadEvoConfig();
-  if (!confirm(`Desconectar a instância "${cfg.instance}"?`)) return;
+  const userId = currentUser?.id;
+  if (!userId) return;
+  if (!confirm(`Desconectar a instância "elo_${userId}"?`)) return;
   try {
-    await fetch(`${cfg.url}/instance/logout/${encodeURIComponent(cfg.instance)}`, {
-      method: 'DELETE', headers: { 'apikey': cfg.key }
+    const data = await _renderFetch('/api/whatsapp/disconnect', {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
     });
-    showNotification('Instância desconectada.', 'warn');
+    if (data?.ok) {
+      showNotification('Instância desconectada.', 'warn');
+    } else {
+      showNotification('Erro ao desconectar: ' + (data?.error || 'resposta inválida'), 'error');
+    }
     setTimeout(checkInstanceState, 1000);
   } catch {
     showNotification('Erro ao desconectar.', 'error');
   }
 }
 
-async function sendViaEvolutionAPI(phone, message, cfg) {
-  const btn = document.getElementById('rep-send-btn');
-  const setBtn = (loading) => {
-    if (!btn) return;
-    btn.disabled = loading;
-    btn.innerHTML = loading
-      ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Enviando...'
-      : '<i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp';
-  };
-  setBtn(true);
-  try {
-    const res = await fetch(`${cfg.url}/message/sendText/${cfg.instance}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': cfg.key },
-      body: JSON.stringify({ number: phone, text: message })
-    });
-    setBtn(false);
-    if (res.ok) {
-      showNotification('✅ Mensagem enviada com sucesso!', 'success');
-    } else {
-      throw new Error(`HTTP ${res.status}`);
-    }
-  } catch {
-    setBtn(false);
-    showNotification('Falha na API. Abrindo via link direto...', 'warn');
-    setTimeout(() => window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank'), 800);
-  }
-}
-
-function sendReportViaWhatsApp() {
-  const clientId  = document.getElementById('rep-client')?.value;
-  const client    = CLIENTS.list.find(c => c.id === clientId);
+async function sendReportViaWhatsApp() {
+  const clientId = document.getElementById('rep-client')?.value;
+  const client   = CLIENTS.list.find(c => c.id === clientId);
   if (!client) { showNotification('Selecione um cliente primeiro.', 'warn'); return; }
   if (!client.whatsapp) {
     showNotification('Número de WhatsApp não cadastrado. Edite o cliente e adicione.', 'warn'); return;
   }
-  /* Lê o texto já renderizado no bloco (respeita template/segmento) */
+
   const msgEl = document.getElementById('rep-wa-msg');
   const msg   = msgEl ? msgEl.innerText : '';
-  const cfg   = loadEvoConfig();
-  if (cfg.url && cfg.key && cfg.instance) {
-    sendViaEvolutionAPI(client.whatsapp, msg, cfg);
-  } else {
+  const userId = currentUser?.id;
+
+  const btn = document.getElementById('rep-send-btn');
+  const setBtn = (loading) => {
+    if (!btn) return;
+    btn.disabled  = loading;
+    btn.innerHTML = loading
+      ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Enviando...'
+      : '<i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp';
+  };
+
+  // Fallback: abre wa.me se Render não estiver configurado ou usuário não logado
+  if (!userId || !PROD_CONFIG.renderUrl) {
     window.open(`https://wa.me/${client.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    return;
+  }
+
+  setBtn(true);
+  try {
+    const data = await _renderFetch('/api/whatsapp/send', {
+      method: 'POST',
+      body: JSON.stringify({ userId, phone: client.whatsapp, message: msg }),
+    });
+    setBtn(false);
+    if (data?.ok) {
+      showNotification('✅ Mensagem enviada com sucesso!', 'success');
+    } else {
+      const errMsg = data?.error || 'Erro desconhecido';
+      throw new Error(errMsg);
+    }
+  } catch(e) {
+    setBtn(false);
+    showNotification('Falha na API. Abrindo via link direto...', 'warn');
+    setTimeout(() => window.open(`https://wa.me/${client.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank'), 800);
   }
 }
 
-window.deletarCliente = function(id) {
+window.deletarCliente = async function(id) {
   const client = CLIENTS.list.find(c => c.id === id);
   if (!client) return;
 
   if (!confirm(`Tem certeza que deseja excluir o cliente "${client.name}"?\n\nIsso também apagará todas as tarefas vinculadas a ele.`)) return;
 
-  // 1. Remove do array em memória
+  // 1. ── Persiste exclusão no MongoDB ANTES de alterar estado local ──────────
+  //    Se a API falhar, aborta e avisa o usuário (evita inconsistência).
+  const apiBase = _apiBase();
+  if (apiBase) {
+    showNotification(`Excluindo "${client.name}"...`, 'warn');
+    const resp = await _apiFetch(`/api/clients/${id}`, { method: 'DELETE' });
+    if (resp === null) {
+      // null = erro de rede ou resposta de erro do servidor (ver _apiFetch)
+      showNotification(
+        `⛔ Falha ao excluir "${client.name}" do banco de dados. Verifique a conexão e tente novamente.`,
+        'error'
+      );
+      return; // ← aborta: não remove localmente para não enganar o usuário
+    }
+  }
+
+  // 2. Remove do array em memória
   CLIENTS.list = CLIENTS.list.filter(c => c.id !== id);
 
-  // 2. Salva clientes no localStorage imediatamente
+  // 3. Persiste no localStorage imediatamente
   localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
   localStorage.setItem('tp_clients_next_id', String(CLIENTS.nextId));
 
-  // 3. Remove tarefas vinculadas do DOM (por data-client-id ou por nome no texto)
+  // 4. Remove tarefas vinculadas do DOM (por data-client-id ou por nome no texto)
   const nameLower = client.name.toLowerCase();
   ['#task-list .task-item', '#completed-tasks-list .task-item'].forEach(sel => {
     document.querySelectorAll(sel).forEach(el => {
@@ -11188,10 +11532,10 @@ window.deletarCliente = function(id) {
     });
   });
 
-  // 4. Salva tarefas no localStorage imediatamente
+  // 5. Salva tarefas no localStorage
   saveTasks();
 
-  // 5. Força re-render completo da tela
+  // 6. Força re-render completo da tela
   renderClients();
   renderGoalAlerts();
   renderPacingAlerts();
@@ -11199,6 +11543,336 @@ window.deletarCliente = function(id) {
 
   showNotification(`Cliente "${client.name}" excluído com sucesso.`, 'warn');
 };
+
+/* ══════════════════════════════════════════════════════════════════
+   MONDAY-STYLE TASK BOARD
+══════════════════════════════════════════════════════════════════ */
+let TASKS_DATA = [];
+
+const TASK_STATUS_CFG = {
+  'Não Iniciada': { color:'#94A3B8', bg:'rgba(148,163,184,.14)', border:'rgba(148,163,184,.3)' },
+  'Em Andamento': { color:'#60A5FA', bg:'rgba(96,165,250,.14)',  border:'rgba(96,165,250,.3)'  },
+  'Travado':      { color:'#F87171', bg:'rgba(248,113,113,.14)', border:'rgba(248,113,113,.3)' },
+  'Pronto':       { color:'#34D399', bg:'rgba(52,211,153,.14)',  border:'rgba(52,211,153,.3)'  },
+};
+
+const TASK_PRIORITY_CFG = {
+  'Baixa':   { color:'#94A3B8', bg:'rgba(148,163,184,.12)', icon:'▼' },
+  'Média':   { color:'#FBBF24', bg:'rgba(251,191,36,.12)',  icon:'●' },
+  'Alta':    { color:'#FB923C', bg:'rgba(251,146,60,.12)',  icon:'▲' },
+  'Crítica': { color:'#F87171', bg:'rgba(248,113,113,.12)', icon:'‼' },
+};
+
+const TASK_GROUPS_CFG = [
+  { key:'semana',    label:'Demandas da Semana', color:'#6C63FF' },
+  { key:'concluidos', label:'Concluídos',        color:'#34D399' },
+];
+
+function normalizeTaskStatus(s) {
+  if (s === 'active') return 'Não Iniciada';
+  if (s === 'done')   return 'Pronto';
+  return TASK_STATUS_CFG[s] ? s : 'Não Iniciada';
+}
+
+function normalizeTaskPriority(t) {
+  if (t.priority && TASK_PRIORITY_CFG[t.priority]) return t.priority;
+  const m = {baixa:'Baixa',media:'Média',alta:'Alta',urgente:'Crítica',critica:'Crítica'};
+  return m[t.criticality] || 'Média';
+}
+
+function renderTasksGrid() {
+  const board = document.getElementById('monday-board');
+  if (!board) return;
+
+  // Populate filter dropdowns
+  _populateTaskFilters();
+
+  const search  = (document.getElementById('task-search')?.value || '').toLowerCase();
+  const ownerF  = document.getElementById('task-filter-owner')?.value || '';
+  const clientF = document.getElementById('task-filter-client')?.value || '';
+  const statusF = document.getElementById('task-filter-status')?.value || '';
+
+  let tasks = TASKS_DATA.map(t => {
+    const s = normalizeTaskStatus(t.status);
+    // Group automation: Pronto → concluidos; migrate old 'backlog' → semana
+    const grp = s === 'Pronto' ? 'concluidos'
+              : (t.group === 'backlog' ? 'semana' : (t.group || 'semana'));
+    return {
+      ...t,
+      status:   s,
+      priority: normalizeTaskPriority(t),
+      group:    grp,
+      assignedTo: t.assignedTo || t.owner || '',
+    };
+  });
+
+  if (search)  tasks = tasks.filter(t => t.title.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search));
+  if (ownerF)  tasks = tasks.filter(t => t.assignedTo === ownerF);
+  if (clientF) tasks = tasks.filter(t => t.client === clientF);
+  if (statusF) tasks = tasks.filter(t => t.status === statusF);
+
+  board.innerHTML = '';
+  TASK_GROUPS_CFG.forEach(g => {
+    board.appendChild(_buildTaskGroup(g, tasks.filter(t => t.group === g.key)));
+  });
+  // Gerencia tick do cronômetro
+  if (_hasRunningTimers()) _startTimerTick();
+  else _stopTimerTick();
+}
+
+function _populateTaskFilters() {
+  const ownerSel  = document.getElementById('task-filter-owner');
+  const clientSel = document.getElementById('task-filter-client');
+  if (ownerSel && ownerSel.options.length <= 1) {
+    USERS.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.name; ownerSel.appendChild(o); });
+  }
+  if (clientSel && clientSel.options.length <= 1) {
+    (CLIENTS.list || []).forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; clientSel.appendChild(o); });
+  }
+}
+
+function _buildTaskGroup(group, tasks) {
+  const section = document.createElement('div');
+  section.className = 'monday-group';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'monday-group-hdr';
+  hdr.innerHTML = `
+    <div class="monday-group-dot" style="background:${group.color}"></div>
+    <div class="monday-group-name">${group.label}</div>
+    <div class="monday-group-cnt">${tasks.length}</div>
+    <i class="ti ti-chevron-down" id="chv-${group.key}" style="color:var(--text3);font-size:13px;transition:transform .2s;margin-left:4px"></i>
+  `;
+
+  const body = document.createElement('div');
+  body.id = 'grp-body-' + group.key;
+
+  const table = document.createElement('table');
+  table.className = 'monday-table';
+
+  const thead = `<thead><tr>
+    <th class="monday-th" style="width:30%;padding-left:46px">Tarefa</th>
+    <th class="monday-th" style="width:13%">Cliente</th>
+    <th class="monday-th" style="width:9%">Responsável</th>
+    <th class="monday-th" style="width:12%">Status</th>
+    <th class="monday-th" style="width:9%">Tempo</th>
+    <th class="monday-th" style="width:11%">Prioridade</th>
+    <th class="monday-th" style="width:8%">Prazo</th>
+    <th class="monday-th" style="width:4%"></th>
+  </tr></thead>`;
+  table.innerHTML = thead;
+
+  const tbody = document.createElement('tbody');
+  tasks.forEach(t => tbody.appendChild(_buildTaskRow(t)));
+  table.appendChild(tbody);
+
+  const addRow = document.createElement('div');
+  addRow.className = 'monday-add-row';
+  addRow.innerHTML = '<i class="ti ti-plus" style="font-size:12px"></i> Adicionar tarefa';
+  addRow.onclick = () => openTaskModal(group.key);
+
+  body.appendChild(table);
+  body.appendChild(addRow);
+
+  hdr.onclick = () => {
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? '' : 'none';
+    const chv = document.getElementById('chv-' + group.key);
+    if (chv) chv.style.transform = hidden ? '' : 'rotate(-90deg)';
+  };
+
+  section.appendChild(hdr);
+  section.appendChild(body);
+  return section;
+}
+
+function _buildTaskRow(task) {
+  const tr = document.createElement('tr');
+  tr.className = 'monday-tr';
+  tr.dataset.taskId = task.id;
+
+  const sc = TASK_STATUS_CFG[task.status]   || TASK_STATUS_CFG['Não Iniciada'];
+  const pc = TASK_PRIORITY_CFG[task.priority] || TASK_PRIORITY_CFG['Média'];
+  const isDone = task.status === 'Pronto';
+
+  const client = (CLIENTS.list||[]).find(c => c.id === task.client);
+  const clientHtml = client
+    ? `<span class="m-client" title="${client.name}">${client.avatar || client.name.substring(0,2)} ${client.name}</span>`
+    : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+  const user = USERS.find(u => u.id === task.assignedTo);
+  const userHtml = user
+    ? `<span class="m-avatar" style="background:${user.color||'var(--accent)'}" title="${user.name}">${user.photo?`<img src="${user.photo}">`:`${user.initials}`}</span>`
+    : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+  const due = task.dueDate || task.deadline || '';
+  let dueHtml = '<span style="color:var(--text3);font-size:11px">—</span>';
+  if (due) {
+    const dt = new Date(due); const now = new Date(); const diff = (dt - now) / 86400000;
+    const fmt = dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
+    const cls = diff < 0 ? 'overdue' : diff < 3 ? 'soon' : '';
+    dueHtml = `<span class="m-due ${cls}">${fmt}</span>`;
+  }
+
+  // Timer display
+  const timerSecs = task.timerStartedAt
+    ? (task.timeSpent || 0) + (Date.now() - new Date(task.timerStartedAt).getTime()) / 1000
+    : (task.timeSpent || 0);
+  const timerHtml = timerSecs > 0 || task.timerStartedAt
+    ? `<span class="m-timer${task.timerStartedAt ? ' m-timer-running' : ''}" data-timer-id="${task.id}">${_formatTaskTime(timerSecs)}</span>`
+    : `<span class="m-timer" data-timer-id="${task.id}" style="opacity:.35">—</span>`;
+
+  tr.innerHTML = `
+    <td class="monday-td" style="padding-left:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="m-check${isDone?' done':''}" onclick="toggleMondayTask('${task.id}')">${isDone?'<i class="ti ti-check" style="font-size:9px;color:#fff"></i>':''}</div>
+        <span class="m-title${isDone?' done-txt':''}" onclick="openEditTaskModal('${task.id}')" title="${tkEscape(task.title)}">${tkEscape(task.title)}</span>
+      </div>
+    </td>
+    <td class="monday-td">${clientHtml}</td>
+    <td class="monday-td">${userHtml}</td>
+    <td class="monday-td" style="padding:5px 8px">
+      <button class="m-status" style="background:${sc.bg};color:${sc.color};border-color:${sc.border}" onclick="openStatusDD('${task.id}',this)">${task.status}</button>
+    </td>
+    <td class="monday-td" style="text-align:center">${timerHtml}</td>
+    <td class="monday-td">
+      <span class="m-prio" style="background:${pc.bg};color:${pc.color};border-color:${pc.color}33" onclick="openPriorityDD('${task.id}',this)">${pc.icon} ${task.priority}</span>
+    </td>
+    <td class="monday-td">${dueHtml}</td>
+    <td class="monday-td" style="text-align:center">
+      <button onclick="deleteTaskRow('${task.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;border-radius:4px" title="Excluir"><i class="ti ti-trash" style="font-size:12px"></i></button>
+    </td>
+  `;
+  return tr;
+}
+
+/* ── Dropdown inline ─────────────────────────────────────────────── */
+let _openDD = null;
+function _closeDD() { if (_openDD) { _openDD.remove(); _openDD = null; } }
+
+function _posDD(dd, anchor) {
+  const r = anchor.getBoundingClientRect();
+  dd.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+  dd.style.left = r.left + 'px';
+}
+
+function openStatusDD(taskId, el) {
+  _closeDD();
+  const dd = document.createElement('div'); dd.className = 'm-dropdown';
+  Object.entries(TASK_STATUS_CFG).forEach(([label, c]) => {
+    const item = document.createElement('div'); item.className = 'm-dd-item';
+    item.innerHTML = `<div class="m-dd-dot" style="background:${c.color}"></div>${label}`;
+    item.onclick = (e) => { e.stopPropagation(); setMondayStatus(taskId, label); _closeDD(); };
+    dd.appendChild(item);
+  });
+  _posDD(dd, el); document.body.appendChild(dd); _openDD = dd;
+  setTimeout(() => document.addEventListener('click', _closeDD, { once:true }), 10);
+}
+
+function openPriorityDD(taskId, el) {
+  _closeDD();
+  const dd = document.createElement('div'); dd.className = 'm-dropdown';
+  Object.entries(TASK_PRIORITY_CFG).forEach(([label, c]) => {
+    const item = document.createElement('div'); item.className = 'm-dd-item';
+    item.innerHTML = `<span style="color:${c.color};font-weight:700;font-size:13px">${c.icon}</span> ${label}`;
+    item.onclick = (e) => { e.stopPropagation(); setMondayPriority(taskId, label); _closeDD(); };
+    dd.appendChild(item);
+  });
+  _posDD(dd, el); document.body.appendChild(dd); _openDD = dd;
+  setTimeout(() => document.addEventListener('click', _closeDD, { once:true }), 10);
+}
+
+function setMondayStatus(taskId, status) {
+  const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
+  const prevStatus = normalizeTaskStatus(t.status);
+  t.status = status;
+  const patch = { status };
+
+  // ── Automação de grupo ─────────────────────────────────────────────────
+  if (status === 'Pronto') {
+    t.group = 'concluidos';
+    patch.group = 'concluidos';
+    patch.completed_at = new Date().toISOString();
+  } else if (prevStatus === 'Pronto' && t.group === 'concluidos') {
+    t.group = 'semana';
+    patch.group = 'semana';
+  }
+
+  // ── Automação de timer ─────────────────────────────────────────────────
+  if (status === 'Em Andamento' && !t.timerStartedAt) {
+    t.timerStartedAt = new Date().toISOString();
+    patch.timerStartedAt = t.timerStartedAt;
+    patch.timeSpent = t.timeSpent || 0;
+    _startTimerTick();
+  } else if (status !== 'Em Andamento' && t.timerStartedAt) {
+    const elapsed = (Date.now() - new Date(t.timerStartedAt).getTime()) / 1000;
+    t.timeSpent = (t.timeSpent || 0) + elapsed;
+    t.timerStartedAt = null;
+    patch.timeSpent = t.timeSpent;
+    patch.timerStartedAt = null;
+  }
+
+  updateTaskInDB(taskId, patch);
+  saveTasks(); renderTasksGrid(); updateNavBadges();
+  showNotification(`Status → ${status}`, 'ok');
+}
+
+function setMondayPriority(taskId, priority) {
+  const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
+  t.priority = priority;
+  const critMap = {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'};
+  updateTaskInDB(taskId, { priority, criticality: critMap[priority] || 'media' });
+  saveTasks(); renderTasksGrid();
+}
+
+function toggleMondayTask(taskId) {
+  const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
+  const ns = normalizeTaskStatus(t.status) === 'Pronto' ? 'Não Iniciada' : 'Pronto';
+  setMondayStatus(taskId, ns);
+}
+
+function deleteTaskRow(taskId) {
+  if (!confirm('Excluir esta tarefa permanentemente?')) return;
+  TASKS_DATA = TASKS_DATA.filter(t => t.id !== taskId);
+  deleteTaskInDB(taskId);
+  saveTasks(); renderTasksGrid(); updateNavBadges();
+}
+/* ── Timer de Produtividade ────────────────────────────────────────── */
+let _tasksTimerTick = null;
+
+function _formatTaskTime(secs) {
+  secs = Math.floor(secs || 0);
+  if (secs <= 0) return '0s';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2,'0')}s`;
+  return `${s}s`;
+}
+
+function _startTimerTick() {
+  if (_tasksTimerTick) return; // já rodando
+  _tasksTimerTick = setInterval(() => {
+    document.querySelectorAll('[data-timer-id]').forEach(el => {
+      const taskId = el.dataset.timerId;
+      const t = TASKS_DATA.find(x => x.id === taskId);
+      if (!t || !t.timerStartedAt) return;
+      const elapsed = (t.timeSpent || 0) + (Date.now() - new Date(t.timerStartedAt).getTime()) / 1000;
+      el.textContent = _formatTaskTime(elapsed);
+      el.className = 'm-timer m-timer-running';
+    });
+  }, 1000);
+}
+
+function _stopTimerTick() {
+  if (_tasksTimerTick) { clearInterval(_tasksTimerTick); _tasksTimerTick = null; }
+}
+
+function _hasRunningTimers() {
+  return TASKS_DATA.some(t => t.timerStartedAt && normalizeTaskStatus(t.status) === 'Em Andamento');
+}
+/* ══ fim Monday Board ═══════════════════════════════════════════════ */
 
 /* ── API helpers ──────────────────────────────────────────────────────────── */
 function _apiBase() { return (PROD_CONFIG.apiUrl || '').replace(/\/$/, ''); }
@@ -11208,6 +11882,274 @@ function _apiFetch(path, opts = {}) {
   return fetch(base + path, { headers: { 'Content-Type': 'application/json' }, ...opts })
     .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
     .catch(e => { console.warn('[API]', path, e); return null; });
+}
+
+/**
+ * Fetch para o backend Render (proxy Evolution API / WhatsApp).
+ * Separado do _apiFetch pois aponta para renderUrl, não para o Vercel.
+ */
+function _renderFetch(path, opts = {}) {
+  const base = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
+  if (!base) { console.warn('[Render] renderUrl não configurado em PROD_CONFIG'); return Promise.resolve(null); }
+  if (!opts.headers) opts.headers = {};
+  if (!opts.headers['Content-Type'] && opts.body) opts.headers['Content-Type'] = 'application/json';
+  return fetch(base + path, opts)
+    .then(r => r.json())
+    .catch(e => { console.error('[Render]', path, e.message); return null; });
+}
+
+/**
+ * Carrega tokens centralizados do servidor (compartilhados entre dispositivos).
+ * Atualiza o localStorage local para que loadMetaToken() / loadGA4Token()
+ * funcionem normalmente — sem quebrar código existente.
+ */
+async function loadAppConfig() {
+  try {
+    const data = await _apiFetch('/api/config');
+    if (!data) return;
+    if (data.meta_access_token) {
+      localStorage.setItem('meta_access_token', data.meta_access_token);
+      META_AD_ACCOUNTS = []; // força recarga das contas com token atualizado
+    }
+    if (data.ga4_access_token) {
+      localStorage.setItem('ga4_access_token', data.ga4_access_token);
+    }
+    // ── Evolution API — URL e chave guardadas no MongoDB pelo admin ───────────
+    if (data.evolution_url) localStorage.setItem('evo_url', data.evolution_url);
+    if (data.evolution_key) localStorage.setItem('evo_key', data.evolution_key);
+    console.log('[Config] Tokens carregados do servidor.');
+  } catch(e) {
+    console.warn('[Config] Falha ao carregar config do servidor — usando localStorage local.', e);
+  }
+  // Também atualiza perfis de usuário (fotos + nomes) do servidor
+  await loadUserProfilesFromAPI();
+}
+
+/**
+ * Carrega perfis de usuário do MongoDB e sincroniza no USERS array.
+ * Garante que fotos e nomes alterados por qualquer usuário sejam visíveis
+ * para toda a equipe — inclusive na tela de login.
+ *
+ * Não retorna pinHash (campo excluído pelo backend).
+ */
+async function loadUserProfilesFromAPI() {
+  try {
+    const data = await _apiFetch('/api/users');
+    if (!Array.isArray(data) || data.length === 0) return;
+    let changed = false;
+    data.forEach(p => {
+      const u = USERS.find(u => u.id === p.userId);
+      if (!u) return;
+      if (p.name     && p.name     !== u.name)     { u.name     = p.name;     changed = true; }
+      if (p.initials && p.initials !== u.initials) { u.initials = p.initials; changed = true; }
+      // photo pode ser string vazia (limpar foto) ou data URL (nova foto)
+      if (typeof p.photo === 'string' && p.photo !== (u.photo || '')) {
+        u.photo   = p.photo || null;
+        changed   = true;
+      }
+      // Permissões de página (colaboradores)
+      if (!u.isAdmin && Array.isArray(p.allowedPages)) {
+        u.allowedPages = p.allowedPages;
+        changed = true;
+      }
+      // Espelha no localStorage local para modo offline
+      const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
+      profiles[u.id] = {
+        ...(profiles[u.id] || {}),
+        name: u.name, initials: u.initials, photo: u.photo || null,
+        allowedPages: u.allowedPages || null
+      };
+      localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
+    });
+    if (changed) {
+      renderLoginScreen();
+      // Se o usuário atual já está logado, atualiza sidebar + permissões
+      if (currentUser) {
+        const fresh = USERS.find(u => u.id === currentUser.id);
+        if (fresh) {
+          currentUser = fresh;
+          updateSidebarUser(currentUser);
+          applySidebarPermissions(); // re-aplica visibilidade dos itens de menu
+        }
+      }
+    }
+    console.log('[Users] Perfis sincronizados do servidor:', data.length);
+  } catch(e) {
+    console.warn('[Users] Falha ao sincronizar perfis:', e);
+  }
+}
+
+/**
+ * Aplica restrições de acesso ao formulário de edição de clientes.
+ * Somente admins podem editar IDs de conta Meta Ads e Google Analytics 4.
+ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SISTEMA DE PERMISSÕES POR PÁGINA
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Oculta/exibe itens da sidebar com base no allowedPages do usuário.
+ * Admins sempre veem tudo. Chamado em loginUser() e quando permissões mudam.
+ */
+function applySidebarPermissions() {
+  const isAdmin    = currentUser?.isAdmin;
+  const allowed    = currentUser?.allowedPages || [];
+
+  document.querySelectorAll('.nav-item').forEach(item => {
+    const match = item.getAttribute('onclick')?.match(/navigate\('([^']+)'/);
+    if (!match) return; // itens sem navigate (ex: seções) ficam visíveis
+    const page = match[1];
+    item.style.display = (isAdmin || allowed.includes(page)) ? '' : 'none';
+  });
+}
+
+/**
+ * Renderiza o card de Gerenciamento de Equipe dentro de page-configuracoes.
+ * Visível apenas para admins. Exibe chips clicáveis por colaborador.
+ */
+function renderTeamPermissions() {
+  const wrap = document.getElementById('perm-section');
+  if (!wrap) return;
+
+  if (!currentUser?.isAdmin) { wrap.innerHTML = ''; return; }
+
+  const collabs = USERS.filter(u => !u.isAdmin);
+
+  wrap.innerHTML = `
+    <div class="card" style="border-color:rgba(108,99,255,0.25);background:rgba(108,99,255,0.04)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="card-title" style="margin:0">
+          <i class="ti ti-shield-check" style="color:var(--accent)"></i> Permissões de Equipe
+        </div>
+        <span style="font-size:11px;color:var(--text3)">Clique nos chips para ligar/desligar o acesso</span>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.55">
+        Administradores têm acesso total a todas as páginas. Configure abaixo quais páginas cada colaborador pode acessar.
+      </p>
+      ${collabs.map(u => _buildPermMemberRow(u)).join('')}
+    </div>`;
+}
+
+/** Constrói o HTML de uma linha de permissões para um colaborador */
+function _buildPermMemberRow(u) {
+  const allowed = u.allowedPages || [];
+  const chips   = ALL_PAGES.map(p => {
+    const on = allowed.includes(p.key);
+    return `<label class="perm-page-chip ${on ? 'on' : 'off'}"
+              data-user="${u.id}" data-page="${p.key}"
+              onclick="_togglePermChip(this)">
+              <i class="ti ${p.icon}" style="font-size:11px"></i>${p.label}
+            </label>`;
+  }).join('');
+
+  const avImg = u.photo
+    ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : u.initials;
+
+  return `
+    <div class="perm-member-row" id="perm-row-${u.id}">
+      <div class="perm-member-av" style="background:${u.color}">${avImg}</div>
+      <div class="perm-member-info">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="perm-member-name">
+            ${u.name}
+            <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">${u.role}</span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="perm-save-${u.id}" onclick="saveTeamPermissions('${u.id}')"
+            style="font-size:11px;padding:4px 12px;opacity:0.4;pointer-events:none">
+            Salvar
+          </button>
+        </div>
+        <div class="perm-pages-grid" id="perm-chips-${u.id}">${chips}</div>
+      </div>
+    </div>`;
+}
+
+/**
+ * Toggle de chip de permissão — liga/desliga visualmente e ativa o botão Salvar.
+ */
+function _togglePermChip(chip) {
+  const isOn = chip.classList.contains('on');
+  chip.classList.toggle('on',  !isOn);
+  chip.classList.toggle('off',  isOn);
+  // Ativa botão Salvar do membro correspondente
+  const userId  = chip.dataset.user;
+  const saveBtn = document.getElementById(`perm-save-${userId}`);
+  if (saveBtn) { saveBtn.style.opacity = ''; saveBtn.style.pointerEvents = ''; }
+}
+
+/**
+ * Persiste as permissões de um colaborador no USERS[] + localStorage + API.
+ */
+function saveTeamPermissions(userId) {
+  const chips = document.querySelectorAll(`[data-user="${userId}"]`);
+  const allowedPages = [...chips]
+    .filter(c => c.classList.contains('on'))
+    .map(c => c.dataset.page);
+
+  // Atualiza em memória
+  const u = USERS.find(u => u.id === userId);
+  if (u) u.allowedPages = allowedPages;
+
+  // Persiste no localStorage (offline backup)
+  const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
+  profiles[userId] = { ...(profiles[userId] || {}), allowedPages };
+  localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
+
+  // Desativa botão Salvar imediatamente
+  const saveBtn = document.getElementById(`perm-save-${userId}`);
+  if (saveBtn) { saveBtn.style.opacity = '0.4'; saveBtn.style.pointerEvents = 'none'; }
+
+  // Persiste no servidor — feedback async
+  _apiFetch('/api/users/' + userId, {
+    method: 'PUT',
+    body: JSON.stringify({ allowedPages })
+  }).then(resp => {
+    showNotification(
+      resp?.ok
+        ? `✅ Permissões de ${u?.name} salvas com sucesso.`
+        : `Permissões de ${u?.name} salvas localmente (erro no servidor).`,
+      resp?.ok ? 'success' : 'warn'
+    );
+  }).catch(() => {
+    showNotification(`Permissões de ${u?.name} salvas localmente (offline).`, 'warn');
+  });
+}
+
+function _applyMetaGa4EditAccess() {
+  const isAdmin = currentUser?.isAdmin;
+  const metaSearch = document.getElementById('cl-form-meta-account-search');
+  const ga4Input   = document.getElementById('cl-form-ga4-property-id');
+  const reloadBtn  = document.querySelector('[onclick="carregarContasMeta(true)"]');
+
+  if (metaSearch) {
+    metaSearch.disabled = !isAdmin;
+    if (!isAdmin) {
+      metaSearch.placeholder = '🔒 Somente admins podem editar';
+      metaSearch.style.opacity = '0.55';
+      metaSearch.title = 'Apenas administradores podem alterar o ID da conta Meta Ads';
+    } else {
+      metaSearch.placeholder = 'Digite para buscar a conta...';
+      metaSearch.style.opacity = '';
+      metaSearch.title = '';
+    }
+  }
+  if (reloadBtn) reloadBtn.style.display = isAdmin ? '' : 'none';
+
+  if (ga4Input) {
+    ga4Input.readOnly = !isAdmin;
+    if (!isAdmin) {
+      ga4Input.style.opacity  = '0.55';
+      ga4Input.style.cursor   = 'not-allowed';
+      ga4Input.style.background = 'var(--bg2)';
+      ga4Input.title = 'Apenas administradores podem alterar o Property ID GA4';
+    } else {
+      ga4Input.style.opacity  = '';
+      ga4Input.style.cursor   = '';
+      ga4Input.style.background = '';
+      ga4Input.title = '';
+    }
+  }
 }
 
 /* ── saveClients — localStorage imediato + sync async para API ─────────────── */
@@ -11397,7 +12339,7 @@ async function _crmApiBulkSync() {
 }
 
 /* Carrega leads da API e atualiza CRM_DATA + localStorage
-   Retorna true se bem-sucedido, false se falhou/offline */
+   Retorna true se bem-sucedido com dados, false se falhou/offline/vazia */
 async function _crmApiLoad() {
   const url = _crmApiUrl();
   if (!url) return false;
@@ -11406,9 +12348,20 @@ async function _crmApiLoad() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data)) throw new Error('Resposta inválida');
+
+    // ── GUARD CRÍTICO ─────────────────────────────────────────────────────
+    // API vazia NUNCA sobrescreve dados locais válidos.
+    // Cenário: MongoDB recém-criado ou primeira sincronização pendente.
+    // Ação:  preserva CRM_DATA atual, dispara bulk sync para popular o Atlas.
+    if (data.length === 0 && CRM_DATA.length > 0) {
+      console.warn(`[CRM] API retornou 0 leads mas há ${CRM_DATA.length} card(s) local(is) — bulk sync disparado para popular o Atlas.`);
+      _crmApiBulkSync();
+      return false; // não re-renderiza com array vazio
+    }
+
     CRM_DATA = data;
     _crmSave(); // mantém localStorage em sync como cache
-    return true;
+    return data.length > 0; // false se API genuinamente vazia (não re-renderiza)
   } catch (e) {
     console.warn('[CRM API] Carregamento falhou, usando localStorage:', e.message);
     return false;
@@ -11433,13 +12386,14 @@ async function _crmInitAndRender() {
 }
 
 /* ── Dados iniciais ─────────────────────────────────────────────────────
-   REGRA: semeia o mock SOMENTE na primeira vez (chave ausente no storage).
+   REGRA: semeia o mock quando NÃO há dados válidos para mostrar.
    null  → chave nunca foi gravada → semeia e salva
-   []    → usuário deletou tudo → respeita e mantém vazio
+   []    → array vazio (primeira vez real OU bug de overwrite da API) → semeia e salva
    [...]  → dados existentes → carrega normalmente
+   OBS: o caso [] = bug-overwrite é protegido pelo guard em _crmApiLoad().
 ── */
 const _crmStored = _crmLoad();
-const _crmIsFirstTime = _crmStored === null;
+const _crmIsFirstTime = _crmStored === null || _crmStored.length === 0;
 
 const _today_crm = new Date().toISOString().slice(0, 10);
 const _ago_crm   = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
