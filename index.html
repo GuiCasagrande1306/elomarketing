@@ -586,6 +586,22 @@
   /* MINI STAT */
   .mini-stat { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
   .mini-stat:last-child { border-bottom: none; }
+
+  /* ── Permissões de Equipe ─────────────────────────────────────────────────── */
+  .perm-member-row { display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border); }
+  .perm-member-row:last-child { border-bottom:none;padding-bottom:0; }
+  .perm-member-av { width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0; }
+  .perm-member-info { flex:1;min-width:0; }
+  .perm-member-name { font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px; }
+  .perm-pages-grid { display:flex;flex-wrap:wrap;gap:6px; }
+  .perm-page-chip { display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all 0.15s;user-select:none; }
+  .perm-page-chip input[type=checkbox] { display:none; }
+  .perm-page-chip.on  { background:rgba(108,99,255,0.18);border-color:rgba(108,99,255,0.45);color:var(--accent); }
+  .perm-page-chip.off { background:var(--bg3);border-color:var(--border);color:var(--text3); }
+  .perm-page-chip.on:hover  { background:rgba(108,99,255,0.28); }
+  .perm-page-chip.off:hover { background:var(--bg4);color:var(--text2); }
+  .perm-save-row { display:flex;justify-content:flex-end;margin-top:10px; }
+  .perm-unsaved-dot { width:7px;height:7px;border-radius:50%;background:var(--amber);display:inline-block;margin-right:5px;flex-shrink:0; }
   .mini-stat-label { font-size: 12px; color: var(--text2); }
   .mini-stat-value { font-size: 12px; font-weight: 600; font-family: var(--mono); }
 
@@ -3102,6 +3118,8 @@
 
     <!-- ===== CONFIGURAÇÕES ===== -->
     <div class="page" id="page-configuracoes">
+      <!-- Gerenciamento de Equipe (renderizado via JS — visível apenas para admins) -->
+      <div id="perm-section" style="margin-bottom:20px"></div>
       <div class="grid-12">
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="card">
@@ -3717,6 +3735,18 @@ const pageConfig = {
 };
 
 function navigate(page, el) {
+  // ── Guarda de rota: colaboradores só acessam páginas liberadas ──────────────
+  if (currentUser && !currentUser.isAdmin) {
+    const allowed = currentUser.allowedPages || [];
+    if (!allowed.includes(page)) {
+      showNotification(`⛔ Sem acesso à página "${ALL_PAGES.find(p=>p.key===page)?.label || page}".`, 'error');
+      // Redireciona para dashboard (sempre permitido como fallback)
+      const dash = document.querySelector('.nav-item[onclick*="dashboard"]');
+      if (page !== 'dashboard' && dash) { navigate('dashboard', dash); }
+      return;
+    }
+  }
+
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -3725,22 +3755,22 @@ function navigate(page, el) {
   const cfg = pageConfig[page] || {};
   document.getElementById('topbar-title').textContent = cfg.title || page;
   document.getElementById('topbar-sub').textContent = cfg.sub || '';
-  if (page === 'dashboard')   renderDashboard();
-  if (page === 'relatorios')  populateReportSelects();
-  if (page === 'integracoes') loadEvoFields();
-  if (page === 'alertas')     renderBalanceMonitor();
-  if (page === 'contas')      renderContasPage();
-  if (page === 'templates')   renderTemplatesPage();
-  if (page === 'campanhas')   { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
-  if (page === 'calendar')    { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
-  if (page === 'esteira')     { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
-  if (page === 'crm')         _crmInitAndRender();
+  if (page === 'dashboard')     renderDashboard();
+  if (page === 'relatorios')    populateReportSelects();
+  if (page === 'integracoes')   loadEvoFields();
+  if (page === 'alertas')       renderBalanceMonitor();
+  if (page === 'contas')        renderContasPage();
+  if (page === 'templates')     renderTemplatesPage();
+  if (page === 'configuracoes') renderTeamPermissions();
+  if (page === 'campanhas')     { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
+  if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
+  if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
+  if (page === 'crm')           _crmInitAndRender();
   // Ao abrir Tarefas, busca dados frescos do servidor (sincroniza entre usuários)
-  if (page === 'tarefas')     loadTasksFromDB().catch(() => {});
+  if (page === 'tarefas')       loadTasksFromDB().catch(() => {});
   /* Auto-sync Meta Ads na primeira visita à página de clientes por sessão */
   if (page === 'clientes' && !navigate._clientsSynced) {
     navigate._clientsSynced = true;
-    // Pequeno delay para o render inicial dos cards acontecer primeiro
     setTimeout(() => sincronizarTodosMeta(), 400);
   }
 }
@@ -3977,6 +4007,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initGA4Config();
   renderDashboard(); // Popula Dashboard com dados reais na carga inicial
   renderTemplatesPage(); // Popula página de templates (builtins + localStorage)
+  // Sync async: atualiza fotos e nomes na tela de login sem bloquear o carregamento
+  loadUserProfilesFromAPI();
 });
 
 /* ========== CALENDÁRIO EDITORIAL ========== */
@@ -5476,12 +5508,37 @@ function setSyncStatus(status) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Páginas padrão liberadas para colaboradores recém-criados (sem registro no banco ainda)
+const _DEFAULT_COLLAB_PAGES = [
+  'dashboard','clientes','esteira','campanhas','creatives',
+  'calendar','tarefas','alertas'
+];
+
 const USERS = [
   { id:'guilherme',   initials:'GU', name:'Guilherme', role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', isAdmin:true  },
   { id:'henrique',    initials:'HE', name:'Henrique',  role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#F59E0B,#D97706)', isAdmin:true  },
-  { id:'amanda',      initials:'AM', name:'Amanda',     role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false },
-  { id:'jaqueline',   initials:'JA', name:'Jaqueline',  role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false },
-  { id:'bernardo',    initials:'BE', name:'Bernardo',   role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false }
+  { id:'amanda',      initials:'AM', name:'Amanda',     role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] },
+  { id:'jaqueline',   initials:'JA', name:'Jaqueline',  role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] },
+  { id:'bernardo',    initials:'BE', name:'Bernardo',   role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] }
+];
+
+// Mapa completo de páginas para o sistema de permissões
+const ALL_PAGES = [
+  { key:'dashboard',     label:'Dashboard',              icon:'ti-layout-dashboard'  },
+  { key:'clientes',      label:'Clientes',               icon:'ti-users'             },
+  { key:'esteira',       label:'Esteira de Otimizações', icon:'ti-layout-kanban'     },
+  { key:'contas',        label:'Contas de Anúncio',      icon:'ti-credit-card'       },
+  { key:'campanhas',     label:'Campanhas',              icon:'ti-speakerphone'      },
+  { key:'creatives',     label:'Criativos',              icon:'ti-video'             },
+  { key:'calendar',      label:'Calendário',             icon:'ti-calendar-event'    },
+  { key:'leads',         label:'Leads / WhatsApp',       icon:'ti-brand-whatsapp'    },
+  { key:'crm',           label:'CRM Comercial',          icon:'ti-layout-kanban'     },
+  { key:'relatorios',    label:'Relatórios',             icon:'ti-file-analytics'    },
+  { key:'tarefas',       label:'Tarefas',                icon:'ti-checkbox'          },
+  { key:'alertas',       label:'Alertas',               icon:'ti-bell'              },
+  { key:'integracoes',   label:'Integrações',            icon:'ti-plug'              },
+  { key:'templates',     label:'Templates',              icon:'ti-template'          },
+  { key:'configuracoes', label:'Configurações',          icon:'ti-settings'          },
 ];
 
 let currentUser = null;
@@ -5528,7 +5585,7 @@ function selectLoginUser(uid) {
   document.getElementById('login-error').textContent = '';
 }
 
-function doLogin() {
+async function doLogin() {
   const card  = document.getElementById('login-nf-wrap');
   const btn   = document.querySelector('.login-btn');
   const shake = () => { card.classList.remove('login-shake'); void card.offsetWidth; card.classList.add('login-shake'); };
@@ -5538,6 +5595,13 @@ function doLogin() {
     btn.innerHTML = loading
       ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Acessando...'
       : '<i class="ti ti-login"></i> Entrar';
+  };
+  const failLogin = (msg) => {
+    setBtnLoading(false);
+    document.getElementById('login-error').textContent = msg;
+    shake();
+    document.getElementById('login-pin').value = '';
+    document.getElementById('login-pin').focus();
   };
 
   if (!pendingLoginUser) {
@@ -5553,25 +5617,47 @@ function doLogin() {
 
   const pin  = document.getElementById('login-pin').value;
   const user = USERS.find(u => u.id === pendingLoginUser);
-  if (!user || pin !== user.pin) {
-    document.getElementById('login-error').textContent = 'Senha incorreta.';
-    shake();
-    document.getElementById('login-pin').value = '';
-    document.getElementById('login-pin').focus();
-    return;
-  }
+  if (!user) { failLogin('Usuário não encontrado.'); return; }
 
   setBtnLoading(true);
+
+  // ── Verifica PIN no servidor (PINs alterados são armazenados como bcrypt hash) ──
+  try {
+    const base = _apiBase();
+    if (base) {
+      const result = await _apiFetch('/api/users/' + user.id, {
+        method: 'POST',
+        body: JSON.stringify({ pin })
+      });
+      if (result?.hasHash === true) {
+        // Servidor tem hash bcrypt — usa decisão do servidor
+        if (!result.valid) { failLogin('Senha incorreta.'); return; }
+        // PIN correto validado pelo servidor — efetua login
+        try {
+          loginUser(user);
+          setTimeout(() => setBtnLoading(false), 4000);
+        } catch(err) {
+          setTimeout(() => { document.getElementById('login-error').textContent = ''; loginUser(user); }, 1500);
+        }
+        return;
+      }
+      // hasHash === false → PIN padrão (nunca foi alterado) — cai no fallback local
+    }
+  } catch(e) {
+    console.warn('[Login] Verificação servidor falhou, usando modo offline:', e.message);
+  }
+
+  // ── Fallback: comparação local (PIN padrão hardcoded ou modo offline) ──
+  if (pin !== user.pin) { failLogin('Senha incorreta.'); return; }
+
   try {
     loginUser(user);
-    // Botão desaparece com a tela — reset preventivo caso algo falhe
     setTimeout(() => setBtnLoading(false), 4000);
   } catch(err) {
     console.warn('[Login] erro inesperado:', err.message);
     document.getElementById('login-error').textContent = 'Erro ao conectar. Tentando modo de segurança...';
     setBtnLoading(false);
     shake();
-    // Fallback: força login offline após 1,5 s
     setTimeout(() => {
       document.getElementById('login-error').textContent = '';
       loginUser(user);
@@ -5606,6 +5692,8 @@ function loginUser(user) {
   popularSelectCampanhaCliente();
   filtrarEExibirCampanhas();
   initSupabaseSync();
+  // Aplica permissões de página na sidebar imediatamente após o login
+  applySidebarPermissions();
 }
 
 function updateSidebarUser(user) {
@@ -5680,11 +5768,23 @@ function handleProfilePhoto(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    _profilePhotoData = e.target.result;
-    const avEl   = document.getElementById('profile-av-preview');
-    const initEl = document.getElementById('profile-av-initials');
-    avEl.style.background = '#333';
-    initEl.innerHTML = `<img src="${_profilePhotoData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    // Redimensiona para max 200×200 px (mantém proporção, JPEG 85%)
+    // antes de salvar — imagens grandes como base64 ultrapassariam o limite do MongoDB
+    const img = new Image();
+    img.onload = () => {
+      const MAX   = 200;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      _profilePhotoData = canvas.toDataURL('image/jpeg', 0.85);
+      const avEl   = document.getElementById('profile-av-preview');
+      const initEl = document.getElementById('profile-av-initials');
+      avEl.style.background = '#333';
+      initEl.innerHTML = `<img src="${_profilePhotoData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -5698,10 +5798,12 @@ function saveProfile() {
   if (newPin && newPin !== confirmPin)  { errEl.textContent = 'As senhas não coincidem.'; return; }
   if (newPin && newPin.length < 4)      { errEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
   errEl.textContent = '';
+
   const parts = name.split(' ').filter(Boolean);
   const initials = parts.length >= 2
     ? (parts[0][0] + parts[parts.length-1][0]).toUpperCase()
     : name.slice(0,2).toUpperCase();
+
   const idx = USERS.findIndex(u => u.id === currentUser.id);
   if (idx >= 0) {
     USERS[idx].name     = name;
@@ -5710,11 +5812,40 @@ function saveProfile() {
     if (_profilePhotoData)  USERS[idx].photo = _profilePhotoData;
   }
   currentUser = USERS[idx];
+
+  // ── Persiste em localStorage (fallback offline) ──
   const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
   profiles[currentUser.id] = { name: currentUser.name, initials, pin: currentUser.pin, photo: currentUser.photo || null };
   localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
   updateSidebarUser(currentUser);
   closeProfileModal();
+
+  // ── Persiste no servidor: foto + nome compartilhados com toda a equipe ──
+  const payload = {
+    name:     currentUser.name,
+    initials,
+    photo:    currentUser.photo || ''
+  };
+  if (newPin) payload.pin = newPin; // backend faz o hash com bcrypt
+
+  _apiFetch('/api/users/' + currentUser.id, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  }).then(resp => {
+    if (resp?.ok) {
+      showNotification(
+        newPin
+          ? 'Perfil e senha salvos! Foto sincronizada com a equipe ✅'
+          : 'Perfil salvo! Foto sincronizada com a equipe ✅',
+        'success'
+      );
+      loadUserProfilesFromAPI(); // atualiza avatares na tela de login para todos
+    } else {
+      showNotification('Perfil salvo localmente. Falha ao sincronizar com o servidor.', 'warn');
+    }
+  }).catch(() => {
+    showNotification('Perfil salvo localmente (sem conexão com servidor).', 'warn');
+  });
 }
 
 function _loadUserProfiles() {
@@ -5722,10 +5853,11 @@ function _loadUserProfiles() {
   USERS.forEach(u => {
     const p = profiles[u.id];
     if (!p) return;
-    if (p.name)     u.name     = p.name;
-    if (p.initials) u.initials = p.initials;
-    if (p.pin)      u.pin      = p.pin;
-    if (p.photo)    u.photo    = p.photo;
+    if (p.name)         u.name         = p.name;
+    if (p.initials)     u.initials     = p.initials;
+    if (p.pin)          u.pin          = p.pin;
+    if (p.photo)        u.photo        = p.photo;
+    if (Array.isArray(p.allowedPages)) u.allowedPages = p.allowedPages;
   });
 }
 _loadUserProfiles();
@@ -11359,12 +11491,201 @@ async function loadAppConfig() {
   } catch(e) {
     console.warn('[Config] Falha ao carregar config do servidor — usando localStorage local.', e);
   }
+  // Também atualiza perfis de usuário (fotos + nomes) do servidor
+  await loadUserProfilesFromAPI();
+}
+
+/**
+ * Carrega perfis de usuário do MongoDB e sincroniza no USERS array.
+ * Garante que fotos e nomes alterados por qualquer usuário sejam visíveis
+ * para toda a equipe — inclusive na tela de login.
+ *
+ * Não retorna pinHash (campo excluído pelo backend).
+ */
+async function loadUserProfilesFromAPI() {
+  try {
+    const data = await _apiFetch('/api/users');
+    if (!Array.isArray(data) || data.length === 0) return;
+    let changed = false;
+    data.forEach(p => {
+      const u = USERS.find(u => u.id === p.userId);
+      if (!u) return;
+      if (p.name     && p.name     !== u.name)     { u.name     = p.name;     changed = true; }
+      if (p.initials && p.initials !== u.initials) { u.initials = p.initials; changed = true; }
+      // photo pode ser string vazia (limpar foto) ou data URL (nova foto)
+      if (typeof p.photo === 'string' && p.photo !== (u.photo || '')) {
+        u.photo   = p.photo || null;
+        changed   = true;
+      }
+      // Permissões de página (colaboradores)
+      if (!u.isAdmin && Array.isArray(p.allowedPages)) {
+        u.allowedPages = p.allowedPages;
+        changed = true;
+      }
+      // Espelha no localStorage local para modo offline
+      const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
+      profiles[u.id] = {
+        ...(profiles[u.id] || {}),
+        name: u.name, initials: u.initials, photo: u.photo || null,
+        allowedPages: u.allowedPages || null
+      };
+      localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
+    });
+    if (changed) {
+      renderLoginScreen();
+      // Se o usuário atual já está logado, atualiza sidebar + permissões
+      if (currentUser) {
+        const fresh = USERS.find(u => u.id === currentUser.id);
+        if (fresh) {
+          currentUser = fresh;
+          updateSidebarUser(currentUser);
+          applySidebarPermissions(); // re-aplica visibilidade dos itens de menu
+        }
+      }
+    }
+    console.log('[Users] Perfis sincronizados do servidor:', data.length);
+  } catch(e) {
+    console.warn('[Users] Falha ao sincronizar perfis:', e);
+  }
 }
 
 /**
  * Aplica restrições de acesso ao formulário de edição de clientes.
  * Somente admins podem editar IDs de conta Meta Ads e Google Analytics 4.
  */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SISTEMA DE PERMISSÕES POR PÁGINA
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Oculta/exibe itens da sidebar com base no allowedPages do usuário.
+ * Admins sempre veem tudo. Chamado em loginUser() e quando permissões mudam.
+ */
+function applySidebarPermissions() {
+  const isAdmin    = currentUser?.isAdmin;
+  const allowed    = currentUser?.allowedPages || [];
+
+  document.querySelectorAll('.nav-item').forEach(item => {
+    const match = item.getAttribute('onclick')?.match(/navigate\('([^']+)'/);
+    if (!match) return; // itens sem navigate (ex: seções) ficam visíveis
+    const page = match[1];
+    item.style.display = (isAdmin || allowed.includes(page)) ? '' : 'none';
+  });
+}
+
+/**
+ * Renderiza o card de Gerenciamento de Equipe dentro de page-configuracoes.
+ * Visível apenas para admins. Exibe chips clicáveis por colaborador.
+ */
+function renderTeamPermissions() {
+  const wrap = document.getElementById('perm-section');
+  if (!wrap) return;
+
+  if (!currentUser?.isAdmin) { wrap.innerHTML = ''; return; }
+
+  const collabs = USERS.filter(u => !u.isAdmin);
+
+  wrap.innerHTML = `
+    <div class="card" style="border-color:rgba(108,99,255,0.25);background:rgba(108,99,255,0.04)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="card-title" style="margin:0">
+          <i class="ti ti-shield-check" style="color:var(--accent)"></i> Permissões de Equipe
+        </div>
+        <span style="font-size:11px;color:var(--text3)">Clique nos chips para ligar/desligar o acesso</span>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.55">
+        Administradores têm acesso total a todas as páginas. Configure abaixo quais páginas cada colaborador pode acessar.
+      </p>
+      ${collabs.map(u => _buildPermMemberRow(u)).join('')}
+    </div>`;
+}
+
+/** Constrói o HTML de uma linha de permissões para um colaborador */
+function _buildPermMemberRow(u) {
+  const allowed = u.allowedPages || [];
+  const chips   = ALL_PAGES.map(p => {
+    const on = allowed.includes(p.key);
+    return `<label class="perm-page-chip ${on ? 'on' : 'off'}"
+              data-user="${u.id}" data-page="${p.key}"
+              onclick="_togglePermChip(this)">
+              <i class="ti ${p.icon}" style="font-size:11px"></i>${p.label}
+            </label>`;
+  }).join('');
+
+  const avImg = u.photo
+    ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : u.initials;
+
+  return `
+    <div class="perm-member-row" id="perm-row-${u.id}">
+      <div class="perm-member-av" style="background:${u.color}">${avImg}</div>
+      <div class="perm-member-info">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="perm-member-name">
+            ${u.name}
+            <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">${u.role}</span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="perm-save-${u.id}" onclick="saveTeamPermissions('${u.id}')"
+            style="font-size:11px;padding:4px 12px;opacity:0.4;pointer-events:none">
+            Salvar
+          </button>
+        </div>
+        <div class="perm-pages-grid" id="perm-chips-${u.id}">${chips}</div>
+      </div>
+    </div>`;
+}
+
+/**
+ * Toggle de chip de permissão — liga/desliga visualmente e ativa o botão Salvar.
+ */
+function _togglePermChip(chip) {
+  const isOn = chip.classList.contains('on');
+  chip.classList.toggle('on',  !isOn);
+  chip.classList.toggle('off',  isOn);
+  // Ativa botão Salvar do membro correspondente
+  const userId  = chip.dataset.user;
+  const saveBtn = document.getElementById(`perm-save-${userId}`);
+  if (saveBtn) { saveBtn.style.opacity = ''; saveBtn.style.pointerEvents = ''; }
+}
+
+/**
+ * Persiste as permissões de um colaborador no USERS[] + localStorage + API.
+ */
+function saveTeamPermissions(userId) {
+  const chips = document.querySelectorAll(`[data-user="${userId}"]`);
+  const allowedPages = [...chips]
+    .filter(c => c.classList.contains('on'))
+    .map(c => c.dataset.page);
+
+  // Atualiza em memória
+  const u = USERS.find(u => u.id === userId);
+  if (u) u.allowedPages = allowedPages;
+
+  // Persiste no localStorage (offline backup)
+  const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
+  profiles[userId] = { ...(profiles[userId] || {}), allowedPages };
+  localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
+
+  // Desativa botão Salvar imediatamente
+  const saveBtn = document.getElementById(`perm-save-${userId}`);
+  if (saveBtn) { saveBtn.style.opacity = '0.4'; saveBtn.style.pointerEvents = 'none'; }
+
+  // Persiste no servidor — feedback async
+  _apiFetch('/api/users/' + userId, {
+    method: 'PUT',
+    body: JSON.stringify({ allowedPages })
+  }).then(resp => {
+    showNotification(
+      resp?.ok
+        ? `✅ Permissões de ${u?.name} salvas com sucesso.`
+        : `Permissões de ${u?.name} salvas localmente (erro no servidor).`,
+      resp?.ok ? 'success' : 'warn'
+    );
+  }).catch(() => {
+    showNotification(`Permissões de ${u?.name} salvas localmente (offline).`, 'warn');
+  });
+}
+
 function _applyMetaGa4EditAccess() {
   const isAdmin = currentUser?.isAdmin;
   const metaSearch = document.getElementById('cl-form-meta-account-search');
