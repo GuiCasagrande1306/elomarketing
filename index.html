@@ -3739,7 +3739,9 @@ function navigate(page, el) {
   if (page === 'campanhas')   { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
   if (page === 'calendar')    { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
   if (page === 'esteira')     renderEsteira();
-  if (page === 'crm')        _crmInitAndRender();
+  if (page === 'crm')         _crmInitAndRender();
+  // Ao abrir Tarefas, busca dados frescos do servidor (sincroniza entre usuários)
+  if (page === 'tarefas')     loadTasksFromDB().catch(() => {});
   /* Auto-sync Meta Ads na primeira visita à página de clientes por sessão */
   if (page === 'clientes' && !navigate._clientsSynced) {
     navigate._clientsSynced = true;
@@ -4715,9 +4717,12 @@ function saveTasks() {
 }
 
 function loadTasks() {
+  // Exibe dados do localStorage imediatamente (UX rápida)
   reloadTasksFromStorage();
   updateCompletedCount();
   updateNavBadges();
+  // Atualiza em background com dados frescos do servidor (fonte de verdade compartilhada)
+  loadTasksFromDB().catch(() => {});
 }
 
 function migrateDefaultDoneTasks() {
@@ -5271,10 +5276,18 @@ function deleteClientFromDB(id) {
 }
 
 // ── TAREFAS ───────────────────────────────────────────────────────────────────
+// ── TASKS API (MongoDB via Vercel) ────────────────────────────────────────────
+// Fonte de verdade compartilhada entre todos os usuários.
+// localStorage é usado como cache local para UX rápida.
+
 async function loadTasksFromDB() {
-  if (!db) return false;
-  const { data, error } = await db.from('tarefas').select('*').order('created_at', { ascending: true });
-  if (error) { console.warn('[DB] loadTarefas:', error.message); return false; }
+  // Tenta API primeiro; fallback para localStorage
+  const data = await _apiFetch('/api/tasks');
+  if (!data || !Array.isArray(data)) {
+    // API indisponível — usa cache local
+    reloadTasksFromStorage();
+    return false;
+  }
 
   const taskList      = document.getElementById('task-list');
   const completedList = document.getElementById('completed-tasks-list');
@@ -5283,7 +5296,7 @@ async function loadTasksFromDB() {
   taskList.querySelectorAll('.task-item').forEach(el => el.remove());
   completedList.querySelectorAll('.task-item').forEach(el => el.remove());
 
-  (data || []).forEach(task => {
+  data.forEach(task => {
     const item = buildTaskItem(task);
     if (task.status === 'done') {
       completedList.appendChild(item);
@@ -5293,6 +5306,8 @@ async function loadTasksFromDB() {
     }
   });
 
+  // Salva no localStorage como cache offline
+  saveTasks();
   updateCompletedCount();
   if (currentUser) filterByCollaborator(currentUser.isAdmin ? 'all' : currentUser.id);
   refreshTaskOwnerChips();
@@ -5301,20 +5316,39 @@ async function loadTasksFromDB() {
 }
 
 function createTaskInDB(task) {
-  if (!db || !currentUser) return;
-  setSyncStatus('syncing');
-  db.from('tarefas')
-    .insert({ ...task, updated_by: currentUser.id })
-    .then(({ error }) => setSyncStatus(error ? 'error' : 'ok'));
+  if (!currentUser) return;
+  _apiFetch('/api/tasks', {
+    method: 'POST',
+    body:   JSON.stringify({ ...task, updated_by: currentUser.id, created_by: currentUser.id })
+  }).then(r => {
+    if (r?.ok) console.log('[Tasks] criada no servidor:', task.id);
+    else       console.warn('[Tasks] falha ao criar:', task.id);
+  });
+  // Supabase (legado — mantido se configurado)
+  if (db && currentUser) {
+    db.from('tarefas').insert({ ...task, updated_by: currentUser.id }).catch(() => {});
+  }
 }
 
 function updateTaskInDB(id, updates) {
-  if (!db || !currentUser) return;
-  setSyncStatus('syncing');
-  db.from('tarefas')
-    .update({ ...updates, updated_by: currentUser.id })
-    .eq('id', id)
-    .then(({ error }) => setSyncStatus(error ? 'error' : 'ok'));
+  if (!currentUser) return;
+  _apiFetch(`/api/tasks/${id}`, {
+    method: 'PUT',
+    body:   JSON.stringify({ ...updates, updated_by: currentUser.id })
+  }).then(r => {
+    if (!r?.ok) console.warn('[Tasks] falha ao atualizar:', id);
+  });
+  // Supabase (legado — mantido se configurado)
+  if (db && currentUser) {
+    db.from('tarefas').update({ ...updates, updated_by: currentUser.id }).eq('id', id).catch(() => {});
+  }
+}
+
+function deleteTaskInDB(id) {
+  if (!id) return;
+  _apiFetch(`/api/tasks/${id}`, { method: 'DELETE' })
+    .then(r => { if (!r?.ok) console.warn('[Tasks] falha ao deletar:', id); });
+  if (db) db.from('tarefas').delete().eq('id', id).catch(() => {});
 }
 
 // ── INIT & REALTIME ───────────────────────────────────────────────────────────
