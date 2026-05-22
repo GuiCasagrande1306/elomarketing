@@ -2127,6 +2127,45 @@
 
   /* CRM Modal tweaks */
   #crm-modal .modal { width: 520px; }
+/* ── Monday-style Task Board ─────────────────────────────────────── */
+.monday-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.monday-search{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:13px;color:var(--text);outline:none;width:200px;transition:border-color .2s}
+.monday-search:focus{border-color:var(--accent)}
+.monday-filter-sel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);outline:none;cursor:pointer}
+.monday-group{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.monday-group-hdr{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);transition:background .15s}
+.monday-group-hdr:hover{background:var(--bg3)}
+.monday-group-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.monday-group-name{font-size:13px;font-weight:700;color:var(--text);flex:1}
+.monday-group-cnt{font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px}
+.monday-table{width:100%;border-collapse:collapse}
+.monday-th{text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
+.monday-tr{border-bottom:1px solid rgba(255,255,255,0.04);transition:background .1s}
+.monday-tr:last-child{border-bottom:none}
+.monday-tr:hover{background:rgba(255,255,255,0.025)}
+.monday-td{padding:9px 12px;font-size:13px;color:var(--text2);vertical-align:middle}
+.m-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
+.m-check:hover{border-color:var(--accent)}
+.m-check.done{background:var(--green);border-color:var(--green)}
+.m-title{font-size:13px;font-weight:500;color:var(--text);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;display:block}
+.m-title:hover{color:var(--accent2)}
+.m-title.done-txt{text-decoration:line-through;opacity:.45}
+.m-client{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(108,99,255,.12);color:var(--accent2);border:1px solid rgba(108,99,255,.2);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.m-avatar{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
+.m-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.m-status{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;white-space:nowrap;width:100%;text-align:center;transition:opacity .15s,transform .1s;background:none;outline:none}
+.m-status:hover{opacity:.8;transform:scale(.97)}
+.m-prio{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:opacity .15s;white-space:nowrap}
+.m-prio:hover{opacity:.75}
+.m-due{font-size:12px;color:var(--text3);white-space:nowrap}
+.m-due.overdue{color:var(--red);font-weight:600}
+.m-due.soon{color:var(--amber);font-weight:600}
+.monday-add-row{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:12px;color:var(--text3);cursor:pointer;border-top:1px solid var(--border);transition:background .1s,color .1s}
+.monday-add-row:hover{background:var(--bg3);color:var(--text)}
+.m-dropdown{position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9999;min-width:155px;overflow:hidden;animation:fadeIn .1s ease}
+.m-dd-item{display:flex;align-items:center;gap:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);transition:background .1s}
+.m-dd-item:hover{background:var(--bg3)}
+.m-dd-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 </style>
 </head>
 <body class="pre-auth">
@@ -2834,49 +2873,33 @@
 
     <!-- ===== TAREFAS ===== -->
     <div class="page" id="page-tarefas">
-      <div class="grid-2">
-        <div class="card" id="task-list">
-          <div class="card-header"><div class="card-title"><i class="ti ti-checkbox"></i> Tarefas Pendentes</div><button class="btn btn-primary btn-sm" onclick="openTaskModal()"><i class="ti ti-plus"></i> Nova</button></div>
-          <div class="task-item" data-owner="colaborador1"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-text"><div style="font-weight:500;font-size:12px">Revisar criativos — Psicologia Saúde</div><div style="font-size:10px;color:var(--text3)">CTR abaixo de 1%</div></div><span class="badge badge-red">Urgente</span></div>
-          <div class="task-item" data-owner="guilherme"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-text"><div style="font-weight:500;font-size:12px">Gerar relatório — Instituto Lara</div><div style="font-size:10px;color:var(--text3)">Vence em 3 dias</div></div><span class="badge badge-amber">Esta semana</span></div>
-          <div class="task-item" data-owner="colaborador1"><div class="task-check done" onclick="toggleTask(this)"><i class="ti ti-check" style="font-size:9px"></i></div><div class="task-text" style="opacity:0.5"><div style="font-weight:500;font-size:12px;text-decoration:line-through">Importar CSV Abril — Cl. Medicina</div></div><span class="badge badge-gray">Feito</span></div>
-          <div class="task-item" data-owner="henrique"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-text"><div style="font-weight:500;font-size:12px">Aumentar budget — Odonto Digital</div><div style="font-size:10px;color:var(--text3)">ROAS excelente</div></div><span class="badge badge-blue">Planejado</span></div>
+      <!-- Toolbar -->
+      <div class="monday-toolbar">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input type="text" class="monday-search" id="task-search" placeholder="🔍 Buscar tarefa..." oninput="renderTasksGrid()">
+          <select class="monday-filter-sel" id="task-filter-owner" onchange="renderTasksGrid()">
+            <option value="">Todos os responsáveis</option>
+          </select>
+          <select class="monday-filter-sel" id="task-filter-client" onchange="renderTasksGrid()">
+            <option value="">Todos os clientes</option>
+          </select>
+          <select class="monday-filter-sel" id="task-filter-status" onchange="renderTasksGrid()">
+            <option value="">Todos os status</option>
+            <option value="Não Iniciada">Não Iniciada</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Travado">Travado</option>
+            <option value="Pronto">Pronto</option>
+          </select>
         </div>
-        <div class="card" style="background:rgba(108,99,255,0.05);border-color:rgba(108,99,255,0.2)">
-          <div class="card-header"><div class="card-title"><i class="ti ti-sparkles" style="color:var(--accent2)"></i> Recomendações da IA</div></div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--red)"><div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:4px">Ação urgente</div><div style="font-size:12px;color:var(--text2)">Frequência 5,2 na campanha "Ansiedade" — pausar ou renovar criativo.</div></div>
-            <div style="background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--amber)"><div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:4px">Otimização</div><div style="font-size:12px;color:var(--text2)">Campanha Drª Roberta com CPA 35% abaixo da meta — expandir público.</div></div>
-            <div style="background:var(--bg3);border-radius:8px;padding:12px;border-left:3px solid var(--green)"><div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px">Oportunidade</div><div style="font-size:12px;color:var(--text2)">23 leads qualificados do Odonto sem resposta há 48h.</div></div>
-          </div>
-        </div>
+        <button class="btn btn-primary btn-sm" onclick="openTaskModal()">
+          <i class="ti ti-plus"></i> Nova Tarefa
+        </button>
       </div>
-
-      <!-- Tarefas Concluídas -->
-      <div class="completed-section">
-        <div class="completed-header">
-          <div class="completed-title">
-            <i class="ti ti-checks" style="color:var(--green)"></i>
-            Tarefas Concluídas
-            <span class="badge badge-green" id="completed-count">0</span>
-          </div>
-          <div class="completed-filter">
-            <span class="completed-filter-label">Filtrar por data:</span>
-            <input type="date" id="completed-date-filter" class="completed-date-input"
-                   oninput="filterCompletedTasks(this.value)"
-                   onchange="filterCompletedTasks(this.value)">
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('completed-date-filter').value=''; filterCompletedTasks('')" title="Limpar filtro">
-              <i class="ti ti-x"></i>
-            </button>
-          </div>
-        </div>
-        <div id="completed-tasks-list" class="completed-tasks-list">
-          <div id="completed-empty-state" class="completed-empty">
-            <i class="ti ti-circle-check" style="font-size:26px;color:var(--text3);margin-bottom:6px;display:block"></i>
-            Nenhuma tarefa concluída ainda.<br>Marque uma tarefa como feita para ela aparecer aqui.
-          </div>
-        </div>
-      </div>
+      <!-- Board dinâmico -->
+      <div id="monday-board"></div>
+      <!-- Listas legadas ocultas (mantidas para compatibilidade de saveTasks/loadTasks) -->
+      <div id="task-list" style="display:none"></div>
+      <div id="completed-tasks-list" style="display:none"></div>
     </div>
 
     <!-- ===== ALERTAS ===== -->
@@ -3479,47 +3502,82 @@
 
 <!-- MODAL: NOVA TAREFA -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
-  <div class="modal">
+  <div class="modal" style="width:480px">
     <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-checkbox" style="color:var(--accent2); margin-right:6px"></i>Nova Tarefa</div>
+      <div class="modal-title"><i class="ti ti-checkbox" style="color:var(--accent2);margin-right:6px"></i><span id="task-modal-title">Nova Tarefa</span></div>
       <button class="modal-close" onclick="closeModal()" aria-label="Fechar"><i class="ti ti-x"></i></button>
     </div>
     <form id="task-form" onsubmit="event.preventDefault(); saveTask();">
+      <!-- Título -->
       <div class="form-group">
-        <label class="form-label" for="task-title">Título da Tarefa</label>
+        <label class="form-label" for="task-title">Título da Tarefa *</label>
         <input type="text" id="task-title" class="form-input" placeholder="Ex: Revisar criativos da semana" autocomplete="off" required>
       </div>
+      <!-- Descrição -->
       <div class="form-group">
         <label class="form-label" for="task-description">Descrição</label>
-        <textarea id="task-description" class="form-input" rows="3" placeholder="Detalhes, contexto, links de referência..."></textarea>
+        <textarea id="task-description" class="form-input" rows="2" placeholder="Detalhes, links, contexto..."></textarea>
       </div>
-      <div class="form-group">
-        <label class="form-label">Criticidade</label>
-        <div class="crit-pills" id="task-criticality">
-          <button type="button" class="crit-pill" data-crit="baixa">Baixa</button>
-          <button type="button" class="crit-pill active" data-crit="media">Média</button>
-          <button type="button" class="crit-pill" data-crit="alta">Alta</button>
-          <button type="button" class="crit-pill" data-crit="critica">Crítica</button>
+      <!-- Linha: Cliente + Responsável -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="task-client">Cliente</label>
+          <select id="task-client" class="form-select">
+            <option value="">Sem cliente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-owner">Responsável</label>
+          <select id="task-owner" class="form-select">
+            <option value="guilherme">Guilherme</option>
+            <option value="henrique">Henrique</option>
+            <option value="amanda">Amanda</option>
+            <option value="jaqueline">Jaqueline</option>
+            <option value="bernardo">Bernardo</option>
+          </select>
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="task-deadline">Data e Hora de Entrega</label>
-        <input type="datetime-local" id="task-deadline" class="form-input form-datetime">
+      <!-- Linha: Status + Prioridade -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="task-status">Status</label>
+          <select id="task-status" class="form-select">
+            <option value="Não Iniciada">Não Iniciada</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Travado">Travado</option>
+            <option value="Pronto">Pronto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-priority">Prioridade</label>
+          <select id="task-priority" class="form-select">
+            <option value="Baixa">Baixa</option>
+            <option value="Média" selected>Média</option>
+            <option value="Alta">Alta</option>
+            <option value="Crítica">Crítica</option>
+          </select>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="task-owner">Responsável</label>
-        <select id="task-owner" class="form-select">
-          <option value="guilherme">Guilherme</option>
-          <option value="henrique">Henrique</option>
-          <option value="amanda">Amanda</option>
-          <option value="jaqueline">Jaqueline</option>
-          <option value="bernardo">Bernardo</option>
-        </select>
+      <!-- Linha: Prazo + Grupo -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="task-duedate">Prazo de Entrega</label>
+          <input type="date" id="task-duedate" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="task-group">Grupo</label>
+          <select id="task-group" class="form-select">
+            <option value="semana">Demandas da Semana</option>
+            <option value="backlog">Backlog / Ideias</option>
+          </select>
+        </div>
       </div>
+      <!-- Botões -->
       <div style="display:flex;gap:8px;margin-top:8px">
         <button type="button" class="btn btn-ghost" style="flex:1" onclick="closeModal()">Cancelar</button>
         <button type="submit" class="btn btn-primary" style="flex:1"><i class="ti ti-check"></i> Salvar Tarefa</button>
       </div>
+      <input type="hidden" id="task-edit-id" value="">
     </form>
   </div>
 </div>
@@ -3771,7 +3829,7 @@ function navigate(page, el) {
   if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
   if (page === 'crm')           _crmInitAndRender();
   // Ao abrir Tarefas, busca dados frescos do servidor (sincroniza entre usuários)
-  if (page === 'tarefas')       loadTasksFromDB().catch(() => {});
+  if (page === 'tarefas') { loadTasks(); _populateTaskFilters(); }
   /* Auto-sync Meta Ads na primeira visita à página de clientes por sessão */
   if (page === 'clientes' && !navigate._clientsSynced) {
     navigate._clientsSynced = true;
@@ -3997,9 +4055,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCalendarMonth();
   renderDetailsEmpty();
   renderCreatives();
-  document.querySelectorAll('#task-criticality .crit-pill').forEach(btn => {
-    btn.addEventListener('click', () => selectCrit(btn));
-  });
   resetTaskForm();
   loadTasks();
   loadClients();
@@ -4643,116 +4698,43 @@ function tkTimeStr(d) {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function toggleTask(checkEl) {
-  const item        = checkEl.closest('.task-item');
-  const taskId      = item.dataset.taskId;
-  const becomingDone = !checkEl.classList.contains('done');
+function toggleTask(el) { } // legado - não usado
 
-  if (becomingDone) {
-    const now        = new Date();
-    const dateKey    = tkDateKey(now);
-    const timeStr    = tkTimeStr(now);
-    const completedAt = now.toISOString();
-
-    checkEl.classList.add('done');
-    checkEl.innerHTML = '<i class="ti ti-check" style="font-size:9px"></i>';
-    item.dataset.date          = dateKey;
-    item.dataset.completedTime = timeStr;
-
-    const textDiv = item.querySelector('.task-text');
-    textDiv.style.opacity = '0.5';
-    const titleEl = textDiv.querySelector('div');
-    if (titleEl) titleEl.style.textDecoration = 'line-through';
-
-    if (!item.querySelector('.task-completed-at')) {
-      const stamp = document.createElement('div');
-      stamp.className = 'task-completed-at';
-      stamp.innerHTML = `<i class="ti ti-check"></i> Concluído às ${timeStr}`;
-      textDiv.appendChild(stamp);
-    }
-
-    document.getElementById('completed-tasks-list').prepend(item);
-    if (taskId) updateTaskInDB(taskId, { status: 'done', completed_at: completedAt });
-
-  } else {
-    checkEl.classList.remove('done');
-    checkEl.innerHTML = '';
-    delete item.dataset.date;
-    delete item.dataset.completedTime;
-
-    const textDiv = item.querySelector('.task-text');
-    textDiv.style.opacity = '';
-    const titleEl = textDiv.querySelector('div');
-    if (titleEl) titleEl.style.textDecoration = '';
-    item.querySelector('.task-completed-at')?.remove();
-
-    const taskList = document.getElementById('task-list');
-    taskList.insertBefore(item, taskList.querySelector('.card-header').nextSibling);
-    if (taskId) updateTaskInDB(taskId, { status: 'active', completed_at: null });
-  }
-
-  saveTasks();
-  updateNavBadges();
-  filterCompletedTasks(document.getElementById('completed-date-filter')?.value || '');
-}
-
-function filterCompletedTasks(selectedDate) {
-  const uid = document.getElementById('collab-filter')?.value || 'all';
-  const items = document.querySelectorAll('#completed-tasks-list .task-item');
-  items.forEach(item => {
-    const dateOk  = !selectedDate || item.dataset.date === selectedDate;
-    const ownerOk = uid === 'all' || !item.dataset.owner || item.dataset.owner === uid;
-    item.style.display = (dateOk && ownerOk) ? '' : 'none';
-  });
-  updateCompletedCount();
-}
+function filterCompletedTasks(date) { } // legado - não usado
 
 function updateCompletedCount() {
-  const all     = [...document.querySelectorAll('#completed-tasks-list .task-item')];
-  const visible = all.filter(el => el.style.display !== 'none').length;
-  const countEl = document.getElementById('completed-count');
-  if (countEl) countEl.textContent = String(visible);
-  const emptyState = document.getElementById('completed-empty-state');
-  if (emptyState) emptyState.style.display = visible === 0 ? '' : 'none';
+  const el = document.getElementById('completed-count');
+  if (el) el.textContent = TASKS_DATA.filter(t => normalizeTaskStatus(t.status) === 'Pronto').length;
 }
 
 function updateNavBadges() {
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-
-  let urgentCount = 0;
-  document.querySelectorAll('#task-list .task-item').forEach(el => {
-    const dl = el.dataset.deadline;
-    if (dl && new Date(dl).getTime() <= endOfToday.getTime()) urgentCount++;
-  });
-
+  const today = new Date(); today.setHours(23,59,59,999);
+  const urgentCount = TASKS_DATA.filter(t => {
+    if (t.status === 'Pronto') return false;
+    const dl = t.dueDate || t.deadline;
+    return dl && new Date(dl) <= today;
+  }).length;
   const tb = document.getElementById('nav-badge-tarefas');
-  if (tb) {
-    tb.textContent    = urgentCount;
-    tb.className      = 'nav-badge amber';
-    tb.style.display  = urgentCount > 0 ? '' : 'none';
-  }
+  if (tb) { tb.textContent = urgentCount; tb.className = 'nav-badge amber'; tb.style.display = urgentCount > 0 ? '' : 'none'; }
 }
 
 function saveTasks() {
-  const activeItems    = document.querySelectorAll('#task-list .task-item');
-  const completedItems = document.querySelectorAll('#completed-tasks-list .task-item');
-  const active = [...activeItems].map(el => ({ html: el.outerHTML }));
-  const done   = [...completedItems].map(el => ({
-    html: el.outerHTML,
-    date: el.dataset.date || '',
-    ct:   el.dataset.completedTime || ''
-  }));
-  localStorage.setItem('tp_tasks_active', JSON.stringify(active));
-  localStorage.setItem('tp_tasks_done',   JSON.stringify(done));
+  localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  // Mantém compatibilidade com código legado que ainda lê #task-list
+  const tl = document.getElementById('task-list');
+  const cl = document.getElementById('completed-tasks-list');
+  if (tl) tl.innerHTML = '';
+  if (cl) cl.innerHTML = '';
 }
 
 function loadTasks() {
-  // Exibe dados do localStorage imediatamente (UX rápida)
-  reloadTasksFromStorage();
-  updateCompletedCount();
+  // Carrega do localStorage v2 (novo formato)
+  const raw = localStorage.getItem('tp_tasks_v2');
+  if (raw) {
+    try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) TASKS_DATA = parsed; } catch(e) {}
+  }
+  renderTasksGrid();
   updateNavBadges();
-  // Atualiza em background com dados frescos do servidor (fonte de verdade compartilhada)
   loadTasksFromDB().catch(() => {});
 }
 
@@ -5082,27 +5064,54 @@ function tkEscape(s) {
 function resetTaskForm() {
   document.getElementById('task-title').value = '';
   document.getElementById('task-description').value = '';
-  document.querySelectorAll('#task-criticality .crit-pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.crit === 'media');
-  });
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  document.getElementById('task-deadline').value = tkFmtLocal(d);
+  document.getElementById('task-status').value = 'Não Iniciada';
+  document.getElementById('task-priority').value = 'Média';
+  document.getElementById('task-duedate').value = '';
+  document.getElementById('task-edit-id').value = '';
+  document.getElementById('task-modal-title').textContent = 'Nova Tarefa';
   const ownerSel = document.getElementById('task-owner');
   if (ownerSel && currentUser) ownerSel.value = currentUser.id;
+  // Popula clientes no select
+  const clientSel = document.getElementById('task-client');
+  if (clientSel) {
+    clientSel.innerHTML = '<option value="">Sem cliente</option>';
+    (CLIENTS.list || []).forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      clientSel.appendChild(o);
+    });
+  }
 }
 
-function openTaskModal() {
+function openTaskModal(groupKey) {
   resetTaskForm();
+  if (groupKey) {
+    const grpSel = document.getElementById('task-group');
+    if (grpSel) grpSel.value = groupKey;
+  }
   openModal();
   setTimeout(() => document.getElementById('task-title').focus(), 50);
 }
 
-function selectCrit(btn) {
-  btn.parentElement.querySelectorAll('.crit-pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
+function openEditTaskModal(taskId) {
+  const task = TASKS_DATA.find(t => t.id === taskId);
+  if (!task) return;
+  resetTaskForm();
+  document.getElementById('task-modal-title').textContent = 'Editar Tarefa';
+  document.getElementById('task-title').value       = task.title || '';
+  document.getElementById('task-description').value = task.description || '';
+  document.getElementById('task-status').value      = normalizeTaskStatus(task.status);
+  document.getElementById('task-priority').value    = normalizeTaskPriority(task);
+  document.getElementById('task-duedate').value     = (task.dueDate || task.deadline || '').substring(0,10);
+  document.getElementById('task-owner').value       = task.assignedTo || task.owner || '';
+  document.getElementById('task-client').value      = task.client || '';
+  document.getElementById('task-group').value       = task.group || 'semana';
+  document.getElementById('task-edit-id').value     = taskId;
+  openModal();
+  setTimeout(() => document.getElementById('task-title').focus(), 50);
 }
+
+function selectCrit(btn) { } // legado - não usado
 
 const CRIT_MAP = {
   baixa:   { label: 'Baixa',   badge: 'badge-blue'  },
@@ -5111,88 +5120,42 @@ const CRIT_MAP = {
   critica: { label: 'Crítica', badge: 'badge-red'   }
 };
 
-function buildTaskItem(task) {
-  const meta = CRIT_MAP[task.criticality || 'media'];
-  const subParts = [];
-  if (task.description) subParts.push(tkEscape(task.description));
-  if (task.deadline) {
-    const dt = new Date(task.deadline);
-    if (!isNaN(dt)) {
-      const fmt = dt.toLocaleString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }).replace('.','');
-      subParts.push(`<i class="ti ti-clock" style="font-size:9px;vertical-align:-1px"></i> ${fmt}`);
-    }
-  }
-  const subHtml = subParts.length
-    ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${subParts.join(' • ')}</div>`
-    : '';
-
-  const item = document.createElement('div');
-  item.className = 'task-item';
-  item.dataset.owner    = task.owner || '';
-  item.dataset.taskId   = task.id;
-  item.dataset.deadline = task.deadline || '';
-
-  if (task.status === 'done') {
-    const timeStr = task.completed_at
-      ? (task.completed_at.includes('T') ? task.completed_at.split('T')[1].slice(0,5) : task.completed_at)
-      : '';
-    const dateStr = task.completed_at
-      ? (task.completed_at.includes('T') ? task.completed_at.split('T')[0] : task.completed_at)
-      : '';
-    item.dataset.date          = dateStr;
-    item.dataset.completedTime = timeStr;
-    item.innerHTML = `
-      <div class="task-check done" onclick="toggleTask(this)"><i class="ti ti-check" style="font-size:9px"></i></div>
-      <div class="task-text" style="opacity:0.5">
-        <div style="font-weight:500;font-size:12px;text-decoration:line-through">${tkEscape(task.title)}</div>
-        ${subHtml}
-        <div class="task-completed-at"><i class="ti ti-check"></i> Concluído às ${timeStr}</div>
-      </div>
-      <span class="badge ${meta.badge}">${meta.label}</span>`;
-  } else {
-    item.innerHTML = `
-      <div class="task-check" onclick="toggleTask(this)"></div>
-      <div class="task-text">
-        <div style="font-weight:500;font-size:12px">${tkEscape(task.title)}</div>
-        ${subHtml}
-      </div>
-      <span class="badge ${meta.badge}">${meta.label}</span>`;
-  }
-  return item;
-}
+function buildTaskItem(task) { return document.createElement('div'); } // legado - não usado
 
 function saveTask() {
   const title = document.getElementById('task-title').value.trim();
   if (!title) { document.getElementById('task-title').focus(); return; }
-  const desc     = document.getElementById('task-description').value.trim();
-  const crit     = document.querySelector('#task-criticality .crit-pill.active')?.dataset.crit || 'media';
-  const deadline = document.getElementById('task-deadline').value || null;
-  const owner    = document.getElementById('task-owner')?.value || currentUser?.id || 'admin';
-
-  const task = {
-    id:          crypto.randomUUID(),
+  const editId   = document.getElementById('task-edit-id').value;
+  const isEdit   = !!editId;
+  const taskObj  = {
+    id:          isEdit ? editId : crypto.randomUUID(),
     title,
-    description: desc,
-    criticality: crit,
-    deadline,
-    owner,
-    status:      'active',
-    completed_at: null,
-    created_at:  new Date().toISOString()
+    description: document.getElementById('task-description').value.trim(),
+    status:      document.getElementById('task-status').value,
+    priority:    document.getElementById('task-priority').value,
+    dueDate:     document.getElementById('task-duedate').value || null,
+    deadline:    document.getElementById('task-duedate').value || null,
+    assignedTo:  document.getElementById('task-owner').value,
+    owner:       document.getElementById('task-owner').value,
+    client:      document.getElementById('task-client').value,
+    group:       document.getElementById('task-group').value,
+    criticality: {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'}[document.getElementById('task-priority').value] || 'media',
+    created_at:  isEdit ? (TASKS_DATA.find(t=>t.id===editId)?.created_at || new Date().toISOString()) : new Date().toISOString(),
   };
-
-  const item   = buildTaskItem(task);
-  const list   = document.getElementById('task-list');
-  const header = list.querySelector('.card-header');
-  list.insertBefore(item, header ? header.nextSibling : null);
-
-  createTaskInDB(task);
+  if (isEdit) {
+    const idx = TASKS_DATA.findIndex(t => t.id === editId);
+    if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
+    updateTaskInDB(editId, taskObj);
+  } else {
+    TASKS_DATA.unshift(taskObj);
+    createTaskInDB(taskObj);
+  }
   saveTasks();
+  renderTasksGrid();
   updateNavBadges();
-  refreshTaskOwnerChips();
-  filterByCollaborator(document.getElementById('collab-filter')?.value || 'all');
   closeModal();
   resetTaskForm();
+  showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
 }
 
 /* ==========================================================================
@@ -5316,37 +5279,19 @@ function deleteClientFromDB(id) {
 // localStorage é usado como cache local para UX rápida.
 
 async function loadTasksFromDB() {
-  // Tenta API primeiro; fallback para localStorage
   const data = await _apiFetch('/api/tasks');
-  if (!data || !Array.isArray(data)) {
-    // API indisponível — usa cache local
-    reloadTasksFromStorage();
-    return false;
-  }
-
-  const taskList      = document.getElementById('task-list');
-  const completedList = document.getElementById('completed-tasks-list');
-  if (!taskList || !completedList) return false;
-
-  taskList.querySelectorAll('.task-item').forEach(el => el.remove());
-  completedList.querySelectorAll('.task-item').forEach(el => el.remove());
-
-  data.forEach(task => {
-    const item = buildTaskItem(task);
-    if (task.status === 'done') {
-      completedList.appendChild(item);
-    } else {
-      const header = taskList.querySelector('.card-header');
-      taskList.insertBefore(item, header ? header.nextSibling : null);
-    }
-  });
-
-  // Salva no localStorage como cache offline
-  saveTasks();
-  updateCompletedCount();
-  if (currentUser) filterByCollaborator(_collabUid());
-  refreshTaskOwnerChips();
+  if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
+  TASKS_DATA = data.map(t => ({
+    ...t,
+    status:   normalizeTaskStatus(t.status),
+    priority: normalizeTaskPriority(t),
+    group:    t.group || 'semana',
+    assignedTo: t.assignedTo || t.owner || '',
+  }));
+  localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  renderTasksGrid();
   updateNavBadges();
+  if (currentUser) filterByCollaborator(_collabUid());
   return true;
 }
 
@@ -5354,15 +5299,8 @@ function createTaskInDB(task) {
   if (!currentUser) return;
   _apiFetch('/api/tasks', {
     method: 'POST',
-    body:   JSON.stringify({ ...task, updated_by: currentUser.id, created_by: currentUser.id })
-  }).then(r => {
-    if (r?.ok) console.log('[Tasks] criada no servidor:', task.id);
-    else       console.warn('[Tasks] falha ao criar:', task.id);
-  });
-  // Supabase (legado — mantido se configurado)
-  if (db && currentUser) {
-    db.from('tarefas').insert({ ...task, updated_by: currentUser.id }).catch(() => {});
-  }
+    body: JSON.stringify({ ...task, updated_by: currentUser.id, created_by: currentUser.id })
+  }).then(r => { if (!r?.ok) console.warn('[Tasks] falha ao criar:', task.id); });
 }
 
 function updateTaskInDB(id, updates) {
@@ -11412,6 +11350,259 @@ window.deletarCliente = async function(id) {
 
   showNotification(`Cliente "${client.name}" excluído com sucesso.`, 'warn');
 };
+
+/* ══════════════════════════════════════════════════════════════════
+   MONDAY-STYLE TASK BOARD
+══════════════════════════════════════════════════════════════════ */
+let TASKS_DATA = [];
+
+const TASK_STATUS_CFG = {
+  'Não Iniciada': { color:'#94A3B8', bg:'rgba(148,163,184,.14)', border:'rgba(148,163,184,.3)' },
+  'Em Andamento': { color:'#60A5FA', bg:'rgba(96,165,250,.14)',  border:'rgba(96,165,250,.3)'  },
+  'Travado':      { color:'#F87171', bg:'rgba(248,113,113,.14)', border:'rgba(248,113,113,.3)' },
+  'Pronto':       { color:'#34D399', bg:'rgba(52,211,153,.14)',  border:'rgba(52,211,153,.3)'  },
+};
+
+const TASK_PRIORITY_CFG = {
+  'Baixa':   { color:'#94A3B8', bg:'rgba(148,163,184,.12)', icon:'▼' },
+  'Média':   { color:'#FBBF24', bg:'rgba(251,191,36,.12)',  icon:'●' },
+  'Alta':    { color:'#FB923C', bg:'rgba(251,146,60,.12)',  icon:'▲' },
+  'Crítica': { color:'#F87171', bg:'rgba(248,113,113,.12)', icon:'‼' },
+};
+
+const TASK_GROUPS_CFG = [
+  { key:'semana',  label:'Demandas da Semana', color:'#6C63FF' },
+  { key:'backlog', label:'Backlog / Ideias',   color:'#FBBF24' },
+];
+
+function normalizeTaskStatus(s) {
+  if (s === 'active') return 'Não Iniciada';
+  if (s === 'done')   return 'Pronto';
+  return TASK_STATUS_CFG[s] ? s : 'Não Iniciada';
+}
+
+function normalizeTaskPriority(t) {
+  if (t.priority && TASK_PRIORITY_CFG[t.priority]) return t.priority;
+  const m = {baixa:'Baixa',media:'Média',alta:'Alta',urgente:'Crítica',critica:'Crítica'};
+  return m[t.criticality] || 'Média';
+}
+
+function renderTasksGrid() {
+  const board = document.getElementById('monday-board');
+  if (!board) return;
+
+  // Populate filter dropdowns
+  _populateTaskFilters();
+
+  const search  = (document.getElementById('task-search')?.value || '').toLowerCase();
+  const ownerF  = document.getElementById('task-filter-owner')?.value || '';
+  const clientF = document.getElementById('task-filter-client')?.value || '';
+  const statusF = document.getElementById('task-filter-status')?.value || '';
+
+  let tasks = TASKS_DATA.map(t => ({
+    ...t,
+    status:   normalizeTaskStatus(t.status),
+    priority: normalizeTaskPriority(t),
+    group:    t.group || 'semana',
+    assignedTo: t.assignedTo || t.owner || '',
+  }));
+
+  if (search)  tasks = tasks.filter(t => t.title.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search));
+  if (ownerF)  tasks = tasks.filter(t => t.assignedTo === ownerF);
+  if (clientF) tasks = tasks.filter(t => t.client === clientF);
+  if (statusF) tasks = tasks.filter(t => t.status === statusF);
+
+  board.innerHTML = '';
+  TASK_GROUPS_CFG.forEach(g => {
+    board.appendChild(_buildTaskGroup(g, tasks.filter(t => t.group === g.key)));
+  });
+}
+
+function _populateTaskFilters() {
+  const ownerSel  = document.getElementById('task-filter-owner');
+  const clientSel = document.getElementById('task-filter-client');
+  if (ownerSel && ownerSel.options.length <= 1) {
+    USERS.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.name; ownerSel.appendChild(o); });
+  }
+  if (clientSel && clientSel.options.length <= 1) {
+    (CLIENTS.list || []).forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; clientSel.appendChild(o); });
+  }
+}
+
+function _buildTaskGroup(group, tasks) {
+  const section = document.createElement('div');
+  section.className = 'monday-group';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'monday-group-hdr';
+  hdr.innerHTML = `
+    <div class="monday-group-dot" style="background:${group.color}"></div>
+    <div class="monday-group-name">${group.label}</div>
+    <div class="monday-group-cnt">${tasks.length}</div>
+    <i class="ti ti-chevron-down" id="chv-${group.key}" style="color:var(--text3);font-size:13px;transition:transform .2s;margin-left:4px"></i>
+  `;
+
+  const body = document.createElement('div');
+  body.id = 'grp-body-' + group.key;
+
+  const table = document.createElement('table');
+  table.className = 'monday-table';
+
+  const thead = `<thead><tr>
+    <th class="monday-th" style="width:36%;padding-left:46px">Tarefa</th>
+    <th class="monday-th" style="width:14%">Cliente</th>
+    <th class="monday-th" style="width:11%">Responsável</th>
+    <th class="monday-th" style="width:14%">Status</th>
+    <th class="monday-th" style="width:12%">Prioridade</th>
+    <th class="monday-th" style="width:9%">Prazo</th>
+    <th class="monday-th" style="width:4%"></th>
+  </tr></thead>`;
+  table.innerHTML = thead;
+
+  const tbody = document.createElement('tbody');
+  tasks.forEach(t => tbody.appendChild(_buildTaskRow(t)));
+  table.appendChild(tbody);
+
+  const addRow = document.createElement('div');
+  addRow.className = 'monday-add-row';
+  addRow.innerHTML = '<i class="ti ti-plus" style="font-size:12px"></i> Adicionar tarefa';
+  addRow.onclick = () => openTaskModal(group.key);
+
+  body.appendChild(table);
+  body.appendChild(addRow);
+
+  hdr.onclick = () => {
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? '' : 'none';
+    const chv = document.getElementById('chv-' + group.key);
+    if (chv) chv.style.transform = hidden ? '' : 'rotate(-90deg)';
+  };
+
+  section.appendChild(hdr);
+  section.appendChild(body);
+  return section;
+}
+
+function _buildTaskRow(task) {
+  const tr = document.createElement('tr');
+  tr.className = 'monday-tr';
+  tr.dataset.taskId = task.id;
+
+  const sc = TASK_STATUS_CFG[task.status]   || TASK_STATUS_CFG['Não Iniciada'];
+  const pc = TASK_PRIORITY_CFG[task.priority] || TASK_PRIORITY_CFG['Média'];
+  const isDone = task.status === 'Pronto';
+
+  const client = (CLIENTS.list||[]).find(c => c.id === task.client);
+  const clientHtml = client
+    ? `<span class="m-client" title="${client.name}">${client.avatar || client.name.substring(0,2)} ${client.name}</span>`
+    : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+  const user = USERS.find(u => u.id === task.assignedTo);
+  const userHtml = user
+    ? `<span class="m-avatar" style="background:${user.color||'var(--accent)'}" title="${user.name}">${user.photo?`<img src="${user.photo}">`:`${user.initials}`}</span>`
+    : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+  const due = task.dueDate || task.deadline || '';
+  let dueHtml = '<span style="color:var(--text3);font-size:11px">—</span>';
+  if (due) {
+    const dt = new Date(due); const now = new Date(); const diff = (dt - now) / 86400000;
+    const fmt = dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
+    const cls = diff < 0 ? 'overdue' : diff < 3 ? 'soon' : '';
+    dueHtml = `<span class="m-due ${cls}">${fmt}</span>`;
+  }
+
+  tr.innerHTML = `
+    <td class="monday-td" style="padding-left:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="m-check${isDone?' done':''}" onclick="toggleMondayTask('${task.id}')">${isDone?'<i class="ti ti-check" style="font-size:9px;color:#fff"></i>':''}</div>
+        <span class="m-title${isDone?' done-txt':''}" onclick="openEditTaskModal('${task.id}')" title="${tkEscape(task.title)}">${tkEscape(task.title)}</span>
+      </div>
+    </td>
+    <td class="monday-td">${clientHtml}</td>
+    <td class="monday-td">${userHtml}</td>
+    <td class="monday-td" style="padding:5px 8px">
+      <button class="m-status" style="background:${sc.bg};color:${sc.color};border-color:${sc.border}" onclick="openStatusDD('${task.id}',this)">${task.status}</button>
+    </td>
+    <td class="monday-td">
+      <span class="m-prio" style="background:${pc.bg};color:${pc.color};border-color:${pc.color}33" onclick="openPriorityDD('${task.id}',this)">${pc.icon} ${task.priority}</span>
+    </td>
+    <td class="monday-td">${dueHtml}</td>
+    <td class="monday-td" style="text-align:center">
+      <button onclick="deleteTaskRow('${task.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;border-radius:4px" title="Excluir"><i class="ti ti-trash" style="font-size:12px"></i></button>
+    </td>
+  `;
+  return tr;
+}
+
+/* ── Dropdown inline ─────────────────────────────────────────────── */
+let _openDD = null;
+function _closeDD() { if (_openDD) { _openDD.remove(); _openDD = null; } }
+
+function _posDD(dd, anchor) {
+  const r = anchor.getBoundingClientRect();
+  dd.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+  dd.style.left = r.left + 'px';
+}
+
+function openStatusDD(taskId, el) {
+  _closeDD();
+  const dd = document.createElement('div'); dd.className = 'm-dropdown';
+  Object.entries(TASK_STATUS_CFG).forEach(([label, c]) => {
+    const item = document.createElement('div'); item.className = 'm-dd-item';
+    item.innerHTML = `<div class="m-dd-dot" style="background:${c.color}"></div>${label}`;
+    item.onclick = (e) => { e.stopPropagation(); setMondayStatus(taskId, label); _closeDD(); };
+    dd.appendChild(item);
+  });
+  _posDD(dd, el); document.body.appendChild(dd); _openDD = dd;
+  setTimeout(() => document.addEventListener('click', _closeDD, { once:true }), 10);
+}
+
+function openPriorityDD(taskId, el) {
+  _closeDD();
+  const dd = document.createElement('div'); dd.className = 'm-dropdown';
+  Object.entries(TASK_PRIORITY_CFG).forEach(([label, c]) => {
+    const item = document.createElement('div'); item.className = 'm-dd-item';
+    item.innerHTML = `<span style="color:${c.color};font-weight:700;font-size:13px">${c.icon}</span> ${label}`;
+    item.onclick = (e) => { e.stopPropagation(); setMondayPriority(taskId, label); _closeDD(); };
+    dd.appendChild(item);
+  });
+  _posDD(dd, el); document.body.appendChild(dd); _openDD = dd;
+  setTimeout(() => document.addEventListener('click', _closeDD, { once:true }), 10);
+}
+
+function setMondayStatus(taskId, status) {
+  const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
+  t.status = status;
+  const patch = { status };
+  if (status === 'Pronto') patch.completed_at = new Date().toISOString();
+  updateTaskInDB(taskId, patch);
+  saveTasks(); renderTasksGrid(); updateNavBadges();
+  showNotification(`Status → ${status}`, 'ok');
+}
+
+function setMondayPriority(taskId, priority) {
+  const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
+  t.priority = priority;
+  const critMap = {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'};
+  updateTaskInDB(taskId, { priority, criticality: critMap[priority] || 'media' });
+  saveTasks(); renderTasksGrid();
+}
+
+function toggleMondayTask(taskId) {
+  const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
+  const ns = normalizeTaskStatus(t.status) === 'Pronto' ? 'Não Iniciada' : 'Pronto';
+  t.status = ns;
+  updateTaskInDB(taskId, { status: ns, completed_at: ns==='Pronto' ? new Date().toISOString() : null });
+  saveTasks(); renderTasksGrid(); updateNavBadges();
+}
+
+function deleteTaskRow(taskId) {
+  if (!confirm('Excluir esta tarefa permanentemente?')) return;
+  TASKS_DATA = TASKS_DATA.filter(t => t.id !== taskId);
+  deleteTaskInDB(taskId);
+  saveTasks(); renderTasksGrid(); updateNavBadges();
+}
+/* ══ fim Monday Board ═══════════════════════════════════════════════ */
 
 /* ── API helpers ──────────────────────────────────────────────────────────── */
 function _apiBase() { return (PROD_CONFIG.apiUrl || '').replace(/\/$/, ''); }
