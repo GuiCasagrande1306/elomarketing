@@ -2336,14 +2336,9 @@
       <span id="sync-indicator" style="display:none;font-size:15px;color:var(--text3);cursor:default" title="Sincronização"></span>
       <button class="btn btn-ghost btn-sm" id="topbar-export-btn" onclick="exportData()" style="display:none" title="Exportar backup dos dados"><i class="ti ti-database"></i></button>
       <span id="collab-filter-wrap" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text3)">
-        Ver visão de:
+        <i class="ti ti-filter" style="font-size:13px"></i>
         <select id="collab-filter" class="collab-select" onchange="filterByCollaborator(this.value)">
-          <option value="all">Todos</option>
-          <option value="guilherme">Guilherme</option>
-          <option value="henrique">Henrique</option>
-          <option value="amanda">Amanda</option>
-          <option value="jaqueline">Jaqueline</option>
-          <option value="bernardo">Bernardo</option>
+          <option value="all">Todos os Colaboradores</option>
         </select>
       </span>
       <button class="btn btn-primary btn-sm" onclick="openModal()">
@@ -3738,7 +3733,7 @@ function navigate(page, el) {
   if (page === 'templates')   renderTemplatesPage();
   if (page === 'campanhas')   { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
   if (page === 'calendar')    { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
-  if (page === 'esteira')     renderEsteira();
+  if (page === 'esteira')     { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
   if (page === 'crm')         _crmInitAndRender();
   // Ao abrir Tarefas, busca dados frescos do servidor (sincroniza entre usuários)
   if (page === 'tarefas')     loadTasksFromDB().catch(() => {});
@@ -5309,7 +5304,7 @@ async function loadTasksFromDB() {
   // Salva no localStorage como cache offline
   saveTasks();
   updateCompletedCount();
-  if (currentUser) filterByCollaborator(currentUser.isAdmin ? 'all' : currentUser.id);
+  if (currentUser) filterByCollaborator(_collabUid());
   refreshTaskOwnerChips();
   updateNavBadges();
   return true;
@@ -5591,14 +5586,18 @@ function loginUser(user) {
   document.getElementById('login-screen').classList.add('hidden');
   updateSidebarUser(user);
   const filterWrap = document.getElementById('collab-filter-wrap');
-  if (filterWrap) filterWrap.style.display = user.isAdmin ? 'flex' : 'none';
+  if (filterWrap) filterWrap.style.display = 'flex'; // visível para todos
   const exportBtn = document.getElementById('topbar-export-btn');
   if (exportBtn) exportBtn.style.display = user.isAdmin ? '' : 'none';
   updateBackupLastInfo();
-  const uid = user.isAdmin ? 'all' : user.id;
+  // Popula as opções dinamicamente a partir de USERS
   const sel = document.getElementById('collab-filter');
-  if (sel) sel.value = uid;
-  filterByCollaborator(uid);
+  if (sel) {
+    sel.innerHTML = '<option value="all">Todos os Colaboradores</option>' +
+      USERS.map(u => `<option value="${u.id}">${u.name}${u.isAdmin ? ' ★' : ''}</option>`).join('');
+    sel.value = 'all'; // todos começam com visão geral
+  }
+  filterByCollaborator('all');
   refreshTaskOwnerChips();
   resetTaskForm();
   showWelcomeToast(user);
@@ -5644,6 +5643,7 @@ function doLogout() {
   const filterWrap = document.getElementById('collab-filter-wrap');
   if (filterWrap) filterWrap.style.display = 'none';
   cleanupSupabase();
+
 }
 
 // ── PROFILE MODAL ─────────────────────────────────────────────────────────────
@@ -5856,7 +5856,7 @@ function reloadTasksFromStorage() {
     completedList.appendChild(item);
   });
   updateCompletedCount();
-  if (currentUser) filterByCollaborator(currentUser.isAdmin ? 'all' : currentUser.id);
+  if (currentUser) filterByCollaborator(_collabUid());
   refreshTaskOwnerChips();
 }
 
@@ -5879,17 +5879,47 @@ function showWelcomeToast(user) {
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
+// Retorna o uid do filtro ativo (lido do select do topbar)
+function _collabUid() {
+  return document.getElementById('collab-filter')?.value || 'all';
+}
+
+// Filtra uma lista de clientes pelo colaborador ativo
+function _filterClientsByCollab(list, uid) {
+  if (!uid || uid === 'all') return list;
+  return list.filter(c => c.owner === uid);
+}
+
 function filterByCollaborator(uid) {
   const match = el => uid === 'all' || el.dataset.owner === uid;
+
+  // ── Dashboard: cards com data-owner ──────────────────────────────────────
   document.querySelectorAll('#page-dashboard [data-owner]').forEach(el => {
     el.style.display = match(el) ? '' : 'none';
   });
+
+  // ── Clientes ──────────────────────────────────────────────────────────────
   renderClients();
+
+  // ── Tarefas ───────────────────────────────────────────────────────────────
   document.querySelectorAll('#task-list .task-item').forEach(el => {
     if (el.dataset.owner) el.style.display = match(el) ? '' : 'none';
   });
   const dateVal = document.getElementById('completed-date-filter')?.value || '';
   filterCompletedTasks(dateVal);
+
+  // ── Re-renderiza a página ativa para refletir o filtro ────────────────────
+  const activePage = document.querySelector('.page.active')?.id || '';
+  if (activePage === 'page-dashboard')  renderDashboard();
+  if (activePage === 'page-contas')     renderContasPage();
+  if (activePage === 'page-campanhas')  { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
+  if (activePage === 'page-esteira') {
+    // Sincroniza o filtro interno da Esteira com o filtro global do topbar
+    const esteiraVal = (uid === 'all') ? 'todos' : uid;
+    ESTEIRA_COLABORADOR = esteiraVal;
+    renderEsteira();
+  }
+  if (activePage === 'page-relatorios') populateReportSelects();
 }
 
 function refreshTaskOwnerChips() {
@@ -6010,8 +6040,10 @@ function popularSelectCampanhaCliente() {
   const sel = document.getElementById('filtro_campanha_cliente');
   if (!sel) return;
   const atual = sel.value;
+  const uid   = _collabUid();
+  const lista = _filterClientsByCollab(CLIENTS.list, uid);
   sel.innerHTML = '<option value="todos">Todos os clientes</option>';
-  CLIENTS.list.forEach(c => {
+  lista.forEach(c => {
     const opt = document.createElement('option');
     opt.value       = c.id;
     opt.textContent = c.name;
@@ -6252,8 +6284,17 @@ function parseCurrencyInput(el) {
 
 /* ========== CONTAS DE ANÚNCIO ========== */
 function renderContasPage() {
-  const filter = document.getElementById('contas-filter-categoria')?.value || '';
-  const data   = filter ? CONTAS_AD_DATA.filter(a => a.categoria === filter) : CONTAS_AD_DATA;
+  const filter   = document.getElementById('contas-filter-categoria')?.value || '';
+  const collabUid = _collabUid();
+  // Filtra por categoria E por colaborador dono do cliente
+  const data = CONTAS_AD_DATA.filter(a => {
+    if (filter && a.categoria !== filter) return false;
+    if (collabUid !== 'all') {
+      const cl = CLIENTS.list.find(c => c.id === a.clienteId || c.name === a.cliente);
+      if (cl && cl.owner && cl.owner !== collabUid) return false;
+    }
+    return true;
+  });
 
   // ── Métricas dinâmicas ──────────────────────────────────────────────────────
   const total       = data.length;
@@ -7850,7 +7891,7 @@ function renderPacingAlerts(filtro) {
 // Fonte única de verdade: CLIENTS.list (localStorage → hardcoded → supabase)
 // Chamado em: DOMContentLoaded, navigate('dashboard'), toda vez que CLIENTS muda.
 function renderDashboard() {
-  const clients = CLIENTS.list;
+  const clients = _filterClientsByCollab(CLIENTS.list, _collabUid());
 
   // ── 1. Métricas agregadas ──────────────────────────────────────────────────
   const totalInvest  = clients.reduce((s, c) => s + (c.investment || 0), 0);
@@ -8116,9 +8157,11 @@ function populateReportSelects() {
   const sel = document.getElementById('rep-client');
   if (!sel) return;
 
-  /* ── Clientes ── */
+  /* ── Clientes (respeitam filtro de colaborador) ── */
+  const _uid = _collabUid();
+  const _repClients = _filterClientsByCollab(CLIENTS.list, _uid);
   sel.innerHTML = '<option value="">Selecione um cliente...</option>' +
-    CLIENTS.list.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    _repClients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
   /* ── Templates (builtins + criados pelo usuário) ── */
   const tplSel = document.getElementById('rep-template');
