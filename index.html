@@ -5590,6 +5590,8 @@ function loginUser(user) {
   const exportBtn = document.getElementById('topbar-export-btn');
   if (exportBtn) exportBtn.style.display = user.isAdmin ? '' : 'none';
   updateBackupLastInfo();
+  // Carrega tokens centralizados do servidor (compartilhados entre dispositivos)
+  loadAppConfig();
   // Popula as opções dinamicamente a partir de USERS
   const sel = document.getElementById('collab-filter');
   if (sel) {
@@ -6741,6 +6743,8 @@ function openNewClientModal(id) {
   if (ga4Badge) ga4Badge.style.display = 'none';
   metaDdSetValue('');
   carregarContasMeta();
+  // Controle de acesso: somente admins podem editar IDs de conta
+  _applyMetaGa4EditAccess();
   setClientImportance(0);
   resetSocialConnectUI();
   const rows = document.getElementById('cl-inv-rows');
@@ -7446,7 +7450,10 @@ function saveNewClient() {
   const whatsapp           = document.getElementById('cl-form-whatsapp').value.trim().replace(/\D/g, '');
   const dia_otimizacao     = document.getElementById('cl-form-dia-otimizacao')?.value || '';
   const categoria          = document.getElementById('cl-form-categoria')?.value || 'elo_marketing';
-  const meta_ad_account_id = document.getElementById('cl-form-meta-account').value.trim();
+  const _canEditApiIds     = currentUser?.isAdmin;
+  const meta_ad_account_id = _canEditApiIds
+    ? document.getElementById('cl-form-meta-account').value.trim()
+    : (clEditingId ? (CLIENTS.list.find(c => c.id === clEditingId)?.meta_ad_account_id || '') : '');
   const investments = [...document.querySelectorAll('#cl-inv-rows .invest-row')].map(row => ({
     month: row.querySelector('.cl-inv-month').value,
     value: parseCurrencyInput(row.querySelector('.cl-inv-value'))
@@ -7465,7 +7472,9 @@ function saveNewClient() {
   const meta_balance      = parseFloat((document.getElementById('cl-form-meta-balance').value || '').replace(/\./g,'').replace(',','.')) || 0;
   const meta_spend7d      = parseFloat((document.getElementById('cl-form-meta-spend7d').value || '').replace(/\./g,'').replace(',','.')) || 0;
   const metodo_pagamento  = document.getElementById('cl-form-metodo-pagamento').value || '';
-  const ga4_property_id   = (document.getElementById('cl-form-ga4-property-id').value || '').trim().replace(/[^0-9]/g,'');
+  const ga4_property_id   = _canEditApiIds
+    ? (document.getElementById('cl-form-ga4-property-id').value || '').trim().replace(/[^0-9]/g,'')
+    : (clEditingId ? (CLIENTS.list.find(c => c.id === clEditingId)?.ga4_property_id || '') : '');
 
   // Social token fields
   const fb_page_id            = (document.getElementById('sc-fb-page-id')?.value    || '').trim();
@@ -9920,12 +9929,21 @@ function loadGA4Token() {
 }
 
 function saveGA4Config() {
+  if (!currentUser?.isAdmin) {
+    showNotification('⛔ Apenas administradores podem configurar o token GA4.', 'error');
+    return;
+  }
   const token = (document.getElementById('ga4-access-token')?.value || '').trim();
   if (!token) { showNotification('Cole o Access Token GA4 antes de salvar.', 'warn'); return; }
   localStorage.setItem('ga4_access_token', token);
   const badge = document.getElementById('ga4-status-badge');
   if (badge) { badge.textContent = 'Configurado ✅'; badge.className = 'badge badge-green'; }
   showNotification('Token GA4 salvo! Clique em Verificar para testar.', 'success');
+  // Salva no servidor (compartilhado entre todos os dispositivos)
+  _apiFetch('/api/config', {
+    method: 'PUT',
+    body: JSON.stringify({ key: 'ga4_access_token', value: token })
+  }).catch(() => {});
 }
 
 async function verifyGA4Token() {
@@ -10529,11 +10547,20 @@ function initMetaConfig() {
   const token = loadMetaToken();
   const input = document.getElementById('meta-access-token');
   const badge = document.getElementById('meta-status-badge');
-  if (input) input.value = token;
+  const isAdmin = currentUser?.isAdmin;
+  if (input) {
+    input.value = isAdmin ? token : '';
+    input.disabled = !isAdmin;
+    input.placeholder = isAdmin ? 'EAAxxxxx...' : '🔒 Visível apenas para admins';
+    input.style.opacity = isAdmin ? '' : '0.5';
+  }
   if (badge) {
     badge.textContent = token ? 'Configurado' : 'Não configurado';
     badge.className   = `badge ${token ? 'badge-green' : 'badge-gray'}`;
   }
+  // Botão Salvar Token: só para admins
+  const saveBtn = document.querySelector('[onclick="saveMetaConfig()"]');
+  if (saveBtn) saveBtn.style.display = isAdmin ? '' : 'none';
   if (token) carregarContasMeta();
 }
 
@@ -10541,14 +10568,27 @@ function initGA4Config() {
   const token = loadGA4Token();
   const input = document.getElementById('ga4-access-token');
   const badge = document.getElementById('ga4-status-badge');
-  if (input) input.value = token;
+  const isAdmin = currentUser?.isAdmin;
+  if (input) {
+    input.value = isAdmin ? token : '';
+    input.disabled = !isAdmin;
+    input.placeholder = isAdmin ? 'ya29.xxxxx...' : '🔒 Visível apenas para admins';
+    input.style.opacity = isAdmin ? '' : '0.5';
+  }
   if (badge) {
     badge.textContent = token ? 'Configurado ✅' : 'Não configurado';
     badge.className   = `badge ${token ? 'badge-green' : 'badge-gray'}`;
   }
+  // Botão Salvar Token: só para admins
+  const saveGA4Btn = document.querySelector('[onclick="saveGA4Config()"]');
+  if (saveGA4Btn) saveGA4Btn.style.display = isAdmin ? '' : 'none';
 }
 
 function saveMetaConfig() {
+  if (!currentUser?.isAdmin) {
+    showNotification('⛔ Apenas administradores podem configurar o token Meta.', 'error');
+    return;
+  }
   const token = document.getElementById('meta-access-token').value.trim();
   localStorage.setItem('meta_access_token', token);
   META_AD_ACCOUNTS = []; // invalidate cache on token change
@@ -10558,7 +10598,14 @@ function saveMetaConfig() {
     badge.className   = `badge ${token ? 'badge-green' : 'badge-gray'}`;
   }
   showNotification(token ? 'Token salvo. Carregando contas...' : 'Token removido.', token ? 'ok' : 'warn');
-  if (token) carregarContasMeta(true);
+  if (token) {
+    carregarContasMeta(true);
+    // Salva no servidor (compartilhado entre todos os dispositivos)
+    _apiFetch('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ key: 'meta_access_token', value: token })
+    }).catch(() => {});
+  }
 }
 
 async function atualizarDadosMeta(cliente) {
@@ -11290,6 +11337,68 @@ function _apiFetch(path, opts = {}) {
   return fetch(base + path, { headers: { 'Content-Type': 'application/json' }, ...opts })
     .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
     .catch(e => { console.warn('[API]', path, e); return null; });
+}
+
+/**
+ * Carrega tokens centralizados do servidor (compartilhados entre dispositivos).
+ * Atualiza o localStorage local para que loadMetaToken() / loadGA4Token()
+ * funcionem normalmente — sem quebrar código existente.
+ */
+async function loadAppConfig() {
+  try {
+    const data = await _apiFetch('/api/config');
+    if (!data) return;
+    if (data.meta_access_token) {
+      localStorage.setItem('meta_access_token', data.meta_access_token);
+      META_AD_ACCOUNTS = []; // força recarga das contas com token atualizado
+    }
+    if (data.ga4_access_token) {
+      localStorage.setItem('ga4_access_token', data.ga4_access_token);
+    }
+    console.log('[Config] Tokens carregados do servidor.');
+  } catch(e) {
+    console.warn('[Config] Falha ao carregar config do servidor — usando localStorage local.', e);
+  }
+}
+
+/**
+ * Aplica restrições de acesso ao formulário de edição de clientes.
+ * Somente admins podem editar IDs de conta Meta Ads e Google Analytics 4.
+ */
+function _applyMetaGa4EditAccess() {
+  const isAdmin = currentUser?.isAdmin;
+  const metaSearch = document.getElementById('cl-form-meta-account-search');
+  const ga4Input   = document.getElementById('cl-form-ga4-property-id');
+  const reloadBtn  = document.querySelector('[onclick="carregarContasMeta(true)"]');
+
+  if (metaSearch) {
+    metaSearch.disabled = !isAdmin;
+    if (!isAdmin) {
+      metaSearch.placeholder = '🔒 Somente admins podem editar';
+      metaSearch.style.opacity = '0.55';
+      metaSearch.title = 'Apenas administradores podem alterar o ID da conta Meta Ads';
+    } else {
+      metaSearch.placeholder = 'Digite para buscar a conta...';
+      metaSearch.style.opacity = '';
+      metaSearch.title = '';
+    }
+  }
+  if (reloadBtn) reloadBtn.style.display = isAdmin ? '' : 'none';
+
+  if (ga4Input) {
+    ga4Input.readOnly = !isAdmin;
+    if (!isAdmin) {
+      ga4Input.style.opacity  = '0.55';
+      ga4Input.style.cursor   = 'not-allowed';
+      ga4Input.style.background = 'var(--bg2)';
+      ga4Input.title = 'Apenas administradores podem alterar o Property ID GA4';
+    } else {
+      ga4Input.style.opacity  = '';
+      ga4Input.style.cursor   = '';
+      ga4Input.style.background = '';
+      ga4Input.title = '';
+    }
+  }
 }
 
 /* ── saveClients — localStorage imediato + sync async para API ─────────────── */
