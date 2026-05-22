@@ -11518,9 +11518,8 @@ window.deletarCliente = async function(id) {
   // 2. Remove do array em memória
   CLIENTS.list = CLIENTS.list.filter(c => c.id !== id);
 
-  // 3. Persiste no localStorage imediatamente
-  localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
-  localStorage.setItem('tp_clients_next_id', String(CLIENTS.nextId));
+  // 3. Sincroniza localStorage + dispara bulk/sync replace-all (sem o cliente excluído)
+  saveClients();
 
   // 4. Remove tarefas vinculadas do DOM (por data-client-id ou por nome no texto)
   const nameLower = client.name.toLowerCase();
