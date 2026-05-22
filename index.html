@@ -11479,7 +11479,7 @@ async function _crmApiBulkSync() {
 }
 
 /* Carrega leads da API e atualiza CRM_DATA + localStorage
-   Retorna true se bem-sucedido, false se falhou/offline */
+   Retorna true se bem-sucedido com dados, false se falhou/offline/vazia */
 async function _crmApiLoad() {
   const url = _crmApiUrl();
   if (!url) return false;
@@ -11488,9 +11488,20 @@ async function _crmApiLoad() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data)) throw new Error('Resposta inválida');
+
+    // ── GUARD CRÍTICO ─────────────────────────────────────────────────────
+    // API vazia NUNCA sobrescreve dados locais válidos.
+    // Cenário: MongoDB recém-criado ou primeira sincronização pendente.
+    // Ação:  preserva CRM_DATA atual, dispara bulk sync para popular o Atlas.
+    if (data.length === 0 && CRM_DATA.length > 0) {
+      console.warn(`[CRM] API retornou 0 leads mas há ${CRM_DATA.length} card(s) local(is) — bulk sync disparado para popular o Atlas.`);
+      _crmApiBulkSync();
+      return false; // não re-renderiza com array vazio
+    }
+
     CRM_DATA = data;
     _crmSave(); // mantém localStorage em sync como cache
-    return true;
+    return data.length > 0; // false se API genuinamente vazia (não re-renderiza)
   } catch (e) {
     console.warn('[CRM API] Carregamento falhou, usando localStorage:', e.message);
     return false;
@@ -11515,13 +11526,14 @@ async function _crmInitAndRender() {
 }
 
 /* ── Dados iniciais ─────────────────────────────────────────────────────
-   REGRA: semeia o mock SOMENTE na primeira vez (chave ausente no storage).
+   REGRA: semeia o mock quando NÃO há dados válidos para mostrar.
    null  → chave nunca foi gravada → semeia e salva
-   []    → usuário deletou tudo → respeita e mantém vazio
+   []    → array vazio (primeira vez real OU bug de overwrite da API) → semeia e salva
    [...]  → dados existentes → carrega normalmente
+   OBS: o caso [] = bug-overwrite é protegido pelo guard em _crmApiLoad().
 ── */
 const _crmStored = _crmLoad();
-const _crmIsFirstTime = _crmStored === null;
+const _crmIsFirstTime = _crmStored === null || _crmStored.length === 0;
 
 const _today_crm = new Date().toISOString().slice(0, 10);
 const _ago_crm   = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
