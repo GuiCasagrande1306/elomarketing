@@ -2953,16 +2953,20 @@
               <span id="evo-status-badge" class="badge badge-gray">Verificando...</span>
             </div>
             <div class="form-group" style="margin-bottom:8px">
-              <label class="form-label">URL do Servidor</label>
-              <input type="text" id="evo-url" class="form-input" oninput="updateEvoStatus()">
-            </div>
-            <div class="form-group" style="margin-bottom:8px">
-              <label class="form-label">API Key</label>
-              <input type="password" id="evo-key" class="form-input" oninput="updateEvoStatus()">
+              <label class="form-label">URL do Servidor Evolution (Railway)</label>
+              <input type="text" id="evo-url" class="form-input" placeholder="https://evolution-api-production-xxxx.up.railway.app" oninput="updateEvoStatus()">
             </div>
             <div class="form-group" style="margin-bottom:12px">
-              <label class="form-label">Nome da Instância</label>
-              <input type="text" id="evo-instance" class="form-input" oninput="updateEvoStatus()">
+              <label class="form-label">API Key <span style="font-weight:400;color:var(--text3)">(AUTHENTICATION_API_KEY do Railway)</span></label>
+              <input type="password" id="evo-key" class="form-input" oninput="updateEvoStatus()">
+            </div>
+            <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text3);line-height:1.6">
+              <i class="ti ti-info-circle" style="color:#25D366;margin-right:4px"></i>
+              <strong style="color:var(--text2)">Instâncias por usuário</strong><br>
+              Cada membro da equipe tem sua instância isolada gerada automaticamente:<br>
+              <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:10px">elo_guilherme</code>
+              <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:10px">elo_amanda</code>
+              <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:10px">elo_bernardo</code> …
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" style="flex:1" onclick="saveEvoConfig()"><i class="ti ti-device-floppy"></i> Salvar</button>
@@ -3034,7 +3038,7 @@
             <div id="evo-conn-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text3);flex-shrink:0"></div>
             <div>
               <div id="evo-conn-label" style="font-size:13px;font-weight:600">A verificar...</div>
-              <div id="evo-conn-sub" style="font-size:11px;color:var(--text3)">Instância: <span id="evo-conn-instance">—</span></div>
+              <div id="evo-conn-sub" style="font-size:11px;color:var(--text3)">Sua instância: <span id="evo-conn-instance" style="font-family:monospace">—</span></div>
             </div>
           </div>
 
@@ -5204,10 +5208,14 @@ const PROD_CONFIG = {
   supabaseUrl:      'https://SEU-PROJETO.supabase.co',
   supabaseAnonKey:  'SUA-CHAVE',
 
-  // ── Evolution API (WhatsApp) ──────────────────────────────────────────────
-  evolutionUrl:     'https://evolution-api-production-b01b.up.railway.app',
-  evolutionKey:     'COLE-SUA-CHAVE-AQUI',
-  evolutionInstance:'Elo Marketing',
+  // ── Backend Render (proxy para Evolution API / WhatsApp) ─────────────────
+  // Substitua pela URL gerada após o deploy no Render.com
+  renderUrl: 'https://elomarketing-api.onrender.com',
+
+  // ── Evolution API — credenciais ficam no .env do Render (não no frontend) ─
+  // URL e API Key são salvas pelo admin em Integrações → Evolution API → Salvar
+  // e ficam no MongoDB; o Render as lê de lá (ou do .env como fallback).
+  evolutionUrl: 'https://evolution-api-production-b01b.up.railway.app',
 
   // ── OpenAI — Gerar Análise IA na página de Relatórios ─────────────────────
   // Cole aqui a sua chave OpenAI (sk-proj-...). Deixe vazio para usar análise local.
@@ -10996,42 +11004,42 @@ async function sincronizarTodosMeta() {
   );
 }
 
+// Apenas URL e key ficam no frontend (salvas no MongoDB pelo admin).
+// O instanceName é gerado no backend: elo_${userId}.
 const EVO_DEFAULTS = {
-  url:      PROD_CONFIG.evolutionUrl,
-  key:      PROD_CONFIG.evolutionKey,
-  instance: PROD_CONFIG.evolutionInstance,
+  url: PROD_CONFIG.evolutionUrl,
 };
 
 function loadEvoConfig() {
   return {
-    url:      localStorage.getItem('evo_url')      || EVO_DEFAULTS.url,
-    key:      localStorage.getItem('evo_key')      || EVO_DEFAULTS.key,
-    instance: localStorage.getItem('evo_instance') || EVO_DEFAULTS.instance
+    url: localStorage.getItem('evo_url') || EVO_DEFAULTS.url,
+    key: localStorage.getItem('evo_key') || '',
   };
 }
 
 function saveEvoConfig() {
-  const url      = document.getElementById('evo-url').value.trim().replace(/\/$/, '');
-  const key      = document.getElementById('evo-key').value.trim();
-  const instance = document.getElementById('evo-instance').value.trim();
+  const url = document.getElementById('evo-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('evo-key').value.trim();
 
-  // Validação básica antes de salvar
-  if (!url || !key || !instance) {
-    showNotification('⚠️ Preencha todos os campos (URL, API Key e Nome da Instância) antes de salvar.', 'warn');
+  if (!url || !key) {
+    showNotification('⚠️ Preencha URL do servidor e API Key antes de salvar.', 'warn');
     return;
   }
 
+  // Persiste localmente
   localStorage.setItem('evo_url', url);
   localStorage.setItem('evo_key', key);
-  localStorage.setItem('evo_instance', instance);
 
-  // Remove highlight de erro nos campos (caso estivessem vermelhos)
-  ['evo-url','evo-key','evo-instance'].forEach(id => {
+  // Persiste no MongoDB — Render backend lerá de lá para chamar a Evolution API
+  _apiFetch('/api/config', { method:'PUT', body: JSON.stringify({ key: 'evolution_url', value: url }) });
+  _apiFetch('/api/config', { method:'PUT', body: JSON.stringify({ key: 'evolution_key', value: key }) });
+
+  ['evo-url','evo-key'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.borderColor = '';
   });
 
-  showNotification('✅ Configuração salva! Verifique o estado da instância.', 'success');
+  showNotification('✅ Configuração salva e sincronizada com o servidor!', 'success');
   updateEvoStatus();
   checkInstanceState();
 }
@@ -11040,7 +11048,7 @@ function updateEvoStatus() {
   const badge = document.getElementById('evo-status-badge');
   if (!badge) return;
   const cfg = loadEvoConfig();
-  if (cfg.url && cfg.key && cfg.instance) {
+  if (cfg.url && cfg.key) {
     badge.className = 'badge badge-green';
     badge.textContent = 'Configurado ✅';
   } else {
@@ -11053,52 +11061,56 @@ function loadEvoFields() {
   const cfg = loadEvoConfig();
   const u = document.getElementById('evo-url');
   const k = document.getElementById('evo-key');
-  const i = document.getElementById('evo-instance');
-  if (u) u.value = cfg.url;
-  if (k) k.value = cfg.key;
-  if (i) i.value = cfg.instance;
+  if (u) u.value = cfg.url || '';
+  if (k) k.value = cfg.key || '';
   updateEvoStatus();
   checkInstanceState();
   initGA4Config();
 }
 
 async function checkInstanceState() {
-  const cfg = loadEvoConfig();
   const dot   = document.getElementById('evo-conn-dot');
   const label = document.getElementById('evo-conn-label');
   const sub   = document.getElementById('evo-conn-sub');
   const inst  = document.getElementById('evo-conn-instance');
   const btn   = document.getElementById('evo-qr-btn');
-  if (inst) inst.textContent = cfg.instance || '—';
-  if (!cfg.url || !cfg.key || !cfg.instance) {
-    if (label) label.textContent = 'Não configurado';
+
+  const userId = currentUser?.id;
+
+  // Mostra instância do usuário logado
+  if (inst) inst.textContent = userId ? `elo_${userId}` : '—';
+
+  if (!userId || !PROD_CONFIG.renderUrl) {
+    if (label) label.textContent = userId ? 'Backend Render não configurado' : 'Não autenticado';
     return;
   }
+
   if (label) label.textContent = 'A verificar...';
   try {
-    const res = await fetch(`${cfg.url}/instance/connectionState/${encodeURIComponent(cfg.instance)}`, {
-      headers: _evoAuthHeaders(cfg.key)
-    });
+    const data = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
 
-    // 401/403 → API Key inválida
-    if (res.status === 401 || res.status === 403) {
-      if (dot)   { dot.style.background = '#EF4444'; dot.style.boxShadow = 'none'; }
-      if (label) label.textContent = 'API Key inválida (401)';
-      if (sub)   { sub.style.color = 'var(--red)'; }
-      const keyInput = document.getElementById('evo-key');
-      if (keyInput) keyInput.style.borderColor = 'var(--red)';
-      console.error('[WhatsApp] checkState 401 — API Key incorreta');
+    if (!data) {
+      if (dot)   dot.style.background = '#EF4444';
+      if (label) label.textContent = 'Sem resposta do servidor';
       return;
     }
 
-    const data  = await res.json();
-    const state = data?.instance?.state || data?.state || 'unknown';
+    // 401 → chave errada
+    if (data.error && (data.error.includes('401') || data.error.toLowerCase().includes('inválida'))) {
+      if (dot)   { dot.style.background = '#EF4444'; dot.style.boxShadow = 'none'; }
+      if (label) label.textContent = 'API Key inválida — verifique Integrações';
+      if (sub)   sub.style.color = 'var(--red)';
+      return;
+    }
+
+    const state = data.state || 'disconnected';
     if (state === 'open') {
       if (dot)   { dot.style.background = '#22D36A'; dot.style.boxShadow = '0 0 6px #22D36A'; }
       if (label) label.textContent = 'Conectado ✅';
       if (sub)   sub.style.color = 'var(--green)';
       if (btn)   btn.innerHTML = '<i class="ti ti-qrcode"></i> Reconectar (novo QR)';
-      document.getElementById('evo-qr-wrap').style.display = 'none';
+      const qrWrap = document.getElementById('evo-qr-wrap');
+      if (qrWrap) qrWrap.style.display = 'none';
     } else if (state === 'connecting') {
       if (dot)   { dot.style.background = '#F59E0B'; dot.style.boxShadow = '0 0 6px #F59E0B'; }
       if (label) label.textContent = 'A conectar... Gera o QR Code';
@@ -11115,103 +11127,61 @@ async function checkInstanceState() {
   }
 }
 
-// Helpers reutilizáveis para o painel de WhatsApp
-function _evoAuthHeaders(key) {
-  // Evolution API v2 usa cabeçalho 'apikey'
-  // (se sua instância usar Bearer, troque aqui por: 'Authorization': `Bearer ${key}`)
-  return { 'apikey': key };
-}
-
 async function diagnosEvoConnection() {
-  const cfg = loadEvoConfig();
-  const lines = [];
-  const add = (icon, text) => lines.push(`${icon} ${text}`);
-
-  add('🔍', `URL: ${cfg.url || '(vazio)'}`);
-  add('🔑', `API Key: ${cfg.key ? cfg.key.substring(0,6) + '••••••••' : '(vazio)'}`);
-  add('📋', `Instância: ${cfg.instance || '(vazio)'}`);
-  lines.push('');
-
-  if (!cfg.url || !cfg.key || !cfg.instance) {
-    add('❌', 'Configuração incompleta — preencha todos os campos e clique em Salvar.');
-    alert(lines.join('\n'));
-    return;
-  }
-
-  // Testa a URL base (sem auth) para verificar se o servidor responde
-  add('⏳', 'Testando servidor...');
-  const diagEl = document.createElement('div');
-  const ENDPOINT = `${cfg.url}/instance/fetchInstances`;
-  const results = [];
-
-  // Tenta 3 formatos de autenticação
-  const formats = [
-    { label: 'apikey header (Evolution v2)',    headers: { 'apikey': cfg.key } },
-    { label: 'Authorization Bearer',            headers: { 'Authorization': `Bearer ${cfg.key}` } },
-    { label: 'Sem autenticação (health check)', headers: {} }
+  const userId = currentUser?.id;
+  const renderBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
+  const lines = [
+    '=== DIAGNÓSTICO WHATSAPP ===',
+    `Usuário logado: ${userId || '(não logado)'}`,
+    `Instância esperada: ${userId ? 'elo_' + userId : '—'}`,
+    `Backend Render: ${renderBase || '(não configurado em PROD_CONFIG.renderUrl)'}`,
+    '',
   ];
 
-  for (const fmt of formats) {
+  if (!renderBase) {
+    lines.push('❌ Configure PROD_CONFIG.renderUrl com a URL do Render.');
+    alert(lines.join('\n')); return;
+  }
+
+  lines.push('⏳ Testando backend Render...');
+
+  try {
+    const r = await fetch(`${renderBase}/health`);
+    lines.push(`[GET /health] → HTTP ${r.status}`);
+  } catch(e) {
+    lines.push(`[GET /health] → ERRO: ${e.message}`);
+  }
+
+  if (userId) {
     try {
-      const r = await fetch(ENDPOINT, { headers: fmt.headers });
-      const text = await r.text();
-      let preview = text.substring(0, 120);
-      results.push(`[${fmt.label}] → HTTP ${r.status}\n   Resposta: ${preview}`);
+      const r = await fetch(`${renderBase}/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
+      const txt = await r.text();
+      lines.push(`[GET /api/whatsapp/state] → HTTP ${r.status}`);
+      lines.push(`  Resposta: ${txt.substring(0, 200)}`);
     } catch(e) {
-      results.push(`[${fmt.label}] → ERRO de rede: ${e.message}`);
+      lines.push(`[GET /api/whatsapp/state] → ERRO: ${e.message}`);
     }
   }
 
-  // Tenta endpoint raiz sem auth
-  try {
-    const r = await fetch(cfg.url);
-    results.push(`[Raiz /] → HTTP ${r.status}`);
-  } catch(e) {
-    results.push(`[Raiz /] → ERRO: ${e.message}`);
-  }
+  lines.push('');
+  lines.push('CONFIGURAÇÃO NO RENDER:');
+  lines.push('• Env EVOLUTION_API_URL = URL do Railway');
+  lines.push('• Env EVOLUTION_API_KEY = AUTHENTICATION_API_KEY do Railway');
 
-  const msg = [
-    '=== DIAGNÓSTICO EVOLUTION API ===',
-    `URL: ${cfg.url}`,
-    `Key (6 chars): ${cfg.key.substring(0,6)}...`,
-    `Instância: ${cfg.instance}`,
-    '',
-    '--- Resultados dos testes ---',
-    ...results,
-    '',
-    'COMO ENCONTRAR SUA API KEY:',
-    '1. Acesse railway.com → seu projeto',
-    '2. Clique no serviço Evolution API',
-    '3. Aba "Variables"',
-    '4. Copie o valor de AUTHENTICATION_API_KEY'
-  ].join('\n');
-
-  console.log('[WhatsApp Diagnóstico]\n' + msg);
-  alert(msg);
+  console.log('[WhatsApp Diagnóstico]\n' + lines.join('\n'));
+  alert(lines.join('\n'));
 }
 
 async function generateQRCode() {
-  // ── Valida configuração antes de qualquer requisição ─────────────────────
-  const cfg = loadEvoConfig();
-
-  if (!cfg.url) {
-    showNotification('⚠️ URL do servidor não configurada. Preencha e salve em Integrações → Evolution API.', 'warn');
-    document.getElementById('evo-url')?.focus();
+  const userId = currentUser?.id;
+  if (!userId) {
+    showNotification('⚠️ Faça login antes de conectar o WhatsApp.', 'warn');
     return;
   }
-  if (!cfg.key || cfg.key === 'COLE-SUA-CHAVE-AQUI') {
-    showNotification('⚠️ API Key não configurada. Preencha e salve em Integrações → Evolution API.', 'warn');
-    document.getElementById('evo-key')?.focus();
+  if (!PROD_CONFIG.renderUrl) {
+    showNotification('⚠️ Backend Render não configurado em PROD_CONFIG.renderUrl.', 'warn');
     return;
   }
-  if (!cfg.instance) {
-    showNotification('⚠️ Nome da instância não configurado. Preencha e salve em Integrações → Evolution API.', 'warn');
-    document.getElementById('evo-instance')?.focus();
-    return;
-  }
-
-  const INST_NAME  = cfg.instance;   // usa exatamente o valor salvo pelo usuário
-  const INST_TOKEN = cfg.key;        // usa a mesma API key como token da instância
 
   const btn        = document.getElementById('evo-qr-btn');
   const wrap       = document.getElementById('evo-qr-wrap');
@@ -11220,9 +11190,7 @@ async function generateQRCode() {
   const loadingMsg = document.getElementById('evo-qr-loading-msg');
 
   const setBtn = (html, disabled = true) => {
-    if (!btn) return;
-    btn.disabled  = disabled;
-    btn.innerHTML = html;
+    if (!btn) return; btn.disabled = disabled; btn.innerHTML = html;
   };
   const showLoading = (msg) => {
     if (wrap)       wrap.style.display    = 'flex';
@@ -11239,109 +11207,71 @@ async function generateQRCode() {
     if (loading) loading.style.display = 'none';
     if (wrap)    wrap.style.display    = 'none';
   };
-  // Para qualquer erro de auth (401/403): para tudo e orienta o usuário
-  const handleAuthError = (status) => {
+
+  setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Conectando...', true);
+  showLoading(`Iniciando instância <strong>elo_${userId}</strong>...<br>Aguarde até 30 segundos.`);
+
+  try {
+    // Uma única chamada ao backend Render — ele cria a instância e busca o QR
+    const data = await _renderFetch('/api/whatsapp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+
+    if (!data) {
+      hideAll();
+      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+      showNotification('❌ Sem resposta do servidor Render. Verifique se está online.', 'error');
+      return;
+    }
+
+    // Erro de autenticação na Evolution API
+    if (data.error && (data.error.includes('401') || data.error.toLowerCase().includes('inválida'))) {
+      hideAll();
+      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+      showNotification('❌ API Key inválida (401). Acesse Integrações → Evolution API e corrija a chave.', 'error');
+      const keyInput = document.getElementById('evo-key');
+      if (keyInput) { keyInput.style.borderColor = 'var(--red)'; keyInput.focus(); }
+      return;
+    }
+
+    // Outro erro genérico
+    if (data.error) {
+      hideAll();
+      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+      showNotification('Erro: ' + data.error, 'error');
+      return;
+    }
+
+    // Já conectado
+    if (data.state === 'open') {
+      hideAll();
+      setBtn('<i class="ti ti-refresh"></i> Reconectar (novo QR)', false);
+      showNotification('✅ WhatsApp já está conectado!', 'success');
+      checkInstanceState();
+      return;
+    }
+
+    // QR disponível
+    if (data.qr) {
+      showQR(data.qr);
+      setBtn('<i class="ti ti-refresh"></i> Novo QR', false);
+      startQRCountdown(60);
+      setTimeout(checkInstanceState, 20000);
+      return;
+    }
+
+    // QR não retornado após todas as tentativas
     hideAll();
     setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
-    showNotification(
-      `❌ API Key inválida (HTTP ${status}). Acesse Integrações → Evolution API, corrija a API Key e clique em Salvar.`,
-      'error'
-    );
-    // Destaca o campo API Key
-    const keyInput = document.getElementById('evo-key');
-    if (keyInput) { keyInput.style.borderColor = 'var(--red)'; keyInput.focus(); }
-    console.error(`[WhatsApp] Auth falhou ${status} — key usada: "${cfg.key.substring(0,8)}..."`);
-  };
+    showNotification('QR não disponível. O servidor pode estar aquecendo — tente novamente em 30s.', 'warn');
 
-  // ── Passo 1: criar instância (ignora 409 = já existe) ─────────────────────
-  setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Criando instância...');
-  showLoading('Criando instância...<br>Aguarde um momento.');
-  try {
-    const cr = await fetch(`${cfg.url}/instance/create`, {
-      method:  'POST',
-      headers: { ..._evoAuthHeaders(cfg.key), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instanceName: INST_NAME,
-        token:        INST_TOKEN,
-        qrcode:       true,
-        integration:  'WHATSAPP-BAILEYS'
-      })
-    });
-    console.log('[WhatsApp] create status:', cr.status, '| instância:', INST_NAME);
-    // 401/403 na criação → auth inválida, para tudo
-    if (cr.status === 401 || cr.status === 403) { handleAuthError(cr.status); return; }
   } catch(e) {
-    console.warn('[WhatsApp] create falhou (pode já existir):', e.message);
+    hideAll();
+    setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+    showNotification('Erro ao gerar QR: ' + e.message, 'error');
+    console.error('[WhatsApp] generateQRCode error:', e.message);
   }
-
-  // ── Passo 2: buscar QR com até 6 tentativas + delay progressivo ───────────
-  // Railway tem cold start — aguarda 3s antes da 1ª tentativa
-  const MAX_RETRIES   = 6;
-  const INITIAL_DELAY = 3000;
-  const RETRY_DELAY   = 2500;
-
-  await new Promise(r => setTimeout(r, INITIAL_DELAY));
-
-  let lastError = null;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    setBtn(`<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando QR... (${attempt}/${MAX_RETRIES})`);
-    showLoading(`A gerar QR Code...<br>Tentativa ${attempt} de ${MAX_RETRIES} — aguarde.`);
-
-    try {
-      const res = await fetch(`${cfg.url}/instance/connect/${encodeURIComponent(INST_NAME)}`, {
-        headers: _evoAuthHeaders(cfg.key)
-      });
-
-      // 401/403 → auth inválida — para imediatamente, sem retentar
-      if (res.status === 401 || res.status === 403) { handleAuthError(res.status); return; }
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ao buscar QR — verifique a URL do servidor.`);
-      }
-
-      const data = await res.json();
-      const b64  = data?.base64 || data?.qrcode?.base64 || data?.qrcode?.code || data?.code;
-
-      // QR disponível ✅
-      if (b64) {
-        showQR(b64);
-        setBtn('<i class="ti ti-refresh"></i> Novo QR', false);
-        startQRCountdown(60);
-        setTimeout(checkInstanceState, 20000);
-        return;
-      }
-
-      // Já conectado ✅
-      const state = data?.instance?.state || data?.state || '';
-      if (state === 'open') {
-        hideAll();
-        setBtn('<i class="ti ti-refresh"></i> Reconectar (novo QR)', false);
-        showNotification('✅ WhatsApp já está conectado!', 'success');
-        checkInstanceState();
-        return;
-      }
-
-      lastError = new Error(`QR ainda não disponível (tentativa ${attempt}/${MAX_RETRIES})`);
-      console.warn('[WhatsApp] QR não retornado — dados:', JSON.stringify(data));
-
-    } catch(e) {
-      lastError = e;
-      console.error(`[WhatsApp] Tentativa ${attempt} falhou:`, e.message);
-    }
-
-    if (attempt < MAX_RETRIES) {
-      await new Promise(r => setTimeout(r, RETRY_DELAY));
-    }
-  }
-
-  // Todas as tentativas esgotadas ❌
-  hideAll();
-  setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
-  const msg = lastError?.message?.includes('HTTP')
-    ? lastError.message
-    : 'O servidor demorou para responder. Aguarde ~30s e clique em "Tentar Novamente".';
-  showNotification('Erro ao gerar QR: ' + msg, 'error');
-  console.error('[WhatsApp] Todas as tentativas falharam. Último erro:', lastError?.message);
 }
 
 function startQRCountdown(seconds) {
@@ -11366,80 +11296,102 @@ function startQRCountdown(seconds) {
 }
 
 async function disconnectInstance() {
-  const cfg = loadEvoConfig();
-  if (!confirm(`Desconectar a instância "${cfg.instance}"?`)) return;
+  const userId = currentUser?.id;
+  if (!userId) return;
+  if (!confirm(`Desconectar a instância "elo_${userId}"?`)) return;
   try {
-    await fetch(`${cfg.url}/instance/logout/${encodeURIComponent(cfg.instance)}`, {
-      method: 'DELETE', headers: { 'apikey': cfg.key }
+    const data = await _renderFetch('/api/whatsapp/disconnect', {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
     });
-    showNotification('Instância desconectada.', 'warn');
+    if (data?.ok) {
+      showNotification('Instância desconectada.', 'warn');
+    } else {
+      showNotification('Erro ao desconectar: ' + (data?.error || 'resposta inválida'), 'error');
+    }
     setTimeout(checkInstanceState, 1000);
   } catch {
     showNotification('Erro ao desconectar.', 'error');
   }
 }
 
-async function sendViaEvolutionAPI(phone, message, cfg) {
-  const btn = document.getElementById('rep-send-btn');
-  const setBtn = (loading) => {
-    if (!btn) return;
-    btn.disabled = loading;
-    btn.innerHTML = loading
-      ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Enviando...'
-      : '<i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp';
-  };
-  setBtn(true);
-  try {
-    const res = await fetch(`${cfg.url}/message/sendText/${cfg.instance}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': cfg.key },
-      body: JSON.stringify({ number: phone, text: message })
-    });
-    setBtn(false);
-    if (res.ok) {
-      showNotification('✅ Mensagem enviada com sucesso!', 'success');
-    } else {
-      throw new Error(`HTTP ${res.status}`);
-    }
-  } catch {
-    setBtn(false);
-    showNotification('Falha na API. Abrindo via link direto...', 'warn');
-    setTimeout(() => window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank'), 800);
-  }
-}
-
-function sendReportViaWhatsApp() {
-  const clientId  = document.getElementById('rep-client')?.value;
-  const client    = CLIENTS.list.find(c => c.id === clientId);
+async function sendReportViaWhatsApp() {
+  const clientId = document.getElementById('rep-client')?.value;
+  const client   = CLIENTS.list.find(c => c.id === clientId);
   if (!client) { showNotification('Selecione um cliente primeiro.', 'warn'); return; }
   if (!client.whatsapp) {
     showNotification('Número de WhatsApp não cadastrado. Edite o cliente e adicione.', 'warn'); return;
   }
-  /* Lê o texto já renderizado no bloco (respeita template/segmento) */
+
   const msgEl = document.getElementById('rep-wa-msg');
   const msg   = msgEl ? msgEl.innerText : '';
-  const cfg   = loadEvoConfig();
-  if (cfg.url && cfg.key && cfg.instance) {
-    sendViaEvolutionAPI(client.whatsapp, msg, cfg);
-  } else {
+  const userId = currentUser?.id;
+
+  const btn = document.getElementById('rep-send-btn');
+  const setBtn = (loading) => {
+    if (!btn) return;
+    btn.disabled  = loading;
+    btn.innerHTML = loading
+      ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Enviando...'
+      : '<i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp';
+  };
+
+  // Fallback: abre wa.me se Render não estiver configurado ou usuário não logado
+  if (!userId || !PROD_CONFIG.renderUrl) {
     window.open(`https://wa.me/${client.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    return;
+  }
+
+  setBtn(true);
+  try {
+    const data = await _renderFetch('/api/whatsapp/send', {
+      method: 'POST',
+      body: JSON.stringify({ userId, phone: client.whatsapp, message: msg }),
+    });
+    setBtn(false);
+    if (data?.ok) {
+      showNotification('✅ Mensagem enviada com sucesso!', 'success');
+    } else {
+      const errMsg = data?.error || 'Erro desconhecido';
+      throw new Error(errMsg);
+    }
+  } catch(e) {
+    setBtn(false);
+    showNotification('Falha na API. Abrindo via link direto...', 'warn');
+    setTimeout(() => window.open(`https://wa.me/${client.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank'), 800);
   }
 }
 
-window.deletarCliente = function(id) {
+window.deletarCliente = async function(id) {
   const client = CLIENTS.list.find(c => c.id === id);
   if (!client) return;
 
   if (!confirm(`Tem certeza que deseja excluir o cliente "${client.name}"?\n\nIsso também apagará todas as tarefas vinculadas a ele.`)) return;
 
-  // 1. Remove do array em memória
+  // 1. ── Persiste exclusão no MongoDB ANTES de alterar estado local ──────────
+  //    Se a API falhar, aborta e avisa o usuário (evita inconsistência).
+  const apiBase = _apiBase();
+  if (apiBase) {
+    showNotification(`Excluindo "${client.name}"...`, 'warn');
+    const resp = await _apiFetch(`/api/clients/${id}`, { method: 'DELETE' });
+    if (resp === null) {
+      // null = erro de rede ou resposta de erro do servidor (ver _apiFetch)
+      showNotification(
+        `⛔ Falha ao excluir "${client.name}" do banco de dados. Verifique a conexão e tente novamente.`,
+        'error'
+      );
+      return; // ← aborta: não remove localmente para não enganar o usuário
+    }
+  }
+
+  // 2. Remove do array em memória
   CLIENTS.list = CLIENTS.list.filter(c => c.id !== id);
 
-  // 2. Salva clientes no localStorage imediatamente
+  // 3. Persiste no localStorage imediatamente
   localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
   localStorage.setItem('tp_clients_next_id', String(CLIENTS.nextId));
 
-  // 3. Remove tarefas vinculadas do DOM (por data-client-id ou por nome no texto)
+  // 4. Remove tarefas vinculadas do DOM (por data-client-id ou por nome no texto)
   const nameLower = client.name.toLowerCase();
   ['#task-list .task-item', '#completed-tasks-list .task-item'].forEach(sel => {
     document.querySelectorAll(sel).forEach(el => {
@@ -11449,10 +11401,10 @@ window.deletarCliente = function(id) {
     });
   });
 
-  // 4. Salva tarefas no localStorage imediatamente
+  // 5. Salva tarefas no localStorage
   saveTasks();
 
-  // 5. Força re-render completo da tela
+  // 6. Força re-render completo da tela
   renderClients();
   renderGoalAlerts();
   renderPacingAlerts();
@@ -11472,6 +11424,20 @@ function _apiFetch(path, opts = {}) {
 }
 
 /**
+ * Fetch para o backend Render (proxy Evolution API / WhatsApp).
+ * Separado do _apiFetch pois aponta para renderUrl, não para o Vercel.
+ */
+function _renderFetch(path, opts = {}) {
+  const base = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
+  if (!base) { console.warn('[Render] renderUrl não configurado em PROD_CONFIG'); return Promise.resolve(null); }
+  if (!opts.headers) opts.headers = {};
+  if (!opts.headers['Content-Type'] && opts.body) opts.headers['Content-Type'] = 'application/json';
+  return fetch(base + path, opts)
+    .then(r => r.json())
+    .catch(e => { console.error('[Render]', path, e.message); return null; });
+}
+
+/**
  * Carrega tokens centralizados do servidor (compartilhados entre dispositivos).
  * Atualiza o localStorage local para que loadMetaToken() / loadGA4Token()
  * funcionem normalmente — sem quebrar código existente.
@@ -11487,6 +11453,9 @@ async function loadAppConfig() {
     if (data.ga4_access_token) {
       localStorage.setItem('ga4_access_token', data.ga4_access_token);
     }
+    // ── Evolution API — URL e chave guardadas no MongoDB pelo admin ───────────
+    if (data.evolution_url) localStorage.setItem('evo_url', data.evolution_url);
+    if (data.evolution_key) localStorage.setItem('evo_key', data.evolution_key);
     console.log('[Config] Tokens carregados do servidor.');
   } catch(e) {
     console.warn('[Config] Falha ao carregar config do servidor — usando localStorage local.', e);
