@@ -10576,46 +10576,103 @@ async function atualizarDadosMeta(cliente) {
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const daysPassed  = today.getDate();
   const timePct     = daysPassed / daysInMonth;
+  const acctId      = cliente.meta_ad_account_id;
+  const enc         = encodeURIComponent(token);
 
   try {
-    const url = `https://graph.facebook.com/v19.0/${cliente.meta_ad_account_id}/insights` +
-      `?access_token=${encodeURIComponent(token)}&date_preset=this_month` +
-      `&fields=spend,actions,action_values&level=account`;
-    const res  = await fetch(url);
-    const json = await res.json();
+    // ── 4 chamadas paralelas à Meta Graph API ─────────────────────────────────
+    // 1) Insights mês vigente  → gasto, ações, conversões
+    // 2) Detalhes da conta     → funding_source_details, balance (detecção de pagamento)
+    // 3) Insights últimos 7d   → média diária para cálculo de autonomia pré-pago
+    // 4) Transações recentes   → confirmação cartão vs boleto/PIX
+    const [insRes, acctRes, ins7dRes, txRes] = await Promise.all([
+      fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
+            `?access_token=${enc}&date_preset=this_month` +
+            `&fields=spend,actions,action_values&level=account`),
+      fetch(`https://graph.facebook.com/v19.0/${acctId}` +
+            `?fields=funding_source_details,balance,account_status,currency` +
+            `&access_token=${enc}`),
+      fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
+            `?date_preset=last_7d&fields=spend&level=account` +
+            `&access_token=${enc}`),
+      fetch(`https://graph.facebook.com/v19.0/${acctId}/transactions` +
+            `?limit=5&fields=type,payment_method_type,description,amount,status` +
+            `&access_token=${enc}`)
+    ]);
+
+    const json      = await insRes.json();
+    const acctJson  = await acctRes.json();
+    const ins7dJson = await ins7dRes.json();
+    const txJson    = await txRes.json();
 
     if (json.error) {
       showNotification(`Meta API: ${json.error.message}`, 'error');
       return null;
     }
 
+    // ── Spend / ações / conversões mês vigente ────────────────────────────────
     const data         = json.data?.[0] || {};
     const spend        = parseFloat(data.spend || '0');
     const actions      = data.actions      || [];
-    const actionValues = data.action_values || [];  // valores monetários das conversões (R$)
+    const actionValues = data.action_values || [];
 
-    // ── DEBUG: loga arrays completos para inspecionar as chaves reais da API ──
     console.log(`%c[Meta API] ${cliente.name} — actions brutas:`, 'color:#E37400;font-weight:bold');
-    console.log(JSON.stringify(actions, null, 2));
     console.table(actions.map(a => ({ action_type: a.action_type, value: a.value })));
     console.log(`%c[Meta API] ${cliente.name} — action_values (R$):`, 'color:#22D3A0;font-weight:bold');
     console.table(actionValues.map(a => ({ action_type: a.action_type, value: a.value })));
 
-    const goalInfo   = CL_GOAL_MAP[cliente.segment];
+    // ── Saldo da conta (detecção de pré-pago) ─────────────────────────────────
+    // CONTAS PRÉ-PAGAS: funding_source_details.display_amount = saldo em carteira
+    // CONTAS PÓS-PAGAS: display_amount = limite disponível (pode estar zerado)
+    // Regra: FSD > balance como último recurso (para pré-pagas, balance = gasto acumulado)
+    let balance = 0;
+    const fsd = !acctJson.error ? acctJson.funding_source_details : null;
+
+    if (fsd?.display_amount != null && parseFloat(fsd.display_amount) > 0) {
+      const raw = parseFloat(fsd.display_amount);
+      balance   = raw >= 200 ? raw / 100 : raw;     // centavos → BRL se ≥ 200
+      console.log(`[MetaSync] ${cliente.name}: saldo via FSD: R$${balance}`);
+    }
+    if (balance < 100 && !acctJson.error && acctJson.balance != null) {
+      const raw = parseFloat(acctJson.balance);
+      const candidate = raw >= 200 ? raw / 100 : raw;
+      if (candidate >= 100) {
+        balance = candidate;
+        console.log(`[MetaSync] ${cliente.name}: saldo via balance field: R$${balance}`);
+      }
+    }
+
+    // ── Gasto médio últimos 7 dias → cálculo de autonomia ────────────────────
+    let gastoMedio7d = 0;
+    if (!ins7dJson?.error && ins7dJson?.data?.length > 0) {
+      const total7d = parseFloat(ins7dJson.data[0].spend || '0');
+      gastoMedio7d  = total7d > 0 ? +(total7d / 7).toFixed(2) : 0;
+      console.log(`[MetaSync] ${cliente.name}: gasto 7d=${total7d} → média/dia=R$${gastoMedio7d}`);
+    }
+
+    // ── Override auditado (para contas com API inconsistente) ─────────────────
+    const overridden   = applyBalanceOverride(acctId, balance, gastoMedio7d);
+    const finalBalance = overridden.balance;
+    const finalSpend7d = overridden.spend7d;
+
+    // ── Detecção automática de forma de pagamento ─────────────────────────────
+    // Hierarquia: PAYMENT_METHOD_OVERRIDES → FSD.type → transactions → FSD.display_amount
+    const txData          = (!txJson?.error && txJson?.data) ? txJson.data : [];
+    const metodoDetectado = detectPaymentMethodFromData(acctId, fsd, txData);
+    console.log(`[MetaSync] ${cliente.name}: metodo_pagamento detectado → ${metodoDetectado}`);
+
+    // ── Realized / faturamento ────────────────────────────────────────────────
+    const goalInfo = CL_GOAL_MAP[cliente.segment];
     let realized = 0;
     let faturamentoMetaAds = 0;
 
     if (goalInfo && (actions.length > 0 || actionValues.length > 0)) {
       if (cliente.segment === 'ecommerce' || cliente.segment === 'delivery') {
-        // Para delivery/ecommerce: usa action_values (R$) — pick-first evita 3× duplicação
         faturamentoMetaAds = _pickMetricByPriority(actionValues, _META_SALE_PRIORITY, parseFloat);
         realized = faturamentoMetaAds;
         console.log(`%c[Meta sync] ${cliente.name} — faturamento via action_values: R$ ${faturamentoMetaAds.toFixed(2)}`, 'color:#6C63FF;font-weight:bold');
       } else {
-        // ── Lead consolidado: usa _calcLeadsTotal (mesma fórmula do relatório) ──
-        //    cadastros nativos + mensagens iniciadas WhatsApp/Messenger
         realized = _calcLeadsTotal(actions);
-
         console.log(
           `%c[Meta sync] ${cliente.name}`,
           'color:#22D3A0;font-weight:bold',
@@ -10625,22 +10682,30 @@ async function atualizarDadosMeta(cliente) {
       }
     }
 
-    // Update client in memory
+    // ── Persiste todos os campos no cliente ───────────────────────────────────
     const idx = CLIENTS.list.findIndex(c => c.id === cliente.id);
     if (idx >= 0) {
-      CLIENTS.list[idx].investment = spend;
-      // Salva faturamento Meta Ads para delivery/ecommerce
-      if (faturamentoMetaAds > 0) {
-        CLIENTS.list[idx].faturamentoMetaAds = faturamentoMetaAds;
+      const cl = CLIENTS.list[idx];
+      cl.investment = spend;
+      // Saldo e média 7d — só sobrescreve se a API retornou valor real
+      if (finalBalance > 0) cl.meta_balance = finalBalance;
+      if (finalSpend7d > 0) cl.meta_spend7d  = finalSpend7d;
+      // Forma de pagamento — só auto-detecta se ainda não foi definida (patches têm prioridade)
+      if (!cl.metodo_pagamento || cl.metodo_pagamento === '') {
+        cl.metodo_pagamento = metodoDetectado;
       }
-      if (realized > 0 && CLIENTS.list[idx].goal) {
-        // Arredonda para 2 casas (não inteiro — faturamento em R$ tem centavos)
-        CLIENTS.list[idx].goal.realized = Math.round(realized * 100) / 100;
+      if (faturamentoMetaAds > 0) cl.faturamentoMetaAds = faturamentoMetaAds;
+      if (realized > 0 && cl.goal) {
+        cl.goal.realized = Math.round(realized * 100) / 100;
       }
       saveClients();
     }
 
-    return { spend, realized, faturamentoMetaAds, timePct, daysPassed, daysInMonth };
+    return {
+      spend, realized, faturamentoMetaAds, timePct, daysPassed, daysInMonth,
+      meta_balance: finalBalance, meta_spend7d: finalSpend7d,
+      metodo_pagamento: metodoDetectado
+    };
   } catch (err) {
     showNotification(`Falha ao conectar com Meta API: ${err.message}`, 'error');
     return null;
@@ -10658,9 +10723,13 @@ async function sincronizarMeta(clientId) {
   renderPacingAlerts();
 
   if (result) {
-    const budgetPct = cliente.budget > 0 ? Math.round((result.spend / cliente.budget) * 100) : '—';
+    const budgetPct  = cliente.budget > 0 ? Math.round((result.spend / cliente.budget) * 100) : '—';
+    const balInfo    = result.meta_balance > 0
+      ? ` | Saldo: ${fmtBRL(result.meta_balance)} (~${result.meta_spend7d > 0 ? Math.floor(result.meta_balance / result.meta_spend7d) + 'd' : '—'})`
+      : '';
+    const payInfo    = result.metodo_pagamento === 'pre_pago' ? ' 💰 Pré-pago' : result.metodo_pagamento === 'cartao' ? ' 💳 Cartão' : '';
     showNotification(
-      `${cliente.name} atualizado — Gasto: ${fmtBRL(result.spend)} (${budgetPct}% do orçamento, dia ${result.daysPassed}/${result.daysInMonth})`,
+      `${cliente.name} atualizado — Gasto: ${fmtBRL(result.spend)} (${budgetPct}% | dia ${result.daysPassed}/${result.daysInMonth})${balInfo}${payInfo}`,
       'ok'
     );
   }
@@ -10722,9 +10791,15 @@ async function sincronizarTodosMeta() {
   const results = await Promise.all(clientes.map(c => atualizarDadosMeta(c).catch(() => null)));
   const ok = results.filter(Boolean).length;
 
+  // Contabiliza formas de pagamento detectadas e saldos obtidos
+  const withBalance  = results.filter(r => r?.meta_balance > 0).length;
+  const prePagos     = results.filter(r => r?.metodo_pagamento === 'pre_pago').length;
+  const cartoes      = results.filter(r => r?.metodo_pagamento === 'cartao').length;
+
   renderClients();
   renderGoalAlerts();
   renderPacingAlerts();
+  renderBalanceMonitor?.();
 
   /* Restaura botão */
   if (btn) {
@@ -10732,7 +10807,14 @@ async function sincronizarTodosMeta() {
     btn.innerHTML = '<i class="ti ti-refresh"></i> Sincronizar Todos';
   }
 
-  showNotification(`Sincronização concluída: ${ok}/${clientes.length} cliente(s) atualizados.`, 'ok');
+  const payInfo = prePagos + cartoes > 0
+    ? ` | 💰 ${prePagos} pré-pago, 💳 ${cartoes} cartão`
+    : '';
+  const balInfo = withBalance > 0 ? ` | ${withBalance} saldo(s) obtido(s)` : '';
+  showNotification(
+    `Sincronização concluída: ${ok}/${clientes.length} cliente(s) atualizados${payInfo}${balInfo}.`,
+    'ok'
+  );
 }
 
 const EVO_DEFAULTS = {
