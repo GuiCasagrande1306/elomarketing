@@ -6330,7 +6330,8 @@ function renderClients() {
   const impFilter  = document.getElementById('cl-filter-importance')?.value || '';
   const catFilter  = document.getElementById('cl-filter-categoria')?.value || '';
   const collabSel  = document.getElementById('collab-filter');
-  const uid        = currentUser?.isAdmin ? (collabSel?.value || 'all') : (currentUser?.id || 'all');
+  // Clientes são visíveis a todos — o filtro por colaborador é opcional (usado por admins no dropdown)
+  const uid        = collabSel?.value || 'all';
 
   const filtered = CLIENTS.list.filter(c => {
     if (search && !c.name.toLowerCase().includes(search)) return false;
