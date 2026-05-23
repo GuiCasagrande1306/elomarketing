@@ -1941,6 +1941,17 @@
   .meta-dd-name { font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0; }
   .meta-dd-id   { font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0; }
   .meta-dd-empty { padding:12px;font-size:12px;color:var(--text3);text-align:center; }
+  /* ── Google Ads account dropdown (mesma estrutura do Meta) ── */
+  .gads-dd-list { position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:300;
+    background:var(--bg2);border:1px solid var(--border2);border-radius:10px;
+    max-height:210px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.45);display:none; }
+  .gads-dd-item { padding:9px 12px;cursor:pointer;display:flex;align-items:baseline;gap:8px;transition:background 0.1s; }
+  .gads-dd-item:hover,.gads-dd-item.hovered { background:var(--bg3); }
+  .gads-dd-item:first-child { border-radius:9px 9px 0 0; }
+  .gads-dd-item:last-child  { border-radius:0 0 9px 9px; }
+  .gads-dd-name { font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0; }
+  .gads-dd-id   { font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0; }
+  .gads-dd-empty { padding:12px;font-size:12px;color:var(--text3);text-align:center; }
 
   .bal-sim-banner { background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:var(--amber);
     border-radius:8px;padding:8px 14px;font-size:11px;margin-bottom:12px;display:none;align-items:center;gap:8px; }
@@ -3446,16 +3457,29 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <label class="form-label" style="margin:0">
             <svg width="13" height="13" viewBox="0 0 512 512" style="margin-right:4px;vertical-align:-2px" fill="#4285F4"><path d="M256 48C141.12 48 48 141.12 48 256s93.12 208 208 208 208-93.12 208-208S370.88 48 256 48zm-32 304l-80-80 22.4-22.4 57.6 57.6 121.6-121.6 22.4 22.4-144 144z"/></svg>
-            Google Ads — Customer ID
+            Google Ads — Conta de Anúncios
           </label>
-          <span id="gads-form-badge" style="display:none;font-size:10px;font-weight:600;color:#4285F4;background:rgba(66,133,244,0.10);border:1px solid rgba(66,133,244,0.35);padding:2px 8px;border-radius:20px">✓ Vinculado</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span id="gads-form-badge" style="display:none;font-size:10px;font-weight:600;color:#4285F4;background:rgba(66,133,244,0.10);border:1px solid rgba(66,133,244,0.35);padding:2px 8px;border-radius:20px">✓ Vinculado</span>
+            <button type="button" onclick="carregarContasGads(true)" title="Recarregar contas"
+              style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;display:flex;align-items:center;gap:4px;transition:color 0.15s">
+              <i class="ti ti-refresh" id="gads-reload-icon"></i>
+            </button>
+          </div>
         </div>
-        <input type="text" id="cl-form-gads-customer-id" class="form-input"
-          placeholder="Ex: 123-456-7890"
-          oninput="onGadsCustomerIdInput(this.value)"
-          autocomplete="off">
-        <div style="font-size:10px;color:var(--text3);margin-top:4px">
-          Encontre em Google Ads → Configurações da conta → ID do cliente (formato: XXX-XXX-XXXX)
+        <div style="position:relative" id="gads-account-wrap">
+          <input type="text" id="cl-form-gads-account-search" class="form-input"
+            placeholder="Digite para buscar a conta..."
+            autocomplete="off"
+            oninput="gadsDdFilter(this.value)"
+            onfocus="gadsDdOpen()"
+            onblur="gadsDdBlur()"
+            onkeydown="gadsDdKey(event)">
+          <input type="hidden" id="cl-form-gads-customer-id">
+          <div id="gads-dd-list" class="gads-dd-list"></div>
+        </div>
+        <div id="cl-gads-account-hint" style="font-size:10px;color:var(--text3);margin-top:4px">
+          Selecione a conta do MCC ou aguarde a aprovação do developer token
         </div>
       </div>
 
@@ -6890,10 +6914,8 @@ function openNewClientModal(id) {
   document.getElementById('cl-form-ga4-property-id').value  = '';
   const ga4Badge = document.getElementById('ga4-form-badge');
   if (ga4Badge) ga4Badge.style.display = 'none';
-  const _gadsInput = document.getElementById('cl-form-gads-customer-id');
-  if (_gadsInput) _gadsInput.value = '';
-  const gadsBadge = document.getElementById('gads-form-badge');
-  if (gadsBadge) gadsBadge.style.display = 'none';
+  gadsDdSetValue('');
+  carregarContasGads();
   metaDdSetValue('');
   carregarContasMeta();
   // Controle de acesso: somente admins podem editar IDs de conta
@@ -6932,11 +6954,13 @@ function openNewClientModal(id) {
         const b = document.getElementById('ga4-form-badge');
         if (b) b.style.display = '';
       }
+      // restore Google Ads dropdown — wait for accounts if cache is empty
       if (c.google_ads_customer_id) {
-        const _gadsEl = document.getElementById('cl-form-gads-customer-id');
-        if (_gadsEl) _gadsEl.value = c.google_ads_customer_id;
-        const _gadsBadge = document.getElementById('gads-form-badge');
-        if (_gadsBadge) _gadsBadge.style.display = '';
+        if (GADS_ACCOUNTS.length > 0) {
+          gadsDdSetValue(c.google_ads_customer_id);
+        } else {
+          carregarContasGads().then(() => gadsDdSetValue(c.google_ads_customer_id));
+        }
       }
       // Show badge if values already saved
       if (c.meta_balance || c.meta_spend7d) {
@@ -10586,6 +10610,164 @@ function onGA4PropertyInput(val) {
 function onGadsCustomerIdInput(val) {
   const badge = document.getElementById('gads-form-badge');
   if (badge) badge.style.display = val.replace(/[^0-9]/g,'').length >= 8 ? '' : 'none';
+}
+
+/* ========== GOOGLE ADS — ACCOUNT DROPDOWN ========== */
+let GADS_ACCOUNTS   = [];
+let _gadsDdHoverIdx = -1;
+
+function gadsDdRender(query) {
+  const list = document.getElementById('gads-dd-list');
+  if (!list) return;
+  _gadsDdHoverIdx = -1;
+  const q = (query || '').toLowerCase().trim();
+  const matches = q
+    ? GADS_ACCOUNTS.filter(a => a.name.toLowerCase().includes(q) || a.id.includes(q))
+    : GADS_ACCOUNTS;
+
+  if (matches.length === 0) {
+    list.innerHTML = `<div class="gads-dd-empty">${GADS_ACCOUNTS.length ? 'Nenhuma conta encontrada' : 'Sem contas carregadas'}</div>`;
+  } else {
+    list.innerHTML = matches.map((a, i) => {
+      const hi = q ? a.name.replace(new RegExp(`(${q})`, 'gi'), '<mark style="background:rgba(66,133,244,0.2);color:#4285F4;border-radius:2px">$1</mark>') : a.name;
+      const fmtId = a.id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+      return `<div class="gads-dd-item" data-id="${a.id}" data-name="${a.name.replace(/"/g,'&quot;')}" data-idx="${i}"
+                onmousedown="gadsDdSelect('${a.id}','${a.name.replace(/'/g,"\\'")}')">
+                <span class="gads-dd-name">${hi}</span>
+                <span class="gads-dd-id">${fmtId}</span>
+              </div>`;
+    }).join('');
+  }
+  list.style.display = 'block';
+}
+
+function gadsDdOpen() {
+  if (GADS_ACCOUNTS.length === 0) { carregarContasGads(); return; }
+  const search = document.getElementById('cl-form-gads-account-search');
+  gadsDdRender(search?.value || '');
+}
+
+function gadsDdFilter(val) {
+  document.getElementById('cl-form-gads-customer-id').value = '';
+  onGadsCustomerIdInput('');
+  gadsDdRender(val);
+}
+
+function gadsDdBlur() {
+  setTimeout(() => {
+    const list   = document.getElementById('gads-dd-list');
+    if (list) list.style.display = 'none';
+    const hidden = document.getElementById('cl-form-gads-customer-id');
+    const search = document.getElementById('cl-form-gads-account-search');
+    if (!hidden || !search) return;
+    // Se nada foi selecionado mas o usuário digitou um ID válido → aceitar manualmente
+    if (!hidden.value && search.value) {
+      const typed = search.value.trim().replace(/\s/g, '');
+      const digits = typed.replace(/[^0-9]/g, '');
+      if (digits.length >= 9) {
+        hidden.value = digits;
+        onGadsCustomerIdInput(digits);
+      } else {
+        search.value = ''; // inválido, limpa
+      }
+    }
+  }, 160);
+}
+
+function gadsDdKey(e) {
+  const list = document.getElementById('gads-dd-list');
+  if (!list || list.style.display === 'none') return;
+  const items = list.querySelectorAll('.gads-dd-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _gadsDdHoverIdx = Math.min(_gadsDdHoverIdx + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _gadsDdHoverIdx = Math.max(_gadsDdHoverIdx - 1, 0);
+  } else if (e.key === 'Enter' && _gadsDdHoverIdx >= 0) {
+    e.preventDefault();
+    const item = items[_gadsDdHoverIdx];
+    if (item) gadsDdSelect(item.dataset.id, item.dataset.name);
+    return;
+  } else if (e.key === 'Escape') {
+    list.style.display = 'none'; return;
+  }
+  items.forEach((el, i) => el.classList.toggle('hovered', i === _gadsDdHoverIdx));
+  items[_gadsDdHoverIdx]?.scrollIntoView({ block: 'nearest' });
+}
+
+function gadsDdSelect(id, name) {
+  const search = document.getElementById('cl-form-gads-account-search');
+  const hidden = document.getElementById('cl-form-gads-customer-id');
+  const list   = document.getElementById('gads-dd-list');
+  if (search) search.value = name;
+  if (hidden) hidden.value = id;
+  if (list)   list.style.display = 'none';
+  onGadsCustomerIdInput(id); // atualiza badge
+}
+
+function gadsDdSetValue(id) {
+  if (!id) {
+    const s = document.getElementById('cl-form-gads-account-search');
+    const h = document.getElementById('cl-form-gads-customer-id');
+    if (s) s.value = '';
+    if (h) h.value = '';
+    const badge = document.getElementById('gads-form-badge');
+    if (badge) badge.style.display = 'none';
+    return;
+  }
+  const acc = GADS_ACCOUNTS.find(a => a.id === id || a.id === id.replace(/-/g,''));
+  if (acc) {
+    gadsDdSelect(acc.id, acc.name);
+  } else {
+    // Conta não listada (token não aprovado ou ID manual) — mostra ID direto
+    const search = document.getElementById('cl-form-gads-account-search');
+    const hidden = document.getElementById('cl-form-gads-customer-id');
+    const fmtId  = id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    if (search) search.value = fmtId;
+    if (hidden) hidden.value = id.replace(/-/g,'');
+    onGadsCustomerIdInput(id);
+  }
+}
+
+async function carregarContasGads(forceReload = false) {
+  const search = document.getElementById('cl-form-gads-account-search');
+  const hint   = document.getElementById('cl-gads-account-hint');
+  const icon   = document.getElementById('gads-reload-icon');
+
+  if (!forceReload && GADS_ACCOUNTS.length > 0) {
+    if (hint) hint.textContent = `${GADS_ACCOUNTS.length} conta(s) disponível(is) — clique para selecionar.`;
+    return;
+  }
+
+  if (hint)  hint.textContent = 'Carregando contas do MCC...';
+  if (icon)  icon.style.animation = 'spin 1s linear infinite';
+  if (search) search.placeholder = 'Carregando...';
+
+  try {
+    const data = await _renderFetch('/api/google-ads/accounts');
+    if (data.error) throw new Error(data.error);
+
+    GADS_ACCOUNTS = (data.accounts || []).map(a => ({
+      id:   String(a.id).replace(/-/g,''),
+      name: a.name || String(a.id)
+    }));
+
+    if (hint) hint.textContent = GADS_ACCOUNTS.length
+      ? `${GADS_ACCOUNTS.length} conta(s) disponível(is) — clique para selecionar.`
+      : 'Nenhuma conta encontrada sob o MCC.';
+    if (search) search.placeholder = 'Digite para buscar a conta...';
+
+  } catch (err) {
+    console.warn('[carregarContasGads]', err.message);
+    // Fallback: permite digitação manual do Customer ID
+    if (hint) hint.innerHTML = `<span style="color:var(--amber)">⚠️ Não foi possível carregar as contas — digite o ID manualmente (formato: XXX-XXX-XXXX)</span>`;
+    if (search) {
+      search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)';
+    }
+  } finally {
+    if (icon) icon.style.animation = '';
+  }
 }
 
 /* ========== META MARKETING API ========== */
