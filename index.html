@@ -946,7 +946,9 @@
   }
   .esteira-status-pill.done    { background:rgba(34,211,160,0.12);  color:var(--green); }
   .esteira-status-pill.recent  { background:rgba(251,191,36,0.14);  color:#F59E0B; }
-  .esteira-status-pill.overdue { background:rgba(248,113,113,0.12); color:var(--red); }
+  .esteira-status-pill.warning { background:rgba(251,191,36,0.18);  color:#F59E0B; border:1px solid rgba(251,191,36,0.35); }
+  @keyframes pulse-overdue { 0%,100%{opacity:1;background:rgba(248,113,113,0.12)} 50%{opacity:0.75;background:rgba(248,113,113,0.24)} }
+  .esteira-status-pill.overdue { background:rgba(248,113,113,0.12); color:var(--red); animation:pulse-overdue 1.8s ease-in-out infinite; }
   .esteira-status-pill.never   { background:var(--bg4); color:var(--text3); }
 
   /* Optimization Drawer */
@@ -4008,6 +4010,15 @@ const pageConfig = {
 };
 
 function navigate(page, el) {
+  // ── Páginas exclusivas do Super Admin (CEO) ─────────────────────────────────
+  const SUPER_ADMIN_PAGES = ['consolidado'];
+  if (SUPER_ADMIN_PAGES.includes(page) && !currentUser?.isSuperAdmin) {
+    showNotification('⛔ Acesso restrito ao Super Admin.', 'error');
+    const dash = document.querySelector('.nav-item[onclick*="dashboard"]');
+    if (dash) navigate('dashboard', dash);
+    return;
+  }
+
   // ── Guarda de rota: colaboradores só acessam páginas liberadas ──────────────
   if (currentUser && !currentUser.isAdmin) {
     const allowed = currentUser.allowedPages || [];
@@ -5284,7 +5295,12 @@ function resetTaskForm() {
   const _delWrap = document.getElementById('task-delete-btn-wrap');
   if (_delWrap) _delWrap.style.display = 'none';
   const ownerSel = document.getElementById('task-owner');
-  if (ownerSel && currentUser) ownerSel.value = currentUser.id;
+  if (ownerSel && currentUser) {
+    ownerSel.value = currentUser.id;
+    // Colaboradores não-admin só podem atribuir tarefas a si mesmos
+    ownerSel.disabled = !currentUser.isAdmin;
+    ownerSel.title = currentUser.isAdmin ? '' : 'Colaboradores só podem atribuir tarefas a si mesmos';
+  }
   // Popula clientes no select
   const clientSel = document.getElementById('task-client');
   if (clientSel) {
@@ -5708,17 +5724,26 @@ function setSyncStatus(status) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Páginas padrão liberadas para colaboradores recém-criados (sem registro no banco ainda)
-const _DEFAULT_COLLAB_PAGES = [
-  'dashboard','clientes','esteira','campanhas','creatives',
+// ── Páginas por perfil de colaborador ───────────────────────────────────────
+// Gestor de Tráfego: acesso completo às ferramentas de mídia, sem visão macro admin
+const _TRAFFIC_COLLAB_PAGES = [
+  'dashboard','clientes','esteira','contas','campanhas','creatives',
   'calendar','tarefas','alertas'
 ];
+// Designer: foco exclusivo em tarefas atribuídas — sem dados financeiros ou gerenciais
+const _DESIGNER_COLLAB_PAGES = ['tarefas'];
 
+/* ── Organograma ───────────────────────────────────────────────────────────────
+   isSuperAdmin → Guilherme (CEO): acesso irrestrito total
+   isAdmin      → Henrique (Gestor de Tráfego e Projetos): admin sem visão macro
+   colaborador  → Bernardo (tráfego), Amanda/Jaqueline (design): acesso focado
+   ─────────────────────────────────────────────────────────────────────────── */
 const USERS = [
-  { id:'guilherme',   initials:'GU', name:'Guilherme', role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', isAdmin:true  },
-  { id:'henrique',    initials:'HE', name:'Henrique',  role:'Administrador', pin:'admin123', color:'linear-gradient(135deg,#F59E0B,#D97706)', isAdmin:true  },
-  { id:'amanda',      initials:'AM', name:'Amanda',     role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] },
-  { id:'jaqueline',   initials:'JA', name:'Jaqueline',  role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] },
-  { id:'bernardo',    initials:'BE', name:'Bernardo',   role:'Colaborador',  pin:'user123',    color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false, allowedPages:[..._DEFAULT_COLLAB_PAGES] }
+  { id:'guilherme', initials:'GU', name:'Guilherme', role:'CEO · Super Admin',             pin:'admin123', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', isAdmin:true,  isSuperAdmin:true  },
+  { id:'henrique',  initials:'HE', name:'Henrique',  role:'Gestor de Tráfego e Projetos',  pin:'admin123', color:'linear-gradient(135deg,#F59E0B,#D97706)', isAdmin:true,  isSuperAdmin:false },
+  { id:'bernardo',  initials:'BE', name:'Bernardo',  role:'Gestor de Tráfego',             pin:'user123',  color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._TRAFFIC_COLLAB_PAGES] },
+  { id:'amanda',    initials:'AM', name:'Amanda',    role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES] },
+  { id:'jaqueline', initials:'JA', name:'Jaqueline', role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES] },
 ];
 
 // Mapa completo de páginas para o sistema de permissões
@@ -5761,7 +5786,11 @@ function renderLoginScreen() {
       ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover">`
       : u.initials;
     const avBg = u.photo ? 'background:#333' : `background:${u.color}`;
-    const crown = u.isAdmin ? `<i class="ti ti-crown" style="color:#F59E0B;font-size:9px;margin-left:3px;vertical-align:middle"></i>` : '';
+    const crown = u.isSuperAdmin
+      ? `<i class="ti ti-crown" style="color:#F59E0B;font-size:9px;margin-left:3px;vertical-align:middle" title="Super Admin"></i>`
+      : u.isAdmin
+        ? `<i class="ti ti-shield-check" style="color:#94A3B8;font-size:9px;margin-left:3px;vertical-align:middle" title="Admin"></i>`
+        : '';
     return `<div class="login-user" data-uid="${u.id}" onclick="selectLoginUser('${u.id}')">
       <div class="login-nf-av" style="${avBg}">${avContent}</div>
       <div class="login-nf-name">${u.name}${crown}</div>
@@ -5882,7 +5911,7 @@ function loginUser(user) {
   const sel = document.getElementById('collab-filter');
   if (sel) {
     sel.innerHTML = '<option value="all">Todos os Colaboradores</option>' +
-      USERS.map(u => `<option value="${u.id}">${u.name}${u.isAdmin ? ' ★' : ''}</option>`).join('');
+      USERS.map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
     sel.value = 'all'; // todos começam com visão geral
   }
   filterByCollaborator('all');
@@ -5896,6 +5925,16 @@ function loginUser(user) {
   applySidebarPermissions();
   // Mostra/oculta painel Torre de Controle conforme role do usuário
   _applyTorreVisibility();
+  // Redireciona colaboradores para a primeira página permitida se a atual for restrita
+  if (!user.isAdmin) {
+    const activePage = document.querySelector('.page.active')?.id?.replace('page-', '');
+    const allowed    = user.allowedPages || [];
+    if (activePage && !allowed.includes(activePage)) {
+      const firstPage = allowed[0];
+      const firstNav  = firstPage && document.querySelector(`.nav-item[onclick*="navigate('${firstPage}'"]`);
+      if (firstPage && firstNav) navigate(firstPage, firstNav);
+    }
+  }
 }
 
 function updateSidebarUser(user) {
@@ -5912,9 +5951,12 @@ function updateSidebarUser(user) {
     }
   }
   if (nameEl) {
-    nameEl.innerHTML = user.isAdmin
-      ? `${user.name} <i class="ti ti-crown admin-crown"></i>`
-      : user.name;
+    const badge = user.isSuperAdmin
+      ? `<i class="ti ti-crown admin-crown" style="color:#F59E0B" title="Super Admin"></i>`
+      : user.isAdmin
+        ? `<i class="ti ti-shield-check admin-crown" style="color:#94A3B8" title="Admin"></i>`
+        : '';
+    nameEl.innerHTML = `${user.name} ${badge}`;
   }
   if (roleEl) roleEl.textContent = user.role;
 }
@@ -6337,7 +6379,7 @@ const CL_COLORS = [
 const CLIENTS = {
   nextId: 6,
   list: [
-    { id:'cl-1', name:'Instituto Lara',          segment:'infoproduto',   importance:4, categoria:'elo_marketing', objective:'Escalar vendas no direct e manter CPL abaixo de R$55',           owner:'guilherme', avatar:'IL', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', budget:7500, investment:890.20,  meta_balance:1673.85, meta_spend7d:48.92, metodo_pagamento:'pre_pago', ga4_property_id:'',            meta_ad_account_id:'', goal:{target:200,   realized:142},  investments:[{month:'2025-01',value:6800},{month:'2025-02',value:7000},{month:'2025-03',value:7200},{month:'2025-04',value:7200},{month:'2025-05',value:7200}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', dia_otimizacao:'segunda', ultima_otimizacao:'2026-05-18T10:30:00.000Z', historico_otimizacoes:[{id:1,data:'2026-05-18T10:30:00.000Z',texto_nota:'Ajustado orçamento para campanha de leads. CPL estava em R$72, pausamos o conjunto de anúncios com público frio e direcionamos budget para remarketing.',autor:'Guilherme'},{id:2,data:'2026-05-11T09:15:00.000Z',texto_nota:'Criados novos anúncios com depoimentos de pacientes. Taxa de cliques subiu 18%.',autor:'Guilherme'}] },
+    { id:'cl-1', name:'Instituto Lara',          segment:'infoproduto',   importance:4, categoria:'elo_marketing', objective:'Escalar vendas no direct e manter CPL abaixo de R$55',           owner:'guilherme', avatar:'IL', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', budget:7500, investment:890.20,  meta_balance:1673.85, meta_spend7d:48.92, metodo_pagamento:'pre_pago', ga4_property_id:'',            meta_ad_account_id:'', goal:{target:200,   realized:142},  investments:[{month:'2025-01',value:6800},{month:'2025-02',value:7000},{month:'2025-03',value:7200},{month:'2025-04',value:7200},{month:'2025-05',value:7200}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', dia_otimizacao:'segunda', ultima_otimizacao:'2026-05-16T10:30:00.000Z', historico_otimizacoes:[{id:1,data:'2026-05-18T10:30:00.000Z',texto_nota:'Ajustado orçamento para campanha de leads. CPL estava em R$72, pausamos o conjunto de anúncios com público frio e direcionamos budget para remarketing.',autor:'Guilherme'},{id:2,data:'2026-05-11T09:15:00.000Z',texto_nota:'Criados novos anúncios com depoimentos de pacientes. Taxa de cliques subiu 18%.',autor:'Guilherme'}] },
     { id:'cl-2', name:'Clínica Medicina',         segment:'negocio-local', importance:3, categoria:'bagano',        objective:'Aumentar captação de novos pacientes via leads qualificados no Meta', owner:'henrique',  avatar:'CM', color:'linear-gradient(135deg,#22D3A0,#0D9488)', budget:5000, investment:1800,    meta_balance:3200,    meta_spend7d:0,    metodo_pagamento:'pre_pago',   ga4_property_id:'',            meta_ad_account_id:'', goal:{target:120,   realized:54},   investments:[{month:'2025-02',value:4500},{month:'2025-03',value:4800},{month:'2025-04',value:4800},{month:'2025-05',value:4800}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', dia_otimizacao:'quarta', ultima_otimizacao:'2026-05-13T14:00:00.000Z', historico_otimizacoes:[{id:3,data:'2026-05-13T14:00:00.000Z',texto_nota:'Testando 3 novos criativos de vídeo 15s. Frequência estava em 4.8 — rotacionamos públicos lookalike 1% e 2%.',autor:'Henrique'}] },
     { id:'cl-3', name:'Brazzo Pizza',             segment:'delivery',     importance:4, categoria:'elo_marketing', objective:'🛵 Aumentar pedidos e alcance local via Meta + rastreamento GA4',   owner:'guilherme', avatar:'BP', color:'linear-gradient(135deg,#F59E0B,#D97706)', budget:2000, investment:1071.16, meta_balance:0,       meta_spend7d:0,    metodo_pagamento:'cartao',     ga4_property_id:'demo_ga4_brazzo', meta_ad_account_id:'', goal:{target:32000, realized:8002.78}, investments:[{month:'2025-03',value:1800},{month:'2025-04',value:1900},{month:'2025-05',value:2000}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', faturamentoMetaAds:8002.78, metaCompras:66, metaAddToCart:113, metaSessoes:0, dia_otimizacao:'sexta', ultima_otimizacao:'', historico_otimizacoes:[] },
     { id:'cl-4', name:'Istituto di Moda Burgo',  segment:'negocio-local', importance:3, categoria:'elo_marketing', objective:'',                                                                owner:'guilherme', avatar:'IM', color:'linear-gradient(135deg,#A855F7,#7C3AED)', budget:2000, investment:1036,    meta_balance:1673.85, meta_spend7d:48.92, metodo_pagamento:'pre_pago',   ga4_property_id:'',            meta_ad_account_id:'act_1115165592789346', goal:{target:0, realized:0}, investments:[], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', faturamentoMetaAds:0, metaCompras:0, metaAddToCart:0, metaSessoes:0, dia_otimizacao:'', ultima_otimizacao:'', historico_otimizacoes:[] },
@@ -7429,11 +7471,16 @@ let ESTEIRA_COLABORADOR = 'todos';
 let ESTEIRA_CATEGORIA   = 'todos';
 
 function getOtimStatus(c) {
-  if (!c.ultima_otimizacao) return { cls:'never',   icon:'ti-clock-off',     label:'Nunca' };
+  // Regra oficial de prazos:
+  //   ≤ 6 dias  → Em dia (saudável)
+  //   = 7 dias  → Dia de Otimizar (atenção amarela, NÃO conta como atraso)
+  //   ≥ 8 dias  → Atrasado (vermelho piscante, conta no indicador)
+  //   sem data  → Nunca otimizado (conta como atraso)
+  if (!c.ultima_otimizacao) return { cls:'never',   icon:'ti-clock-off',          label:'Nunca',          days: null };
   const diffDays = Math.floor((Date.now() - new Date(c.ultima_otimizacao)) / 86400000);
-  if (diffDays < 7)  return { cls:'done',    icon:'ti-circle-check',  label:'Em dia' };
-  if (diffDays < 14) return { cls:'recent',  icon:'ti-clock',         label:'Recente' };
-  return               { cls:'overdue',  icon:'ti-alert-circle',  label:'Atrasado' };
+  if (diffDays <= 6)  return { cls:'done',    icon:'ti-circle-check',       label:'Em dia',         days: diffDays };
+  if (diffDays === 7) return { cls:'warning', icon:'ti-clock-exclamation',  label:'Otimizar hoje',  days: 7 };
+  return                     { cls:'overdue', icon:'ti-alert-circle',       label:'Atrasado',       days: diffDays };
 }
 
 function esteiraFilterByColaborador(val) {
@@ -8488,8 +8535,8 @@ function renderDashboard() {
       </div>`).join('');
   }
 
-  // ── Torre de Controle — Admin only ────────────────────────────────────────
-  if (currentUser?.isAdmin) renderTorreControle();
+  // ── Torre de Controle — Super Admin only (CEO) ───────────────────────────
+  if (currentUser?.isSuperAdmin) renderTorreControle();
 }
 
 /* ========== RELATÓRIOS — WHATSAPP ========== */
@@ -10781,11 +10828,11 @@ function onGadsCustomerIdInput(val) {
    TORRE DE CONTROLE — Dashboard Admin
    ══════════════════════════════════════════════════════════ */
 
-/** Mostra/esconde o bloco Torre de Controle com base no role do usuário */
+/** Mostra/esconde o bloco Torre de Controle — exclusivo para Super Admin */
 function _applyTorreVisibility() {
   const el = document.getElementById('dash-torre-controle');
   if (!el) return;
-  el.style.display = currentUser?.isAdmin ? '' : 'none';
+  el.style.display = currentUser?.isSuperAdmin ? '' : 'none';
 }
 
 /** Computa tarefas abertas e tarefas concluídas por colaborador */
@@ -10801,17 +10848,17 @@ function _computeTasksByUser() {
   return map;
 }
 
-/** Computa otimizações atrasadas por colaborador usando CLIENTS.list (fallback local) */
+/** Computa otimizações atrasadas e "dia de otimizar" por colaborador usando CLIENTS.list (fallback local) */
 function _computeOtimByOwner() {
   const map = {};
   CLIENTS.list.forEach(c => {
     const owner = c.owner || '';
     if (!owner) return;
-    if (!map[owner]) map[owner] = { overdue: 0, total: 0 };
+    if (!map[owner]) map[owner] = { overdue: 0, warning: 0, total: 0 };
     map[owner].total++;
-    if (getOtimStatus(c).cls === 'overdue' || getOtimStatus(c).cls === 'never') {
-      map[owner].overdue++;
-    }
+    const st = getOtimStatus(c);
+    if (st.cls === 'overdue' || st.cls === 'never') map[owner].overdue++;
+    else if (st.cls === 'warning')                  map[owner].warning++;
   });
   return map;
 }
@@ -10834,7 +10881,7 @@ function _computeSpendSummary() {
 let _torreLastRender = null;
 
 async function renderTorreControle(force = false) {
-  if (!currentUser?.isAdmin) return;
+  if (!currentUser?.isSuperAdmin) return;
 
   const body  = document.getElementById('torre-body');
   const label = document.getElementById('torre-sync-label');
@@ -10864,8 +10911,8 @@ async function renderTorreControle(force = false) {
   // ── Monta dados por colaborador ─────────────────────────────────────────
   // Usa USERS como fonte de verdade da lista de colaboradores
   const collabList = USERS.map(u => {
-    const tasks   = tasksByUser[u.id] || { open: 0, done: 0 };
-    const otim    = otimByOwner[u.id] || { overdue: 0, total: 0 };
+    const tasks    = tasksByUser[u.id] || { open: 0, done: 0 };
+    const otim     = otimByOwner[u.id] || { overdue: 0, warning: 0, total: 0 };
     // Enriquece com dados de backend se disponível
     const srvOwner = serverData?.byOwner?.find(o => o.owner === u.id);
     return {
@@ -10874,7 +10921,8 @@ async function renderTorreControle(force = false) {
       initials:     u.initials,
       color:        u.color,
       clientCount:  srvOwner?.clientCount  ?? otim.total,
-      overdueOtim:  srvOwner?.overdueOtim  ?? otim.overdue,
+      overdueOtim:  srvOwner?.overdueOtim  ?? otim.overdue,   // >= 8 dias
+      warningOtim:  srvOwner?.warningOtim  ?? otim.warning,   // = 7 dias (Dia de Otimizar)
       openTasks:    tasks.open,
       doneTasks:    tasks.done,
     };
@@ -10882,15 +10930,15 @@ async function renderTorreControle(force = false) {
 
   // Máximos para escalar as barras
   const maxTasks = Math.max(1, ...collabList.map(u => u.openTasks));
-  const maxOtim  = Math.max(1, ...collabList.map(u => u.overdueOtim));
+  const maxOtim  = Math.max(1, ...collabList.map(u => Math.max(u.overdueOtim, u.warningOtim)));
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const barPct = (val, max) => Math.round((val / max) * 100);
 
   function collabBlock(u) {
-    const taskW = barPct(u.openTasks, maxTasks);
-    const otimW = barPct(u.overdueOtim, maxOtim);
-    const otimRed = u.overdueOtim >= 2;
+    const taskW  = barPct(u.openTasks,   maxTasks);
+    const otimW  = barPct(u.overdueOtim, maxOtim);
+    const warnW  = barPct(u.warningOtim, maxOtim);
     return `
       <div>
         <div class="torre-collab-header">
@@ -10906,17 +10954,26 @@ async function renderTorreControle(force = false) {
           <span class="torre-bar-val">${u.openTasks}</span>
         </div>
         <div class="torre-bar-row">
-          <span class="torre-bar-label"><i class="ti ti-clock-exclamation" style="font-size:9px;margin-right:3px"></i>Otim. atrasadas</span>
+          <span class="torre-bar-label"><i class="ti ti-alert-circle" style="font-size:9px;margin-right:3px;color:var(--red)"></i>Otim. atrasadas <span style="font-size:9px;color:var(--text3)">(≥8d)</span></span>
           <div class="torre-bar-track">
-            <div class="torre-bar-fill otim${otimRed ? ' red' : ''}" style="width:${otimW}%"></div>
+            <div class="torre-bar-fill otim red" style="width:${otimW}%"></div>
           </div>
-          <span class="torre-bar-val" style="color:${otimRed?'var(--red)':'var(--text)'}">${u.overdueOtim}</span>
+          <span class="torre-bar-val" style="color:${u.overdueOtim > 0 ? 'var(--red)' : 'var(--text)'}">${u.overdueOtim}</span>
         </div>
+        ${u.warningOtim > 0 ? `
+        <div class="torre-bar-row">
+          <span class="torre-bar-label"><i class="ti ti-clock-exclamation" style="font-size:9px;margin-right:3px;color:#F59E0B"></i>Otimizar hoje <span style="font-size:9px;color:var(--text3)">(7d)</span></span>
+          <div class="torre-bar-track">
+            <div class="torre-bar-fill otim" style="width:${warnW}%"></div>
+          </div>
+          <span class="torre-bar-val" style="color:#F59E0B">${u.warningOtim}</span>
+        </div>` : ''}
       </div>`;
   }
 
   const totalOpenTasks = collabList.reduce((s, u) => s + u.openTasks, 0);
   const totalOverdue   = collabList.reduce((s, u) => s + u.overdueOtim, 0);
+  const totalWarning   = collabList.reduce((s, u) => s + u.warningOtim, 0);
 
   // ── Render ────────────────────────────────────────────────────────────────
   body.innerHTML = `
@@ -10938,12 +10995,17 @@ async function renderTorreControle(force = false) {
         <div class="torre-legend">
           <div class="torre-legend-item">
             <div class="torre-legend-dot" style="background:#6C63FF"></div>
-            Tarefas em aberto (${totalOpenTasks} total)
+            Tarefas em aberto (${totalOpenTasks})
           </div>
           <div class="torre-legend-item">
-            <div class="torre-legend-dot" style="background:#F59E0B"></div>
-            Otimizações atrasadas (${totalOverdue} total)
+            <div class="torre-legend-dot" style="background:#F87171"></div>
+            Atrasadas ≥8d (${totalOverdue})
           </div>
+          ${totalWarning > 0 ? `
+          <div class="torre-legend-item">
+            <div class="torre-legend-dot" style="background:#FBBF24"></div>
+            Otimizar hoje (${totalWarning})
+          </div>` : ''}
         </div>
       </div>
 
@@ -12943,13 +13005,24 @@ async function loadUserProfilesFromAPI() {
  * Admins sempre veem tudo. Chamado em loginUser() e quando permissões mudam.
  */
 function applySidebarPermissions() {
-  const isAdmin    = currentUser?.isAdmin;
-  const allowed    = currentUser?.allowedPages || [];
+  const isSuperAdmin = currentUser?.isSuperAdmin;
+  const isAdmin      = currentUser?.isAdmin;
+  const allowed      = currentUser?.allowedPages || [];
+
+  // Páginas exclusivas do Super Admin — escondidas para todos os outros
+  const SUPER_ADMIN_ONLY = ['consolidado'];
 
   document.querySelectorAll('.nav-item').forEach(item => {
     const match = item.getAttribute('onclick')?.match(/navigate\('([^']+)'/);
-    if (!match) return; // itens sem navigate (ex: seções) ficam visíveis
+    if (!match) return; // itens sem navigate (ex: separadores) ficam visíveis
     const page = match[1];
+
+    // Super Admin only
+    if (SUPER_ADMIN_ONLY.includes(page)) {
+      item.style.display = isSuperAdmin ? '' : 'none';
+      return;
+    }
+
     item.style.display = (isAdmin || allowed.includes(page)) ? '' : 'none';
   });
 }
