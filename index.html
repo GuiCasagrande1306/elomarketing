@@ -5444,26 +5444,28 @@ function saveTask() {
    PROD_CONFIG — preencha antes de cada deploy
    Nunca commite valores reais em repositórios públicos.
    ========================================================================== */
+// Auto-detecta se está rodando localmente (file://, localhost ou 127.0.0.1)
+const _isLocalEnv = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
+
 const PROD_CONFIG = {
   // ── Backend REST API (Render) ──────────────────────────────────────────────
-  // Cole aqui a URL gerada pela Render após o deploy do server.js
   apiUrl: 'https://elomarketing-api.vercel.app',
 
-  // ── Supabase (opcional — pode ficar vazio se usar só o Render) ────────────
+  // ── Supabase (opcional) ───────────────────────────────────────────────────
   supabaseUrl:      'https://SEU-PROJETO.supabase.co',
   supabaseAnonKey:  'SUA-CHAVE',
 
-  // ── Backend Render (proxy para Evolution API / WhatsApp) ─────────────────
-  // Substitua pela URL gerada após o deploy no Render.com
-  renderUrl: 'https://elomarketing-api.onrender.com',
+  // ── Backend Render (proxy WhatsApp / Evolution API) ───────────────────────
+  // Em dev local aponta para o servidor Express rodando em :5001
+  // Em produção (GitHub Pages) aponta para o Render
+  renderUrl: _isLocalEnv
+    ? 'http://localhost:5001'
+    : 'https://elomarketing-api.onrender.com',
 
   // ── Evolution API — credenciais ficam no .env do Render (não no frontend) ─
-  // URL e API Key são salvas pelo admin em Integrações → Evolution API → Salvar
-  // e ficam no MongoDB; o Render as lê de lá (ou do .env como fallback).
   evolutionUrl: 'https://evolution-api-production-b01b.up.railway.app',
 
   // ── OpenAI — Gerar Análise IA na página de Relatórios ─────────────────────
-  // Cole aqui a sua chave OpenAI (sk-proj-...). Deixe vazio para usar análise local.
   openaiKey: '',
 };
 /* ========================================================================== */
