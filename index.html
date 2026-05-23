@@ -1834,6 +1834,7 @@
   .cat-badge.bagano  { background:rgba(168,85,247,0.12);  color:#A855F7; }
   .cat-badge.brava   { background:rgba(244,63,94,0.12);   color:#F43F5E; }
   .cat-badge.ampla   { background:rgba(245,158,11,0.12);  color:var(--amber); }
+.cat-badge.clipy   { background:rgba(6,182,212,0.12);   color:#06B6D4; }
   .client-card-crowns { display:flex;gap:3px; }
   .crown-icon { font-size:14px; }
   .crown-icon.filled { color:#F59E0B; }
@@ -2603,6 +2604,7 @@
           <option value="bagano">🎒 Bagano</option>
           <option value="brava_reels">🎬 Brava Reels</option>
           <option value="ampla_mkt">📢 Ampla MKT</option>
+          <option value="clipy">🎞️ Clipy</option>
         </select>
         <button id="sync-all-btn" class="btn btn-sm"
                 style="margin-left:auto;border:1px solid var(--accent);color:var(--accent);
@@ -2654,6 +2656,7 @@
               <option value="bagano">🎒 Bagano</option>
               <option value="brava_reels">🎬 Brava Reels</option>
               <option value="ampla_mkt">📢 Ampla MKT</option>
+              <option value="clipy">🎞️ Clipy</option>
             </select>
             <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="ti ti-plus"></i> Nova conta</button>
           </div>
@@ -3357,6 +3360,7 @@
           <option value="bagano">🎒 Bagano</option>
           <option value="brava_reels">🎬 Brava Reels</option>
           <option value="ampla_mkt">📢 Ampla MKT</option>
+          <option value="clipy">🎞️ Clipy</option>
         </select>
         <div style="font-size:10px;color:var(--text3);margin-top:4px">Identifica a origem do cliente — direto pela Elo ou via agência parceira</div>
       </div>
@@ -6700,6 +6704,7 @@ function buildClientCard(c) {
     bagano:       { cls:'bagano', label:'🎒 Bagano'        },
     brava_reels:  { cls:'brava',  label:'🎬 Brava Reels'  },
     ampla_mkt:    { cls:'ampla',  label:'📢 Ampla MKT'    },
+    clipy:        { cls:'clipy',  label:'🎞️ Clipy'         },
   };
   const _catEntry    = _catMap[c.categoria] || _catMap.elo_marketing;
   const catBadgeHtml = `<span class="cat-badge ${_catEntry.cls}">${_catEntry.label}</span>`;
@@ -7284,6 +7289,7 @@ function renderEsteira() {
         <option value="bagano"        ${ESTEIRA_CATEGORIA==='bagano'?'selected':''}>🎒 Bagano</option>
         <option value="brava_reels"   ${ESTEIRA_CATEGORIA==='brava_reels'?'selected':''}>🎬 Brava Reels</option>
         <option value="ampla_mkt"     ${ESTEIRA_CATEGORIA==='ampla_mkt'?'selected':''}>📢 Ampla MKT</option>
+        <option value="clipy"         ${ESTEIRA_CATEGORIA==='clipy'?'selected':''}>🎞️ Clipy</option>
       </select>`;
   }
 
