@@ -1941,6 +1941,65 @@
   .meta-dd-name { font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0; }
   .meta-dd-id   { font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0; }
   .meta-dd-empty { padding:12px;font-size:12px;color:var(--text3);text-align:center; }
+  /* ══════════════════════════════════════════════════════════
+     RELATÓRIOS CONSOLIDADOS — Super Admin
+  ══════════════════════════════════════════════════════════ */
+  .repcon-kpis { display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px; }
+  @media(max-width:700px){ .repcon-kpis{grid-template-columns:1fr;} }
+
+  .repcon-kpi  { background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+                 padding:18px 20px;position:relative;overflow:hidden; }
+  .repcon-kpi::before { content:'';position:absolute;top:0;left:0;right:0;height:2px;
+                        background:var(--repcon-color,var(--accent)); }
+  .repcon-kpi-icon  { width:38px;height:38px;border-radius:10px;display:flex;align-items:center;
+                      justify-content:center;font-size:17px;background:var(--repcon-bg,rgba(108,99,255,0.12));
+                      color:var(--repcon-color,var(--accent));margin-bottom:12px; }
+  .repcon-kpi-val   { font-size:26px;font-weight:700;color:var(--text);line-height:1; }
+  .repcon-kpi-label { font-size:11px;color:var(--text3);margin-top:5px;text-transform:uppercase;
+                      letter-spacing:.5px;font-weight:500; }
+  .repcon-kpi-sub   { font-size:10px;color:var(--text3);margin-top:3px; }
+
+  /* Toolbar */
+  .repcon-toolbar { display:flex;align-items:center;justify-content:space-between;
+                    margin-bottom:18px;flex-wrap:wrap;gap:10px; }
+  .repcon-sync-info { font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px; }
+
+  /* Agency table */
+  .repcon-table-wrap { overflow-x:auto;border-radius:var(--radius); }
+  .repcon-table { width:100%;border-collapse:collapse; }
+  .repcon-table th { font-size:10px;color:var(--text3);text-transform:uppercase;
+                     letter-spacing:.5px;font-weight:600;padding:10px 14px;
+                     text-align:left;border-bottom:1px solid var(--border); white-space:nowrap; }
+  .repcon-table th.r, .repcon-table td.r { text-align:right; }
+  .repcon-table td { padding:13px 14px;font-size:13px;color:var(--text);
+                     border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle; }
+  .repcon-table tr:last-child td { border-bottom:none; }
+  .repcon-table tr.repcon-total td { font-weight:700;color:var(--text);
+                                      border-top:1px solid var(--border);
+                                      background:rgba(255,255,255,0.025); }
+  .repcon-table tr:not(.repcon-total):hover td { background:rgba(255,255,255,0.02); }
+
+  /* Agency name cell */
+  .repcon-agency-cell { display:flex;align-items:center;gap:10px; }
+  .repcon-agency-icon { width:32px;height:32px;border-radius:8px;display:flex;align-items:center;
+                        justify-content:center;font-size:15px;flex-shrink:0; }
+  .repcon-agency-name { font-weight:600;font-size:13px; }
+  .repcon-agency-count{ font-size:11px;color:var(--text3); }
+
+  /* Alert badges */
+  .repcon-alert-wrap { display:flex;gap:5px;flex-wrap:wrap; }
+  .repcon-badge { display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;
+                  padding:3px 7px;border-radius:20px;white-space:nowrap; }
+  .repcon-badge.crit  { background:rgba(248,113,113,.15);color:#F87171;border:1px solid rgba(248,113,113,.3); }
+  .repcon-badge.mod   { background:rgba(251,191,36,.12); color:#FBBF24;border:1px solid rgba(251,191,36,.3);  }
+  .repcon-badge.ok    { background:rgba(34,211,160,.12); color:#22D3A0;border:1px solid rgba(34,211,160,.3);  }
+
+  /* Task progress */
+  .repcon-task-wrap { display:flex;flex-direction:column;gap:4px; }
+  .repcon-task-bar  { height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;width:80px; }
+  .repcon-task-fill { height:100%;border-radius:2px;background:var(--accent); }
+  .repcon-task-pct  { font-size:10px;color:var(--text3); }
+
   /* ── Google Ads account dropdown (mesma estrutura do Meta) ── */
   .gads-dd-list { position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:300;
     background:var(--bg2);border:1px solid var(--border2);border-radius:10px;
@@ -2311,6 +2370,9 @@
     <div class="nav-label">Análise</div>
     <div class="nav-item" onclick="navigate('relatorios', this)">
       <i class="ti ti-file-analytics"></i> Relatórios
+    </div>
+    <div class="nav-item" onclick="navigate('consolidado', this)">
+      <i class="ti ti-chart-pie"></i> Consolidado
     </div>
     <div class="nav-item" onclick="navigate('tarefas', this)">
       <i class="ti ti-checkbox"></i> Tarefas
@@ -2885,6 +2947,16 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ===== CONSOLIDADO (Super Admin) ===== -->
+    <div class="page" id="page-consolidado">
+      <div id="repcon-root" style="padding:2px 0">
+        <div style="display:flex;align-items:center;justify-content:center;padding:80px 0;color:var(--text3);gap:10px">
+          <i class="ti ti-loader-2" style="font-size:20px;animation:spin 1s linear infinite"></i>
+          Carregando dados consolidados...
+        </div>
       </div>
     </div>
 
@@ -3841,6 +3913,7 @@ const pageConfig = {
   calendar:       { title: 'Calendário Editorial', sub: 'Planeamento de Conteúdo' },
   leads:          { title: 'Leads / WhatsApp',     sub: 'Pipeline de conversas e qualificação' },
   relatorios:     { title: 'Relatórios',           sub: 'Geração de relatórios por cliente' },
+  consolidado:    { title: 'Consolidado',          sub: 'Visão Super Admin — desempenho por agência parceira' },
   tarefas:        { title: 'Tarefas',              sub: 'Pendências e recomendações automáticas' },
   alertas:        { title: 'Alertas',              sub: 'Notificações de performance' },
   integracoes:    { title: 'Integrações',          sub: 'APIs e conexões externas' },
@@ -3872,6 +3945,7 @@ function navigate(page, el) {
   document.getElementById('topbar-sub').textContent = cfg.sub || '';
   if (page === 'dashboard')     renderDashboard();
   if (page === 'relatorios')    populateReportSelects();
+  if (page === 'consolidado')   renderConsolidatedReport();
   if (page === 'integracoes')   loadEvoFields();
   if (page === 'alertas')       renderBalanceMonitor();
   if (page === 'contas')        renderContasPage();
@@ -5574,6 +5648,7 @@ const ALL_PAGES = [
   { key:'leads',         label:'Leads / WhatsApp',       icon:'ti-brand-whatsapp'    },
   { key:'crm',           label:'CRM Comercial',          icon:'ti-layout-kanban'     },
   { key:'relatorios',    label:'Relatórios',             icon:'ti-file-analytics'    },
+  { key:'consolidado',  label:'Consolidado',            icon:'ti-chart-pie'          },
   { key:'tarefas',       label:'Tarefas',                icon:'ti-checkbox'          },
   { key:'alertas',       label:'Alertas',               icon:'ti-bell'              },
   { key:'integracoes',   label:'Integrações',            icon:'ti-plug'              },
@@ -10610,6 +10685,281 @@ function onGA4PropertyInput(val) {
 function onGadsCustomerIdInput(val) {
   const badge = document.getElementById('gads-form-badge');
   if (badge) badge.style.display = val.replace(/[^0-9]/g,'').length >= 8 ? '' : 'none';
+}
+
+/* ══════════════════════════════════════════════════════════
+   RELATÓRIOS CONSOLIDADOS — Super Admin
+   ══════════════════════════════════════════════════════════ */
+
+const _AGENCY_ORDER = ['elo_marketing','bagano','brava_reels','ampla_mkt','clipy'];
+const _AGENCY_META  = {
+  elo_marketing: { label:'Elo MKT',    icon:'🎯', color:'#6C63FF', bg:'rgba(108,99,255,0.15)'  },
+  bagano:        { label:'Bagano',     icon:'🎒', color:'#F59E0B', bg:'rgba(245,158,11,0.12)'  },
+  brava_reels:   { label:'Brava Reels',icon:'🎬', color:'#EC4899', bg:'rgba(236,72,153,0.12)'  },
+  ampla_mkt:     { label:'Ampla MKT', icon:'📢', color:'#22D3A0', bg:'rgba(34,211,160,0.12)'  },
+  clipy:         { label:'Clipy',      icon:'🎞️', color:'#06B6D4', bg:'rgba(6,182,212,0.12)'   },
+};
+
+/* Avalia nível de alerta de um cliente usando apenas dados armazenados */
+function _evalClientAlertLevel(c) {
+  const mp     = CLIENT_NAME_PAY_OVERRIDES[c.name] || c.metodo_pagamento || '';
+  const isPre  = mp === 'pre_pago';
+  const isPost = mp === 'cartao' || mp === 'pos_pago';
+  const bal    = c.meta_balance   || 0;
+  const s7d    = c.meta_spend7d   || 0;
+  const bgt    = c.budget         || 0;
+  const inv    = c.investment     || 0;
+
+  // Sem conta configurada → sem alerta
+  if (!c.meta_ad_account_id && !c.google_ads_customer_id) return 'pending';
+
+  // Pré-pago: verifica autonomia
+  if (isPre && bal > 0 && s7d > 0) {
+    const dias = Math.floor(bal / (s7d / 7));
+    if (dias <= 2) return 'critical';
+    if (dias <= 5) return 'moderate';
+  }
+  // Budget excedido
+  if (bgt > 0 && inv > bgt * 1.05) return 'critical';
+  if (bgt > 0 && inv > bgt * 0.9)  return 'moderate';
+  // Google Ads: usa evalGadsStatus com dados em cache
+  const gadsData   = _gadsCache[c.id]?.data || null;
+  const gadsAlert  = evalGadsStatus(gadsData, c);
+  if (gadsAlert.level === 'critical') return 'critical';
+  if (gadsAlert.level === 'moderate') return 'moderate';
+  return 'ok';
+}
+
+/* Agrega tarefas por agência usando TASKS_DATA + CLIENTS.list */
+function _aggregateTasksByAgency() {
+  const tasksByAgency = {};
+  _AGENCY_ORDER.forEach(a => { tasksByAgency[a] = { total:0, done:0 }; });
+
+  TASKS_DATA.forEach(t => {
+    if (!t.client) return;
+    const client = CLIENTS.list.find(c => c.id === t.client);
+    if (!client) return;
+    const ag = client.categoria || 'elo_marketing';
+    if (!tasksByAgency[ag]) tasksByAgency[ag] = { total:0, done:0 };
+    tasksByAgency[ag].total++;
+    if (t.status === 'Pronto') tasksByAgency[ag].done++;
+  });
+  return tasksByAgency;
+}
+
+/* Agrega alertas por agência usando CLIENTS.list */
+function _aggregateAlertsByAgency() {
+  const alertsByAgency = {};
+  _AGENCY_ORDER.forEach(a => { alertsByAgency[a] = { critical:0, moderate:0, ok:0 }; });
+
+  CLIENTS.list.forEach(c => {
+    const ag  = c.categoria || 'elo_marketing';
+    if (!alertsByAgency[ag]) alertsByAgency[ag] = { critical:0, moderate:0, ok:0 };
+    const lvl = _evalClientAlertLevel(c);
+    if (lvl === 'critical')  alertsByAgency[ag].critical++;
+    else if (lvl === 'moderate') alertsByAgency[ag].moderate++;
+    else if (lvl === 'ok')   alertsByAgency[ag].ok++;
+  });
+  return alertsByAgency;
+}
+
+let _repconLastSync = null;
+
+async function renderConsolidatedReport(force = false) {
+  const root = document.getElementById('repcon-root');
+  if (!root) return;
+
+  // Mostra loading
+  root.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;padding:80px 0;color:var(--text3);gap:10px">
+      <i class="ti ti-loader-2" style="font-size:20px;animation:spin 1s linear infinite"></i>
+      Carregando dados consolidados...
+    </div>`;
+
+  // Agrega localmente (alertas + tarefas)
+  const tasksByAgency   = _aggregateTasksByAgency();
+  const alertsByAgency  = _aggregateAlertsByAgency();
+
+  // Monta dados por agência a partir de CLIENTS.list (fallback robusto)
+  const localByAgency = {};
+  _AGENCY_ORDER.forEach(a => { localByAgency[a] = { count:0, totalBudget:0, totalInvestment:0 }; });
+  CLIENTS.list.forEach(c => {
+    const ag = c.categoria || 'elo_marketing';
+    if (!localByAgency[ag]) localByAgency[ag] = { count:0, totalBudget:0, totalInvestment:0 };
+    localByAgency[ag].count++;
+    localByAgency[ag].totalBudget     += c.budget     || 0;
+    localByAgency[ag].totalInvestment += c.investment || 0;
+  });
+
+  // Tenta enriquecer com dados do backend (MongoDB aggregation)
+  let serverByAgency = null;
+  try {
+    const srv = await _renderFetch('/api/reports/consolidated');
+    if (srv?.ok && srv.byAgency) {
+      serverByAgency = {};
+      srv.byAgency.forEach(r => { serverByAgency[r.agency] = r; });
+    }
+  } catch(e) {
+    console.warn('[Consolidado] backend indisponível — usando dados locais');
+  }
+
+  // ── Monta linhas por agência ─────────────────────────────────────────────
+  const agencyRows = _AGENCY_ORDER.map(ag => {
+    const meta   = _AGENCY_META[ag] || { label:ag, icon:'🏢', color:'var(--text3)', bg:'var(--bg3)' };
+    const local  = localByAgency[ag]  || { count:0, totalBudget:0, totalInvestment:0 };
+    const srv    = serverByAgency?.[ag] || local;
+    const alerts = alertsByAgency[ag]  || { critical:0, moderate:0, ok:0 };
+    const tasks  = tasksByAgency[ag]   || { total:0, done:0 };
+    return {
+      ag, meta,
+      count:           srv.count           ?? local.count,
+      totalBudget:     srv.totalBudget     ?? local.totalBudget,
+      totalInvestment: srv.totalInvestment ?? local.totalInvestment,
+      alerts, tasks,
+    };
+  }).filter(r => r.count > 0); // oculta agências sem clientes
+
+  // ── Totais globais ───────────────────────────────────────────────────────
+  const totals = agencyRows.reduce(
+    (acc, r) => ({
+      count:           acc.count           + r.count,
+      totalBudget:     acc.totalBudget     + r.totalBudget,
+      totalInvestment: acc.totalInvestment + r.totalInvestment,
+      critical:        acc.critical        + r.alerts.critical,
+      moderate:        acc.moderate        + r.alerts.moderate,
+      taskTotal:       acc.taskTotal       + r.tasks.total,
+      taskDone:        acc.taskDone        + r.tasks.done,
+    }),
+    { count:0, totalBudget:0, totalInvestment:0, critical:0, moderate:0, taskTotal:0, taskDone:0 }
+  );
+
+  _repconLastSync = new Date();
+
+  // ── Helpers de formatação ────────────────────────────────────────────────
+  const fmtR = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtK = v => v >= 1000 ? 'R$ ' + (v/1000).toFixed(1).replace('.',',') + ' k' : fmtR(v);
+
+  function alertBadges(a, showOk = false) {
+    let html = '';
+    if (a.critical > 0)  html += `<span class="repcon-badge crit"><i class="ti ti-alert-octagon" style="font-size:9px"></i>${a.critical} Crítico${a.critical>1?'s':''}</span>`;
+    if (a.moderate > 0)  html += `<span class="repcon-badge mod"><i class="ti ti-alert-triangle" style="font-size:9px"></i>${a.moderate} Mod.</span>`;
+    if (!html && showOk) html  = `<span class="repcon-badge ok"><i class="ti ti-circle-check" style="font-size:9px"></i>OK</span>`;
+    if (!html)           html  = `<span style="color:var(--text3);font-size:11px">—</span>`;
+    return `<div class="repcon-alert-wrap">${html}</div>`;
+  }
+
+  function taskCell(t) {
+    const pct  = t.total > 0 ? Math.round((t.done/t.total)*100) : null;
+    const fill = pct !== null ? `background:${pct>=80?'var(--green)':pct>=50?'var(--amber)':'#F87171'}` : '';
+    if (t.total === 0) return `<span style="color:var(--text3);font-size:11px">—</span>`;
+    return `<div class="repcon-task-wrap">
+      <span style="font-size:12px;font-weight:600">${t.done}/${t.total}</span>
+      <div class="repcon-task-bar"><div class="repcon-task-fill" style="width:${pct||0}%;${fill}"></div></div>
+      <span class="repcon-task-pct">${pct !== null ? pct+'% concluído' : '—'}</span>
+    </div>`;
+  }
+
+  // ── Linhas da tabela ─────────────────────────────────────────────────────
+  const rowsHtml = agencyRows.map(r => `
+    <tr>
+      <td>
+        <div class="repcon-agency-cell">
+          <div class="repcon-agency-icon" style="background:${r.meta.bg};color:${r.meta.color}">${r.meta.icon}</div>
+          <div>
+            <div class="repcon-agency-name">${r.meta.label}</div>
+          </div>
+        </div>
+      </td>
+      <td class="r" style="font-weight:600">${r.count}</td>
+      <td class="r">
+        <div style="font-weight:600">${fmtK(r.totalBudget)}</div>
+        <div style="font-size:10px;color:var(--text3)">${fmtK(r.totalInvestment)} gasto</div>
+      </td>
+      <td>${alertBadges(r.alerts, true)}</td>
+      <td>${taskCell(r.tasks)}</td>
+    </tr>`).join('');
+
+  // ── Linha de totais ──────────────────────────────────────────────────────
+  const totalTaskPct = totals.taskTotal > 0 ? Math.round((totals.taskDone/totals.taskTotal)*100) : null;
+  const totalRowHtml = `
+    <tr class="repcon-total">
+      <td><div class="repcon-agency-cell"><div style="font-size:13px;color:var(--text3);padding-left:2px">TOTAL GERAL</div></div></td>
+      <td class="r">${totals.count}</td>
+      <td class="r">
+        <div>${fmtK(totals.totalBudget)}</div>
+        <div style="font-size:10px;color:var(--text3)">${fmtK(totals.totalInvestment)} gasto</div>
+      </td>
+      <td>${alertBadges({critical:totals.critical,moderate:totals.moderate})}</td>
+      <td><div class="repcon-task-wrap">
+        ${totals.taskTotal > 0 ? `<span style="font-size:12px;font-weight:600">${totals.taskDone}/${totals.taskTotal}</span>` : '<span style="color:var(--text3);font-size:11px">—</span>'}
+        ${totalTaskPct !== null ? `<div class="repcon-task-bar"><div class="repcon-task-fill" style="width:${totalTaskPct}%"></div></div><span class="repcon-task-pct">${totalTaskPct}% eficiência</span>` : ''}
+      </div></td>
+    </tr>`;
+
+  // ── Renderiza ────────────────────────────────────────────────────────────
+  root.innerHTML = `
+    <!-- Toolbar -->
+    <div class="repcon-toolbar">
+      <div class="repcon-sync-info">
+        <i class="ti ti-refresh" style="font-size:12px"></i>
+        Atualizado às ${_repconLastSync.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+        ${serverByAgency ? '<span style="color:var(--green);margin-left:4px">· MongoDB</span>' : '<span style="color:var(--amber);margin-left:4px">· Dados locais</span>'}
+      </div>
+      <button class="btn btn-sm" onclick="renderConsolidatedReport(true)" style="font-size:12px;padding:5px 12px">
+        <i class="ti ti-refresh"></i> Atualizar
+      </button>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="repcon-kpis">
+      <div class="repcon-kpi" style="--repcon-color:#6C63FF;--repcon-bg:rgba(108,99,255,0.12)">
+        <div class="repcon-kpi-icon"><i class="ti ti-currency-real"></i></div>
+        <div class="repcon-kpi-val">${fmtK(totals.totalBudget)}</div>
+        <div class="repcon-kpi-label">Total de Verba Gerenciada</div>
+        <div class="repcon-kpi-sub">${fmtK(totals.totalInvestment)} investido no mês</div>
+      </div>
+      <div class="repcon-kpi" style="--repcon-color:${totals.critical>0?'#F87171':'#22D3A0'};--repcon-bg:${totals.critical>0?'rgba(248,113,113,0.12)':'rgba(34,211,160,0.12)'}">
+        <div class="repcon-kpi-icon"><i class="ti ti-alert-octagon"></i></div>
+        <div class="repcon-kpi-val" style="color:${totals.critical>0?'#F87171':'#22D3A0'}">${totals.critical}</div>
+        <div class="repcon-kpi-label">Alertas Críticos Ativos</div>
+        <div class="repcon-kpi-sub">${totals.moderate} moderado${totals.moderate!==1?'s':''} · ${totals.count - totals.critical - totals.moderate} OK</div>
+      </div>
+      <div class="repcon-kpi" style="--repcon-color:#38BDF8;--repcon-bg:rgba(56,189,248,0.12)">
+        <div class="repcon-kpi-icon"><i class="ti ti-users"></i></div>
+        <div class="repcon-kpi-val">${totals.count}</div>
+        <div class="repcon-kpi-label">Total de Clientes Atendidos</div>
+        <div class="repcon-kpi-sub">${agencyRows.length} agência${agencyRows.length!==1?'s':''} ativa${agencyRows.length!==1?'s':''}</div>
+      </div>
+    </div>
+
+    <!-- Agency Table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="ti ti-chart-pie" style="color:var(--accent)"></i> Desempenho por Agência Parceira</div>
+      </div>
+      <div class="repcon-table-wrap">
+        <table class="repcon-table">
+          <thead>
+            <tr>
+              <th>Agência</th>
+              <th class="r">Clientes</th>
+              <th class="r">Verba / Gasto</th>
+              <th>Alertas</th>
+              <th>Tarefas</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+            ${totalRowHtml}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:10px;color:var(--text3);padding:10px 14px;border-top:1px solid var(--border)">
+        <i class="ti ti-info-circle" style="font-size:10px"></i>
+        Alertas calculados com dados em cache · Tarefas vinculadas ao cadastro do cliente
+        ${!serverByAgency ? ' · <span style="color:var(--amber)">Backend indisponível — verbas calculadas localmente</span>' : ''}
+      </div>
+    </div>`;
 }
 
 /* ========== GOOGLE ADS — ACCOUNT DROPDOWN ========== */
