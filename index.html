@@ -5474,6 +5474,20 @@ const _isLocalEnv = ['localhost', '127.0.0.1', ''].includes(window.location.host
 
 // Override de backend: localStorage['elo_backend_url'] tem prioridade sobre tudo.
 // Permite apontar para localhost:5001 mesmo acessando via GitHub Pages quando o Render está fora.
+// Ativação por URL param: ?localbackend=1  →  salva override e redireciona sem o param.
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('localbackend') === '1') {
+    localStorage.setItem('elo_backend_url', 'http://localhost:5001');
+    // Remove o param da URL sem recarregar (histórico limpo)
+    const clean = window.location.pathname + window.location.hash;
+    window.history.replaceState(null, '', clean);
+  } else if (p.get('localbackend') === '0') {
+    localStorage.removeItem('elo_backend_url');
+    const clean = window.location.pathname + window.location.hash;
+    window.history.replaceState(null, '', clean);
+  }
+})();
 const _backendOverride = localStorage.getItem('elo_backend_url') || '';
 
 const PROD_CONFIG = {
