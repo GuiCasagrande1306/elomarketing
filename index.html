@@ -392,6 +392,7 @@
 
   .badge-green { background: rgba(34,211,160,0.15); color: var(--green); }
   .badge-red { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: #F59E0B; }
   .badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); }
   .badge-blue { background: rgba(96,165,250,0.15); color: var(--blue); }
   .badge-purple { background: rgba(108,99,255,0.15); color: var(--accent2); }
@@ -2567,6 +2568,57 @@
           <div class="metric-sub" id="dash-metric-budget-sub">do total orçado</div>
         </div>
       </div>
+
+      <!-- ── Cards de Ação do Dia ─────────────────────────────────────────── -->
+      <div class="grid-3" style="margin-bottom:16px" id="dash-action-row">
+
+        <!-- Tarefas de Hoje -->
+        <div class="card" style="border-color:rgba(108,99,255,0.3);background:rgba(108,99,255,0.03)">
+          <div class="card-header" style="margin-bottom:12px">
+            <div class="card-title" style="font-size:13px"><i class="ti ti-clipboard-list" style="color:var(--accent)"></i> Tarefas de Hoje</div>
+            <span id="dash-tasks-badge" class="badge badge-gray" style="font-size:10px">0</span>
+          </div>
+          <div id="dash-tasks-list" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
+            <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px"
+            onclick="navigate('tarefas', document.querySelector('.nav-item[onclick*=\"tarefas\"]'))">
+            Ver todas as tarefas <i class="ti ti-arrow-right" style="font-size:10px"></i>
+          </button>
+        </div>
+
+        <!-- Otimizar Hoje -->
+        <div class="card" style="border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.03)">
+          <div class="card-header" style="margin-bottom:12px">
+            <div class="card-title" style="font-size:13px"><i class="ti ti-settings-automation" style="color:#F59E0B"></i> Otimizar Hoje</div>
+            <span id="dash-otim-badge" class="badge badge-gray" style="font-size:10px">0</span>
+          </div>
+          <div id="dash-otim-list" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
+            <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(245,158,11,0.3);color:#F59E0B"
+            onclick="navigate('esteira', document.querySelector('.nav-item[onclick*=\"esteira\"]'))">
+            Ver Esteira <i class="ti ti-arrow-right" style="font-size:10px"></i>
+          </button>
+        </div>
+
+        <!-- Spend Acima do Ritmo -->
+        <div class="card" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.03)">
+          <div class="card-header" style="margin-bottom:12px">
+            <div class="card-title" style="font-size:13px"><i class="ti ti-trending-up" style="color:var(--red)"></i> Acima do Spend</div>
+            <span id="dash-spend-badge" class="badge badge-gray" style="font-size:10px">0</span>
+          </div>
+          <div id="dash-spend-list" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
+            <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(239,68,68,0.3);color:var(--red)"
+            onclick="navigate('clientes', document.querySelector('.nav-item[onclick*=\"clientes\"]'))">
+            Ver Clientes <i class="ti ti-arrow-right" style="font-size:10px"></i>
+          </button>
+        </div>
+
+      </div>
+      <!-- ── fim Cards de Ação ─────────────────────────────────────────────── -->
 
       <div class="grid-21" style="margin-bottom:16px">
         <div class="card">
@@ -8357,6 +8409,132 @@ function renderPacingAlerts(filtro) {
 /* ========== DASHBOARD DINÂMICO ========== */
 // Fonte única de verdade: CLIENTS.list (localStorage → hardcoded → supabase)
 // Chamado em: DOMContentLoaded, navigate('dashboard'), toda vez que CLIENTS muda.
+// ── Cards de Ação do Dia ──────────────────────────────────────────────────────
+function renderDashboardActionCards(clients) {
+  const uid     = _collabUid();
+  const today   = new Date();
+  const todayStr = today.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+  // ── 1. Tarefas de Hoje / Atrasadas ────────────────────────────────────────
+  const myTasks = TASKS_DATA.filter(t => {
+    if (t.status === 'Pronto') return false;
+    // colaborador vê só as suas; admin vê todas
+    const isAdmin = currentUser?.isAdmin;
+    if (!isAdmin && t.assignedTo !== uid) return false;
+    const due = t.dueDate || t.deadline || '';
+    return due && due.slice(0, 10) <= todayStr;
+  }).sort((a, b) => {
+    const prioOrd = { 'Crítica': 0, 'Alta': 1, 'Média': 2, 'Baixa': 3 };
+    return (prioOrd[a.priority] ?? 4) - (prioOrd[b.priority] ?? 4);
+  });
+
+  const taskBadge = document.getElementById('dash-tasks-badge');
+  const taskList  = document.getElementById('dash-tasks-list');
+  if (taskBadge) {
+    taskBadge.textContent = myTasks.length || '0';
+    taskBadge.className   = myTasks.length > 0 ? 'badge badge-purple' : 'badge badge-gray';
+  }
+  if (taskList) {
+    if (!myTasks.length) {
+      taskList.innerHTML = `<div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">✅ Nenhuma tarefa pendente hoje</div>`;
+    } else {
+      const PRIO_COLOR = { 'Crítica':'#EF4444','Alta':'#F59E0B','Média':'var(--accent2)','Baixa':'var(--text3)' };
+      taskList.innerHTML = myTasks.slice(0, 4).map(t => {
+        const dueDate   = (t.dueDate || t.deadline || '').slice(0,10);
+        const isOverdue = dueDate < todayStr;
+        const assignee  = USERS.find(u => u.id === t.assignedTo);
+        return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${PRIO_COLOR[t.priority]||'var(--text3)'};flex-shrink:0"></span>
+          <span style="font-size:11px;color:var(--text1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.title}</span>
+          ${isOverdue ? `<span style="font-size:9px;color:#EF4444;font-weight:700;white-space:nowrap">ATRASADA</span>` : `<span style="font-size:9px;color:#F59E0B;white-space:nowrap">HOJE</span>`}
+          ${assignee ? `<span style="font-size:9px;color:var(--text3);white-space:nowrap">${assignee.initials}</span>` : ''}
+        </div>`;
+      }).join('');
+      if (myTasks.length > 4) {
+        taskList.innerHTML += `<div style="font-size:10px;color:var(--text3);text-align:center;padding:2px">+${myTasks.length - 4} mais</div>`;
+      }
+    }
+  }
+
+  // ── 2. Clientes para Otimizar Hoje ────────────────────────────────────────
+  const otimClients = clients.filter(c => {
+    const s = getOtimStatus(c);
+    return s.cls === 'warning' || s.cls === 'overdue' || s.cls === 'never';
+  }).sort((a, b) => {
+    const ord = { never: 0, overdue: 1, warning: 2 };
+    return (ord[getOtimStatus(a).cls] ?? 3) - (ord[getOtimStatus(b).cls] ?? 3);
+  });
+
+  const otimBadge = document.getElementById('dash-otim-badge');
+  const otimList  = document.getElementById('dash-otim-list');
+  if (otimBadge) {
+    otimBadge.textContent = otimClients.length || '0';
+    otimBadge.className   = otimClients.length > 0 ? 'badge badge-yellow' : 'badge badge-green';
+    if (otimClients.length === 0) otimBadge.textContent = '✅ 0';
+  }
+  if (otimList) {
+    if (!otimClients.length) {
+      otimList.innerHTML = `<div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">✅ Todos os clientes otimizados</div>`;
+    } else {
+      otimList.innerHTML = otimClients.slice(0, 4).map(c => {
+        const s = getOtimStatus(c);
+        const color  = s.cls === 'never' || s.cls === 'overdue' ? '#EF4444' : '#F59E0B';
+        const label  = s.cls === 'never' ? 'Nunca' : s.cls === 'overdue' ? `${s.days}d atraso` : 'Hoje';
+        return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
+          <div style="width:28px;height:28px;border-radius:7px;background:${c.color||'var(--accent)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${c.avatar||c.name.slice(0,2).toUpperCase()}</div>
+          <span style="font-size:11px;color:var(--text1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
+          <span style="font-size:9px;font-weight:700;color:${color};white-space:nowrap">${label}</span>
+        </div>`;
+      }).join('');
+      if (otimClients.length > 4) {
+        otimList.innerHTML += `<div style="font-size:10px;color:var(--text3);text-align:center;padding:2px">+${otimClients.length - 4} mais</div>`;
+      }
+    }
+  }
+
+  // ── 3. Clientes Acima do Spend (>15% acima do pacing) ─────────────────────
+  const daysInMonth  = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const timePct      = today.getDate() / daysInMonth;
+
+  const overspend = clients.filter(c => {
+    if (!c.budget || c.budget <= 0) return false;
+    const investPct = (c.investment || 0) / c.budget;
+    return (investPct - timePct) > 0.15;
+  }).map(c => {
+    const investPct = (c.investment || 0) / c.budget;
+    const devPct    = Math.round((investPct - timePct) * 100);
+    return { ...c, _devPct: devPct };
+  }).sort((a, b) => b._devPct - a._devPct);
+
+  const spendBadge = document.getElementById('dash-spend-badge');
+  const spendList  = document.getElementById('dash-spend-list');
+  if (spendBadge) {
+    spendBadge.textContent = overspend.length || '0';
+    spendBadge.className   = overspend.length > 0 ? 'badge badge-red' : 'badge badge-green';
+    if (overspend.length === 0) spendBadge.textContent = '✅ 0';
+  }
+  if (spendList) {
+    if (!overspend.length) {
+      spendList.innerHTML = `<div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">✅ Todos no ritmo de spend</div>`;
+    } else {
+      spendList.innerHTML = overspend.slice(0, 4).map(c => {
+        const investPct = Math.round((c.investment || 0) / c.budget * 100);
+        return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
+          <div style="width:28px;height:28px;border-radius:7px;background:${c.color||'var(--accent)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${c.avatar||c.name.slice(0,2).toUpperCase()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
+            <div style="font-size:9px;color:var(--text3)">${fmtBRL(c.investment)} / ${fmtBRL(c.budget)}</div>
+          </div>
+          <span style="font-size:9px;font-weight:700;color:#EF4444;white-space:nowrap">+${c._devPct}%</span>
+        </div>`;
+      }).join('');
+      if (overspend.length > 4) {
+        spendList.innerHTML += `<div style="font-size:10px;color:var(--text3);text-align:center;padding:2px">+${overspend.length - 4} mais</div>`;
+      }
+    }
+  }
+}
+
 function renderDashboard() {
   const clients = _filterClientsByCollab(CLIENTS.list, _collabUid());
 
@@ -8596,6 +8774,9 @@ function renderDashboard() {
         ${s.text}
       </div>`).join('');
   }
+
+  // ── Cards de Ação do Dia ─────────────────────────────────────────────────
+  renderDashboardActionCards(clients);
 
   // ── Torre de Controle — Super Admin only (CEO) ───────────────────────────
   if (currentUser?.isSuperAdmin) renderTorreControle();
