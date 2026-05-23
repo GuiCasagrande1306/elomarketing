@@ -1942,6 +1942,66 @@
   .meta-dd-id   { font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0; }
   .meta-dd-empty { padding:12px;font-size:12px;color:var(--text3);text-align:center; }
   /* ══════════════════════════════════════════════════════════
+     TORRE DE CONTROLE — Dashboard Admin
+  ══════════════════════════════════════════════════════════ */
+  #dash-torre-controle { margin-top: 16px; }
+
+  .torre-grid { display:grid; grid-template-columns:1fr 260px; gap:14px; }
+  @media(max-width:860px){ .torre-grid{ grid-template-columns:1fr; } }
+
+  /* ── Gráfico por colaborador ── */
+  .torre-chart-card { background:var(--bg2);border:1px solid var(--border);
+                      border-radius:var(--radius);padding:16px 18px; }
+  .torre-chart-title { font-size:10px;text-transform:uppercase;letter-spacing:.6px;
+                       font-weight:700;color:var(--text3);margin-bottom:14px;
+                       display:flex;align-items:center;gap:6px; }
+
+  .torre-collab { display:flex;flex-direction:column;gap:10px;margin-bottom:16px; }
+  .torre-collab:last-child { margin-bottom:0; }
+  .torre-collab-header { display:flex;align-items:center;gap:9px;margin-bottom:7px; }
+  .torre-collab-avatar { width:28px;height:28px;border-radius:7px;font-size:10px;
+                         font-weight:700;display:flex;align-items:center;justify-content:center;
+                         background:var(--bg4);color:var(--text);flex-shrink:0; }
+  .torre-collab-name   { font-size:13px;font-weight:600;color:var(--text); }
+  .torre-collab-chip   { font-size:10px;color:var(--text3);background:var(--bg3);
+                         border-radius:20px;padding:1px 7px;margin-left:auto; }
+
+  .torre-bar-row   { display:flex;align-items:center;gap:8px;margin-bottom:5px; }
+  .torre-bar-label { font-size:10px;color:var(--text3);width:130px;flex-shrink:0;
+                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .torre-bar-track { flex:1;height:8px;border-radius:4px;background:var(--bg3);
+                     overflow:hidden;position:relative; }
+  .torre-bar-fill  { height:100%;border-radius:4px;transition:width 0.5s ease;
+                     min-width:2px; }
+  .torre-bar-val   { font-size:11px;font-weight:700;color:var(--text);
+                     width:24px;text-align:right;flex-shrink:0; }
+  .torre-bar-fill.tasks  { background:linear-gradient(90deg,#6C63FF,#A78BFA); }
+  .torre-bar-fill.otim   { background:linear-gradient(90deg,#F59E0B,#FBBF24); }
+  .torre-bar-fill.otim.red{ background:linear-gradient(90deg,#F87171,#EF4444); }
+
+  /* ── Separador ── */
+  .torre-collab-sep { border:none;border-top:1px solid rgba(255,255,255,0.05);margin:10px 0; }
+
+  /* ── Legenda ── */
+  .torre-legend { display:flex;gap:14px;margin-top:14px; }
+  .torre-legend-item { display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3); }
+  .torre-legend-dot  { width:8px;height:8px;border-radius:2px;flex-shrink:0; }
+
+  /* ── Cards de saúde ── */
+  .torre-health { display:flex;flex-direction:column;gap:10px; }
+  .torre-health-card { background:var(--bg2);border:1px solid var(--border);
+                       border-radius:var(--radius);padding:14px 16px;position:relative;
+                       overflow:hidden; }
+  .torre-health-card::before { content:'';position:absolute;top:0;left:0;bottom:0;
+                                width:3px;background:var(--torre-hc-color,var(--accent)); }
+  .torre-health-count { font-size:32px;font-weight:800;line-height:1;
+                        color:var(--torre-hc-color,var(--text)); }
+  .torre-health-label { font-size:11px;font-weight:600;color:var(--text);margin-top:4px; }
+  .torre-health-sub   { font-size:10px;color:var(--text3);margin-top:2px; }
+  .torre-health-icon  { position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                        font-size:22px;opacity:.25; }
+
+  /* ══════════════════════════════════════════════════════════
      RELATÓRIOS CONSOLIDADOS — Super Admin
   ══════════════════════════════════════════════════════════ */
   .repcon-kpis { display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px; }
@@ -2645,6 +2705,31 @@
           </div>
           <div id="dash-ia-summary"></div>
           <div id="dash-ia-suggestions" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+      <!-- ===== TORRE DE CONTROLE — Admin Only ===== -->
+      <div id="dash-torre-controle" style="display:none">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-header" style="padding:13px 16px;border-bottom:1px solid var(--border)">
+            <div class="card-title" style="font-size:13px">
+              <i class="ti ti-tower" style="color:var(--accent2)"></i>
+              Torre de Controle
+              <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">Visão Admin</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="torre-sync-label" style="font-size:10px;color:var(--text3)">—</span>
+              <button class="btn btn-ghost btn-sm" onclick="renderTorreControle(true)"
+                title="Atualizar Torre de Controle" style="padding:3px 7px">
+                <i class="ti ti-refresh" id="torre-refresh-icon" style="font-size:12px"></i>
+              </button>
+            </div>
+          </div>
+          <div id="torre-body" style="padding:16px">
+            <div style="text-align:center;padding:32px 0;color:var(--text3);font-size:12px">
+              <i class="ti ti-loader-2" style="animation:spin 1s linear infinite;font-size:16px;display:block;margin-bottom:8px"></i>
+              Carregando dados operacionais...
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -5809,6 +5894,8 @@ function loginUser(user) {
   initSupabaseSync();
   // Aplica permissões de página na sidebar imediatamente após o login
   applySidebarPermissions();
+  // Mostra/oculta painel Torre de Controle conforme role do usuário
+  _applyTorreVisibility();
 }
 
 function updateSidebarUser(user) {
@@ -8400,6 +8487,9 @@ function renderDashboard() {
         ${s.text}
       </div>`).join('');
   }
+
+  // ── Torre de Controle — Admin only ────────────────────────────────────────
+  if (currentUser?.isAdmin) renderTorreControle();
 }
 
 /* ========== RELATÓRIOS — WHATSAPP ========== */
@@ -10685,6 +10775,213 @@ function onGA4PropertyInput(val) {
 function onGadsCustomerIdInput(val) {
   const badge = document.getElementById('gads-form-badge');
   if (badge) badge.style.display = val.replace(/[^0-9]/g,'').length >= 8 ? '' : 'none';
+}
+
+/* ══════════════════════════════════════════════════════════
+   TORRE DE CONTROLE — Dashboard Admin
+   ══════════════════════════════════════════════════════════ */
+
+/** Mostra/esconde o bloco Torre de Controle com base no role do usuário */
+function _applyTorreVisibility() {
+  const el = document.getElementById('dash-torre-controle');
+  if (!el) return;
+  el.style.display = currentUser?.isAdmin ? '' : 'none';
+}
+
+/** Computa tarefas abertas e tarefas concluídas por colaborador */
+function _computeTasksByUser() {
+  const map = {};
+  TASKS_DATA.forEach(t => {
+    const uid = t.assignedTo || t.owner || '';
+    if (!uid) return;
+    if (!map[uid]) map[uid] = { open: 0, done: 0 };
+    if (t.status === 'Pronto') map[uid].done++;
+    else map[uid].open++;
+  });
+  return map;
+}
+
+/** Computa otimizações atrasadas por colaborador usando CLIENTS.list (fallback local) */
+function _computeOtimByOwner() {
+  const map = {};
+  CLIENTS.list.forEach(c => {
+    const owner = c.owner || '';
+    if (!owner) return;
+    if (!map[owner]) map[owner] = { overdue: 0, total: 0 };
+    map[owner].total++;
+    if (getOtimStatus(c).cls === 'overdue' || getOtimStatus(c).cls === 'never') {
+      map[owner].overdue++;
+    }
+  });
+  return map;
+}
+
+/** Computa pacing de spend local — reutiliza calcPacing() */
+function _computeSpendSummary() {
+  let onTrack = 0, underspend = 0, overspend = 0;
+  CLIENTS.list.forEach(c => {
+    if (!c.budget) return;
+    const p = calcPacing(c);
+    if (p.investDev === null || p.investPct === null) return;
+    const dev = p.investDev; // investPct - timePct
+    if (dev > 0.15)        overspend++;
+    else if (dev < -0.20)  underspend++;
+    else                   onTrack++;
+  });
+  return { onTrack, underspend, overspend };
+}
+
+let _torreLastRender = null;
+
+async function renderTorreControle(force = false) {
+  if (!currentUser?.isAdmin) return;
+
+  const body  = document.getElementById('torre-body');
+  const label = document.getElementById('torre-sync-label');
+  const icon  = document.getElementById('torre-refresh-icon');
+  if (!body) return;
+
+  if (icon) icon.style.animation = 'spin 1s linear infinite';
+
+  // ── Dados locais (sempre disponíveis) ───────────────────────────────────
+  const tasksByUser = _computeTasksByUser();
+  const otimByOwner = _computeOtimByOwner();
+  const localSpend  = _computeSpendSummary();
+
+  // ── Tenta enriquecer com dados do backend (MongoDB) ──────────────────────
+  let serverData = null;
+  try {
+    const srv = await _renderFetch('/api/dashboard/admin-overview');
+    if (srv?.ok) serverData = srv;
+  } catch(e) {
+    console.warn('[TorreControle] backend indisponível — usando dados locais');
+  }
+
+  const spend = serverData
+    ? { onTrack: serverData.spendSummary.onTrack, underspend: serverData.spendSummary.underspend, overspend: serverData.spendSummary.overspend }
+    : localSpend;
+
+  // ── Monta dados por colaborador ─────────────────────────────────────────
+  // Usa USERS como fonte de verdade da lista de colaboradores
+  const collabList = USERS.map(u => {
+    const tasks   = tasksByUser[u.id] || { open: 0, done: 0 };
+    const otim    = otimByOwner[u.id] || { overdue: 0, total: 0 };
+    // Enriquece com dados de backend se disponível
+    const srvOwner = serverData?.byOwner?.find(o => o.owner === u.id);
+    return {
+      id:           u.id,
+      name:         u.name,
+      initials:     u.initials,
+      color:        u.color,
+      clientCount:  srvOwner?.clientCount  ?? otim.total,
+      overdueOtim:  srvOwner?.overdueOtim  ?? otim.overdue,
+      openTasks:    tasks.open,
+      doneTasks:    tasks.done,
+    };
+  }).filter(u => u.clientCount > 0 || u.openTasks > 0);
+
+  // Máximos para escalar as barras
+  const maxTasks = Math.max(1, ...collabList.map(u => u.openTasks));
+  const maxOtim  = Math.max(1, ...collabList.map(u => u.overdueOtim));
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const barPct = (val, max) => Math.round((val / max) * 100);
+
+  function collabBlock(u) {
+    const taskW = barPct(u.openTasks, maxTasks);
+    const otimW = barPct(u.overdueOtim, maxOtim);
+    const otimRed = u.overdueOtim >= 2;
+    return `
+      <div>
+        <div class="torre-collab-header">
+          <div class="torre-collab-avatar" style="background:${u.color}">${u.initials}</div>
+          <span class="torre-collab-name">${u.name}</span>
+          <span class="torre-collab-chip">${u.clientCount} cliente${u.clientCount !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="torre-bar-row">
+          <span class="torre-bar-label"><i class="ti ti-checkbox" style="font-size:9px;margin-right:3px"></i>Tarefas em aberto</span>
+          <div class="torre-bar-track">
+            <div class="torre-bar-fill tasks" style="width:${taskW}%"></div>
+          </div>
+          <span class="torre-bar-val">${u.openTasks}</span>
+        </div>
+        <div class="torre-bar-row">
+          <span class="torre-bar-label"><i class="ti ti-clock-exclamation" style="font-size:9px;margin-right:3px"></i>Otim. atrasadas</span>
+          <div class="torre-bar-track">
+            <div class="torre-bar-fill otim${otimRed ? ' red' : ''}" style="width:${otimW}%"></div>
+          </div>
+          <span class="torre-bar-val" style="color:${otimRed?'var(--red)':'var(--text)'}">${u.overdueOtim}</span>
+        </div>
+      </div>`;
+  }
+
+  const totalOpenTasks = collabList.reduce((s, u) => s + u.openTasks, 0);
+  const totalOverdue   = collabList.reduce((s, u) => s + u.overdueOtim, 0);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  body.innerHTML = `
+    <div class="torre-grid">
+
+      <!-- Gráfico por colaborador -->
+      <div class="torre-chart-card">
+        <div class="torre-chart-title">
+          <i class="ti ti-users" style="font-size:11px"></i>
+          Tarefas &amp; Otimizações — por Colaborador
+        </div>
+        <div>
+          ${collabList.map((u, i) => `
+            ${i > 0 ? '<hr class="torre-collab-sep">' : ''}
+            ${collabBlock(u)}
+          `).join('')}
+          ${collabList.length === 0 ? '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">Nenhum colaborador com clientes atribuídos</div>' : ''}
+        </div>
+        <div class="torre-legend">
+          <div class="torre-legend-item">
+            <div class="torre-legend-dot" style="background:#6C63FF"></div>
+            Tarefas em aberto (${totalOpenTasks} total)
+          </div>
+          <div class="torre-legend-item">
+            <div class="torre-legend-dot" style="background:#F59E0B"></div>
+            Otimizações atrasadas (${totalOverdue} total)
+          </div>
+        </div>
+      </div>
+
+      <!-- Cards de saúde de mídia -->
+      <div class="torre-health">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--text3);margin-bottom:2px;display:flex;align-items:center;gap:6px">
+          <i class="ti ti-activity-heartbeat" style="font-size:11px"></i>
+          Saúde de Mídia Global
+        </div>
+        <div class="torre-health-card" style="--torre-hc-color:#22D3A0">
+          <div class="torre-health-count">${spend.onTrack}</div>
+          <div class="torre-health-label">✅ No Ritmo</div>
+          <div class="torre-health-sub">clientes dentro do spend ideal</div>
+          <i class="ti ti-chart-line torre-health-icon"></i>
+        </div>
+        <div class="torre-health-card" style="--torre-hc-color:#FBBF24">
+          <div class="torre-health-count">${spend.underspend}</div>
+          <div class="torre-health-label">⚠️ Abaixo do Spend</div>
+          <div class="torre-health-sub">under-delivery — verifique campanhas</div>
+          <i class="ti ti-trending-down torre-health-icon"></i>
+        </div>
+        <div class="torre-health-card" style="--torre-hc-color:#F87171">
+          <div class="torre-health-count">${spend.overspend}</div>
+          <div class="torre-health-label">🔴 Gastando a Mais</div>
+          <div class="torre-health-sub">over-spend — revise limites de budget</div>
+          <i class="ti ti-trending-up torre-health-icon"></i>
+        </div>
+        <div style="font-size:10px;color:var(--text3);text-align:center;padding-top:2px">
+          ${serverData ? '<span style="color:var(--green)">● MongoDB</span>' : '<span style="color:var(--amber)">● Dados locais</span>'}
+          · pacing atual do mês
+        </div>
+      </div>
+
+    </div>`;
+
+  _torreLastRender = new Date();
+  if (label) label.textContent = `Atualizado às ${_torreLastRender.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  if (icon)  icon.style.animation = '';
 }
 
 /* ══════════════════════════════════════════════════════════
