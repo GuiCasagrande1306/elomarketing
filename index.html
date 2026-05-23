@@ -3284,7 +3284,32 @@
               <i class="ti ti-logout"></i> Desconectar Instância
             </button>
           </div>
+
+          <!-- ── Override de Backend (dev / Render fora do ar) ─────────────── -->
+          <div id="backend-override-panel" style="margin-top:12px;padding:12px;background:var(--bg3);border-radius:10px;border:1px solid rgba(245,158,11,0.25)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:12px;font-weight:600;color:#F59E0B"><i class="ti ti-server-bolt"></i> Backend Override</div>
+              <span id="backend-override-badge" class="badge" style="font-size:10px"></span>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">
+              Use quando o Render estiver fora do ar. Aponte para o servidor local (<code style="background:var(--bg4);padding:1px 4px;border-radius:3px">http://localhost:5001</code>) ou deixe vazio para usar o Render.
+            </div>
+            <div style="display:flex;gap:6px">
+              <input id="backend-override-input" type="text" class="form-input" style="font-size:11px;padding:5px 8px;flex:1"
+                placeholder="http://localhost:5001  (vazio = usar Render)">
+              <button class="btn btn-sm" onclick="saveBackendOverride()"
+                style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#F59E0B;padding:5px 12px;border-radius:7px;white-space:nowrap">
+                <i class="ti ti-device-floppy"></i> Salvar
+              </button>
+              <button class="btn btn-sm" onclick="clearBackendOverride()"
+                style="background:transparent;border:1px solid rgba(239,68,68,0.3);color:var(--red);padding:5px 10px;border-radius:7px"
+                title="Limpar override e voltar ao Render">
+                <i class="ti ti-x"></i>
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
 
       </div>
     </div>
@@ -5447,6 +5472,10 @@ function saveTask() {
 // Auto-detecta se está rodando localmente (file://, localhost ou 127.0.0.1)
 const _isLocalEnv = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
 
+// Override de backend: localStorage['elo_backend_url'] tem prioridade sobre tudo.
+// Permite apontar para localhost:5001 mesmo acessando via GitHub Pages quando o Render está fora.
+const _backendOverride = localStorage.getItem('elo_backend_url') || '';
+
 const PROD_CONFIG = {
   // ── Backend REST API (Render) ──────────────────────────────────────────────
   apiUrl: 'https://elomarketing-api.vercel.app',
@@ -5456,11 +5485,12 @@ const PROD_CONFIG = {
   supabaseAnonKey:  'SUA-CHAVE',
 
   // ── Backend Render (proxy WhatsApp / Evolution API) ───────────────────────
-  // Em dev local aponta para o servidor Express rodando em :5001
-  // Em produção (GitHub Pages) aponta para o Render
-  renderUrl: _isLocalEnv
-    ? 'http://localhost:5001'
-    : 'https://elomarketing-api.onrender.com',
+  // Prioridade: override localStorage → auto-detect local → Render produção
+  renderUrl: _backendOverride
+    ? _backendOverride
+    : _isLocalEnv
+      ? 'http://localhost:5001'
+      : 'https://elomarketing-api.onrender.com',
 
   // ── Evolution API — credenciais ficam no .env do Render (não no frontend) ─
   evolutionUrl: 'https://evolution-api-production-b01b.up.railway.app',
@@ -12227,6 +12257,7 @@ function loadEvoFields() {
   if (u) u.value = cfg.url || '';
   if (k) k.value = cfg.key || '';
   updateEvoStatus();
+  initBackendOverridePanel();
   checkInstanceState();
   initGA4Config();
 }
@@ -12291,6 +12322,48 @@ async function checkInstanceState() {
     if (dot)   dot.style.background = '#EF4444';
     if (label) label.textContent = 'Erro ao contactar servidor';
   }
+}
+
+// ── Backend Override (dev local / Render fora do ar) ─────────────────────────
+function initBackendOverridePanel() {
+  const input  = document.getElementById('backend-override-input');
+  const badge  = document.getElementById('backend-override-badge');
+  if (!input || !badge) return;
+  const stored = localStorage.getItem('elo_backend_url') || '';
+  input.value = stored;
+  if (stored) {
+    badge.textContent  = '⚡ Override ativo';
+    badge.className    = 'badge badge-yellow';
+  } else {
+    badge.textContent  = 'Render (padrão)';
+    badge.className    = 'badge badge-gray';
+  }
+}
+
+function saveBackendOverride() {
+  const input = document.getElementById('backend-override-input');
+  const val   = (input?.value || '').trim().replace(/\/$/, '');
+  if (val) {
+    localStorage.setItem('elo_backend_url', val);
+    PROD_CONFIG.renderUrl = val;
+    showNotification(`✅ Backend apontando para ${val} — recarregue a página para confirmar.`, 'success');
+  } else {
+    clearBackendOverride();
+    return;
+  }
+  initBackendOverridePanel();
+  setTimeout(checkInstanceState, 500);
+}
+
+function clearBackendOverride() {
+  localStorage.removeItem('elo_backend_url');
+  const input = document.getElementById('backend-override-input');
+  if (input) input.value = '';
+  // Restaura a URL padrão (Render)
+  PROD_CONFIG.renderUrl = 'https://elomarketing-api.onrender.com';
+  showNotification('Override removido — usando Render em produção.', 'warn');
+  initBackendOverridePanel();
+  setTimeout(checkInstanceState, 500);
 }
 
 async function diagnosEvoConnection() {
