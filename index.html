@@ -3248,6 +3248,17 @@
             <div id="evo-qr-loading" style="display:none;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;background:var(--bg3);border-radius:12px;width:224px;text-align:center">
               <i class="ti ti-loader-2" style="font-size:40px;color:#25D366;animation:spin 1s linear infinite"></i>
               <div style="font-size:12px;color:var(--text2);line-height:1.5" id="evo-qr-loading-msg">Iniciando servidor...<br>Aguarde até 30 segundos.</div>
+              <div id="evo-qr-timeout-hint" style="display:none;margin-top:4px">
+                <div style="font-size:11px;color:#F59E0B;margin-bottom:8px">⚠️ Servidor demorou mais de 15s.<br>A instância pode estar presa.</div>
+                <button class="btn btn-sm" onclick="generateQRCode()"
+                  style="font-size:11px;background:rgba(34,211,102,0.15);border:1px solid rgba(34,211,102,0.35);color:#22D366;padding:6px 14px;border-radius:8px;cursor:pointer;width:100%">
+                  <i class="ti ti-refresh"></i> Tentar Novamente / Atualizar QR
+                </button>
+                <button class="btn btn-sm" onclick="resetInstance()"
+                  style="font-size:11px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:6px 14px;border-radius:8px;cursor:pointer;width:100%;margin-top:6px">
+                  <i class="ti ti-refresh-alert"></i> Resetar Sessão Fantasma
+                </button>
+              </div>
             </div>
             <!-- QR image (hidden while loading) -->
             <div style="background:#fff;padding:12px;border-radius:12px;display:inline-block">
@@ -3260,6 +3271,11 @@
           <div style="display:flex;flex-direction:column;gap:8px">
             <button id="evo-qr-btn" class="btn btn-primary" onclick="generateQRCode()">
               <i class="ti ti-qrcode"></i> Conectar WhatsApp
+            </button>
+            <button id="evo-reset-btn" class="btn btn-ghost btn-sm" onclick="resetInstance()"
+              style="color:#F59E0B;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.05)"
+              title="Use quando a instância ficar travada em 'Conectando...' — força reset completo da sessão">
+              <i class="ti ti-refresh-alert"></i> Resetar Sessão (preso em 'Conectando...')
             </button>
             <button class="btn btn-ghost btn-sm" onclick="diagnosEvoConnection()" style="color:var(--accent2);border-color:rgba(108,99,255,0.3)">
               <i class="ti ti-stethoscope"></i> Diagnosticar Conexão
@@ -12353,15 +12369,36 @@ async function generateQRCode() {
     if (wrap)    wrap.style.display    = 'none';
   };
 
+  const timeoutHint = document.getElementById('evo-qr-timeout-hint');
+  if (timeoutHint) timeoutHint.style.display = 'none';
+
   setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Conectando...', true);
   showLoading(`Iniciando instância <strong>elo_${userId}</strong>...<br>Aguarde até 30 segundos.`);
 
+  // Timer de 15s — se o backend não responder, exibe botão amigável sem travar o spinner
+  const _qrTimeoutId = setTimeout(() => {
+    const hint = document.getElementById('evo-qr-timeout-hint');
+    const msg  = document.getElementById('evo-qr-loading-msg');
+    if (hint) hint.style.display = 'block';
+    if (msg)  msg.style.opacity  = '0.45';
+  }, 15000);
+
   try {
+    // Timeout de 60s para o fetch (máx do backend = 6×2.5s + 2s inicial ≈ 17s)
+    const _fetchTimeout = new Promise((_, rej) =>
+      setTimeout(() => rej(new Error('timeout_60s')), 60000)
+    );
+
     // Uma única chamada ao backend Render — ele cria a instância e busca o QR
-    const data = await _renderFetch('/api/whatsapp/connect', {
-      method: 'POST',
-      body: JSON.stringify({ userId }),
-    });
+    const data = await Promise.race([
+      _renderFetch('/api/whatsapp/connect', {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      }),
+      _fetchTimeout,
+    ]);
+
+    clearTimeout(_qrTimeoutId);
 
     if (!data) {
       hideAll();
@@ -12407,15 +12444,24 @@ async function generateQRCode() {
     }
 
     // QR não retornado após todas as tentativas
+    clearTimeout(_qrTimeoutId);
     hideAll();
-    setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
+    setBtn('<i class="ti ti-refresh"></i> Tentar Novamente / Atualizar QR', false);
     showNotification('QR não disponível. O servidor pode estar aquecendo — tente novamente em 30s.', 'warn');
 
   } catch(e) {
+    clearTimeout(_qrTimeoutId);
     hideAll();
-    setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
-    showNotification('Erro ao gerar QR: ' + e.message, 'error');
-    console.error('[WhatsApp] generateQRCode error:', e.message);
+
+    if (e.message === 'timeout_60s') {
+      // Timeout absoluto — o backend nem respondeu em 60s
+      setBtn('<i class="ti ti-refresh"></i> Tentar Novamente / Atualizar QR', false);
+      showNotification('⏱ Timeout: servidor não respondeu em 60s. Use "Resetar Sessão" se continuar.', 'warn');
+    } else {
+      setBtn('<i class="ti ti-refresh"></i> Tentar Novamente / Atualizar QR', false);
+      showNotification('Erro ao gerar QR: ' + e.message, 'error');
+      console.error('[WhatsApp] generateQRCode error:', e.message);
+    }
   }
 }
 
@@ -12457,6 +12503,51 @@ async function disconnectInstance() {
     setTimeout(checkInstanceState, 1000);
   } catch {
     showNotification('Erro ao desconectar.', 'error');
+  }
+}
+
+/**
+ * Força logout + delete completo da instância Evolution API para resolver
+ * o estado fantasma "Conectando..." que não avança para o QR Code.
+ */
+async function resetInstance() {
+  const userId = currentUser?.id;
+  if (!userId) return;
+
+  if (!confirm(
+    `Resetar completamente a instância "elo_${userId}"?\n\n` +
+    `Isso vai forçar logout e deletar a sessão atual.\n` +
+    `Use quando o WhatsApp ficar preso em "Conectando..." sem gerar o QR Code.`
+  )) return;
+
+  const btn = document.getElementById('evo-reset-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Resetando...'; }
+
+  const qrWrap = document.getElementById('evo-qr-wrap');
+  if (qrWrap) qrWrap.style.display = 'none';
+
+  try {
+    const data = await _renderFetch('/api/whatsapp/reset', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+
+    if (data?.ok) {
+      const stepsSummary = (data.steps || []).map(s => `${s.action}:${s.status || s.error}`).join(', ');
+      showNotification(`✅ Sessão resetada (${stepsSummary}) — agora clique em "Conectar WhatsApp".`, 'success');
+      console.log('[WhatsApp] reset steps:', data.steps);
+    } else {
+      showNotification('Erro ao resetar: ' + (data?.error || 'resposta inválida'), 'error');
+    }
+  } catch (e) {
+    showNotification('Erro ao resetar sessão: ' + e.message, 'error');
+    console.error('[WhatsApp] resetInstance error:', e.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-refresh-alert"></i> Resetar Sessão (preso em \'Conectando...\')';
+    }
+    setTimeout(checkInstanceState, 1500);
   }
 }
 
