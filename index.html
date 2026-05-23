@@ -3144,8 +3144,8 @@
     <div class="page" id="page-integracoes">
       <div class="grid-21" style="gap:16px">
 
-        <!-- Coluna esquerda: config + outras integrações -->
-        <div style="display:flex;flex-direction:column;gap:16px">
+        <!-- Coluna esquerda: config + outras integrações (só admins) -->
+        <div id="integracoes-admin-col" style="display:flex;flex-direction:column;gap:16px">
           <div class="card" style="border-color:rgba(37,211,102,0.3);background:rgba(37,211,102,0.04)">
             <div class="card-header" style="margin-bottom:14px">
               <div class="card-title"><i class="ti ti-brand-whatsapp" style="color:#25D366"></i> Evolution API</div>
@@ -3225,8 +3225,8 @@
           </div>
         </div>
 
-        <!-- Coluna direita: gerenciador de instância -->
-        <div class="card" style="border-color:rgba(37,211,102,0.3)">
+        <!-- Coluna direita: gerenciador de instância (visível para todos) -->
+        <div id="integracoes-wa-col" class="card" style="border-color:rgba(37,211,102,0.3)">
           <div class="card-header" style="margin-bottom:16px">
             <div class="card-title"><i class="ti ti-qrcode" style="color:#25D366"></i> Gerenciador de Instância</div>
             <button class="btn btn-ghost btn-sm" onclick="checkInstanceState()"><i class="ti ti-refresh"></i> Atualizar</button>
@@ -5790,10 +5790,10 @@ function setSyncStatus(status) {
 // Gestor de Tráfego: acesso completo às ferramentas de mídia, sem visão macro admin
 const _TRAFFIC_COLLAB_PAGES = [
   'dashboard','clientes','esteira','contas','campanhas','creatives',
-  'calendar','tarefas','alertas'
+  'calendar','tarefas','alertas','integracoes'
 ];
-// Designer: foco exclusivo em tarefas atribuídas — sem dados financeiros ou gerenciais
-const _DESIGNER_COLLAB_PAGES = ['tarefas'];
+// Designer: tarefas + integracoes (para conectar o próprio WhatsApp)
+const _DESIGNER_COLLAB_PAGES = ['tarefas','integracoes'];
 
 /* ── Organograma ───────────────────────────────────────────────────────────────
    isSuperAdmin → Guilherme (CEO): acesso irrestrito total
@@ -12274,6 +12274,14 @@ function loadEvoFields() {
   initBackendOverridePanel();
   checkInstanceState();
   initGA4Config();
+
+  // Coluna de configuração de API só visível para admins
+  const adminCol = document.getElementById('integracoes-admin-col');
+  const waCol    = document.getElementById('integracoes-wa-col');
+  const isAdmin  = currentUser?.isAdmin;
+  if (adminCol) adminCol.style.display = isAdmin ? '' : 'none';
+  // Para não-admins: gerenciador ocupa largura total (sem a coluna de config ao lado)
+  if (waCol) waCol.style.gridColumn = isAdmin ? '' : '1 / -1';
 }
 
 async function checkInstanceState() {
