@@ -12250,9 +12250,12 @@ async function checkInstanceState() {
   try {
     const data = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
 
-    if (!data) {
-      if (dot)   dot.style.background = '#EF4444';
-      if (label) label.textContent = 'Sem resposta do servidor';
+    if (!data || data._coldStart) {
+      if (dot)   { dot.style.background = '#F59E0B'; dot.style.boxShadow = '0 0 8px rgba(245,158,11,0.5)'; }
+      if (label) label.textContent = '⏳ Backend iniciando...';
+      if (sub)   { sub.textContent = 'O Render acorda em ~30-60s — verificando de novo em 15s'; sub.style.color = '#F59E0B'; }
+      console.warn('[Render] backend dormindo (cold start) — retry em 15s');
+      setTimeout(checkInstanceState, 15000);
       return;
     }
 
@@ -12400,10 +12403,15 @@ async function generateQRCode() {
 
     clearTimeout(_qrTimeoutId);
 
-    if (!data) {
-      hideAll();
-      setBtn('<i class="ti ti-qrcode"></i> Tentar Novamente', false);
-      showNotification('❌ Sem resposta do servidor Render. Verifique se está online.', 'error');
+    if (!data || data._coldStart) {
+      // Render dormindo — aguarda 20s e tenta de novo automaticamente
+      showLoading(`⏳ Backend Render está acordando...<br><span style="font-size:11px;opacity:0.7">Pode levar 30–60s na primeira vez. Tentando de novo em 20s...</span>`);
+      const hint = document.getElementById('evo-qr-timeout-hint');
+      if (hint) hint.style.display = 'none';
+      setBtn('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Aguardando backend...', true);
+      showNotification('⏳ Render está acordando (free tier). Tentativa automática em 20s.', 'warn');
+      console.warn('[Render] cold start detectado em /connect — retry em 20s');
+      setTimeout(generateQRCode, 20000);
       return;
     }
 
@@ -12532,7 +12540,9 @@ async function resetInstance() {
       body: JSON.stringify({ userId }),
     });
 
-    if (data?.ok) {
+    if (!data || data._coldStart) {
+      showNotification('⏳ Backend Render está iniciando. Aguarde 30-60s e tente novamente.', 'warn');
+    } else if (data?.ok) {
       const stepsSummary = (data.steps || []).map(s => `${s.action}:${s.status || s.error}`).join(', ');
       showNotification(`✅ Sessão resetada (${stepsSummary}) — agora clique em "Conectar WhatsApp".`, 'success');
       console.log('[WhatsApp] reset steps:', data.steps);
@@ -12991,6 +13001,11 @@ function _apiFetch(path, opts = {}) {
 /**
  * Fetch para o backend Render (proxy Evolution API / WhatsApp).
  * Separado do _apiFetch pois aponta para renderUrl, não para o Vercel.
+ *
+ * Retorna:
+ *   { _coldStart: true }  → Render dormindo (502 HTML ou 503)
+ *   null                  → erro de rede / timeout
+ *   { ... }               → resposta JSON normal
  */
 function _renderFetch(path, opts = {}) {
   const base = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
@@ -12998,7 +13013,20 @@ function _renderFetch(path, opts = {}) {
   if (!opts.headers) opts.headers = {};
   if (!opts.headers['Content-Type'] && opts.body) opts.headers['Content-Type'] = 'application/json';
   return fetch(base + path, opts)
-    .then(r => r.json())
+    .then(async r => {
+      const text = await r.text().catch(() => '');
+      // Render devolve HTML quando o serviço está dormindo (502/503/504)
+      if (text.trim().startsWith('<') || (r.status >= 500 && !text.trim().startsWith('{'))) {
+        console.warn(`[Render] ${path} → HTTP ${r.status} (resposta HTML — backend acordando?)`);
+        return { _coldStart: true, _status: r.status };
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        console.warn(`[Render] ${path} → HTTP ${r.status} (resposta não-JSON): ${text.substring(0,100)}`);
+        return r.status >= 500 ? { _coldStart: true, _status: r.status } : null;
+      }
+    })
     .catch(e => { console.error('[Render]', path, e.message); return null; });
 }
 
