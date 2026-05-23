@@ -9613,25 +9613,63 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
           </div>
         </div>`;
     }
+
     const isCritical = gadsAlert.level === 'critical';
     const isModerate = gadsAlert.level === 'moderate';
     const badgeCls   = isCritical ? 'critical' : isModerate ? 'warning' : 'active';
-    const badgeTxt   = isCritical ? '❌ Conta Pausada'
+    const isPrepaid  = gadsData?.payType === 'prepaid';
+
+    // ── Bloco PRÉ-PAGO (PIX / Boleto) — igual ao prepaidMetaRow ──────────────
+    if (isPrepaid) {
+      const balance        = gadsData?.balance   || 0;
+      const spend7dVal     = gadsData?.spend7d   || 0;
+      const taxaDiaria     = spend7dVal > 0 ? spend7dVal / 7 : (gadsData?.dailySpend || 0);
+      const diasRestantes  = taxaDiaria > 0 ? Math.floor(balance / taxaDiaria) : 0;
+      const dataFim        = diasRestantes > 0 ? dateAddDays(diasRestantes) : null;
+      const badgeTxt       = isCritical ? '🔴 Saldo Crítico' : isModerate ? '⚠️ Saldo Baixo' : '✅ Saldo Saudável';
+
+      const statusLine = isCritical
+        ? `<span style="color:var(--red)">Saldo pode esgotar em breve — recarregue o Google Ads agora!</span>`
+        : dataFim
+          ? `<span style="color:${isModerate ? 'var(--amber)' : 'var(--green)'}">Previsão de Término: estimado para <b>${dataFim}</b> · Autonomia de <b>${diasRestantes} dias</b></span>`
+          : balance > 0
+            ? `<span style="color:var(--text3)">Saldo disponível — informe o gasto médio no cadastro para calcular autonomia</span>`
+            : `<span style="color:var(--text3)">Configure o saldo no cadastro para ativar o monitor</span>`;
+
+      return `
+        <div class="bal-platform-row">
+          <div class="bal-platform-icon gads">G</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+              <span style="font-size:11px;font-weight:600;color:var(--text)">Google Ads</span>
+              <span class="bal-card-badge ${badgeCls}">${badgeTxt}</span>
+              <span style="font-size:9px;color:var(--text3);padding:1px 6px;background:var(--bg3);border-radius:4px;border:1px solid var(--border)">💰 Pré-pago</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">
+              Saldo Disponível: <b style="color:var(--text);font-family:var(--mono)">${balance > 0 ? fmtBRL2(balance) : '—'}</b>
+            </div>
+            <div style="font-size:10px;margin-top:3px">${statusLine}</div>
+          </div>
+        </div>`;
+    }
+
+    // ── Bloco PÓS-PAGO (cartão) — barra de gasto vs orçamento ────────────────
+    const badgeTxt   = isCritical ? '❌ Conta Suspensa'
                      : isModerate ? '⚠️ Orçamento Excedido'
                      :              '✅ Google Ads Ativo';
 
     const budget   = gadsData?.budget || client.budget || 0;
     const spent    = gadsData?.amountSpent || client.investment || 0;
-    const rate     = gadsData?.spend7d || gadsData?.dailySpend || 0;
+    const rate     = (gadsData?.spend7d || 0) > 0 ? gadsData.spend7d / 7 : (gadsData?.dailySpend || 0);
     const pct      = budget > 0 ? Math.min(Math.round((spent / budget) * 100), 100) : 0;
     const barColor = isCritical ? 'var(--red)' : isModerate ? 'var(--amber)' : '#4285F4';
 
-    const remaining    = budget - spent;
-    const daysUntilEnd = rate > 0 && remaining > 0 ? Math.ceil(remaining / rate) : 0;
-    const closingDate  = daysUntilEnd > 0 ? dateAddDays(daysUntilEnd) : null;
+    const remaining   = budget - spent;
+    const daysLeft    = rate > 0 && remaining > 0 ? Math.ceil(remaining / rate) : 0;
+    const closingDate = daysLeft > 0 ? dateAddDays(daysLeft) : null;
 
     const statusLine = isCritical
-      ? `<span style="color:var(--red)">Anúncios pausados — verifique a conta no Google Ads</span>`
+      ? `<span style="color:var(--red)">Conta suspensa — verifique o status no Google Ads Manager</span>`
       : isModerate
         ? `<span style="color:var(--amber)">Gasto ultrapassou o orçamento planejado de ${fmtBRL2(budget)}</span>`
         : closingDate
@@ -10314,36 +10352,102 @@ function evalGadsStatus(gadsData, client) {
   if (!gadsData) {
     return { level: 'pending', msg: 'Google Ads sem dados', detail: null };
   }
-  const { budgetPct, status } = gadsData;
+  const { budgetPct, status, payType, balance, spend7d } = gadsData;
+
   if (status === 'SUSPENDED' || status === 'REMOVED') {
-    return { level: 'critical', msg: 'Conta Pausada', detail: 'Verifique o status no Google Ads Manager' };
+    return { level: 'critical', msg: 'Conta Suspensa', detail: 'Verifique o status no Google Ads Manager' };
   }
+  if (status === 'PAUSED') {
+    return { level: 'moderate', msg: 'Campanhas Pausadas', detail: 'Todas as campanhas estão pausadas' };
+  }
+
+  // Contas pré-pagas (PIX/Boleto): alerta por autonomia de saldo
+  if (payType === 'prepaid' && balance >= 0) {
+    const taxaDiaria = spend7d > 0 ? spend7d / 7 : (gadsData.dailySpend || 0);
+    const diasRestantes = taxaDiaria > 0 ? Math.floor(balance / taxaDiaria) : 999;
+    if (diasRestantes <= 2)  return { level: 'critical', msg: '🔴 Saldo Crítico',  detail: `Saldo pode esgotar em ${diasRestantes <= 0 ? 'menos de 1 dia' : diasRestantes + ' dias'} — recarregue agora!` };
+    if (diasRestantes <= 7)  return { level: 'moderate', msg: '⚠️ Saldo Baixo',    detail: `Autonomia estimada de ${diasRestantes} dias — programe o reabastecimento` };
+    return { level: 'ok', msg: '✅ Saldo Saudável', detail: null };
+  }
+
+  // Contas pós-pagas: alerta por % do orçamento mensal
   if ((budgetPct || 0) > 100) {
     return { level: 'moderate', msg: 'Orçamento Excedido', detail: `Gasto ultrapassou o budget planejado (${Math.round(budgetPct)}%)` };
   }
   return { level: 'ok', msg: 'Google Ads Ativo', detail: null };
 }
 
-// ── Google Ads: busca dados de gasto/orçamento (usa dados do cadastro como proxy) ──
-// A integração direta com a Google Ads API requer OAuth e developer token.
-// Por enquanto usa os campos investment/budget do cliente como fonte de dados.
-async function fetchGadsAccountStatus(client) {
-  if (!client.google_ads_customer_id) return null;
+// ── Google Ads: cache de sessão (evita múltiplas chamadas ao backend por render) ──
+const _gadsCache = {}; // { [clientId]: { data, fetchedAt } }
+const GADS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+// Fallback proxy: usa campos do cadastro quando a API não está disponível
+function _gadsProxyData(client) {
   const budget     = client.budget     || 0;
   const spent      = client.investment || 0;
   const daysPassed = Math.max(1, new Date().getDate());
   const dailySpend = spent > 0 ? spent / daysPassed : 0;
-  const spend7d    = client.meta_spend7d > 0 ? client.meta_spend7d : dailySpend;
+  const spend7d    = client.meta_spend7d > 0 ? client.meta_spend7d : dailySpend * 7;
   const budgetPct  = budget > 0 ? (spent / budget) * 100 : 0;
-  return {
-    amountSpent: spent,
-    budget,
-    spend7d,
-    dailySpend,
-    budgetPct,
-    status: 'ENABLED',
-    payType: 'postpaid',
-  };
+  return { amountSpent: spent, budget, spend7d, dailySpend, budgetPct, status: 'ENABLED', payType: 'postpaid', balance: 0, budgetTotal: 0 };
+}
+
+// ── Google Ads: busca dados reais via backend Render → /api/google-ads/account/:id ──
+async function fetchGadsAccountStatus(client) {
+  if (!client.google_ads_customer_id) return null;
+
+  // Verifica cache de sessão
+  const cached = _gadsCache[client.id];
+  if (cached && (Date.now() - cached.fetchedAt) < GADS_CACHE_TTL_MS) return cached.data;
+
+  try {
+    const cleanId = client.google_ads_customer_id.replace(/-/g, '');
+    const raw     = await _renderFetch(`/api/google-ads/account/${cleanId}`);
+
+    if (!raw || raw.error) {
+      console.warn(`[Google Ads] ${client.name}:`, raw?.error || 'sem resposta — usando proxy');
+      return _gadsProxyData(client);
+    }
+
+    const budget   = client.budget || 0;
+    const budgetPct = budget > 0 ? (raw.amountSpent / budget) * 100 : 0;
+
+    const data = {
+      amountSpent: raw.amountSpent,
+      budget,
+      spend7d:     raw.spend7d,
+      dailySpend:  raw.dailySpend,
+      budgetPct,
+      balance:     raw.balance     || 0,
+      budgetTotal: raw.budgetTotal || 0,
+      payType:     raw.payType     || 'postpaid',
+      status:      raw.status      || 'ENABLED',
+      campaigns:   raw.campaigns   || [],
+    };
+
+    _gadsCache[client.id] = { data, fetchedAt: Date.now() };
+    return data;
+
+  } catch(e) {
+    console.warn('[Google Ads fetch]', client.name, e.message);
+    return _gadsProxyData(client);
+  }
+}
+
+// ── Google Ads: atualiza um cliente específico e escreve de volta em CLIENTS.list ──
+async function atualizarDadosGads(cliente) {
+  const data = await fetchGadsAccountStatus(cliente);
+  if (!data) return null;
+
+  const idx = CLIENTS.list.findIndex(c => c.id === cliente.id);
+  if (idx >= 0) {
+    CLIENTS.list[idx].google_ads_spend    = data.amountSpent;
+    CLIENTS.list[idx].google_ads_spend7d  = data.spend7d;
+    CLIENTS.list[idx].google_ads_balance  = data.balance;
+    CLIENTS.list[idx].google_ads_status   = data.status;
+    CLIENTS.list[idx].google_ads_paytype  = data.payType;
+  }
+  return data;
 }
 
 // Avalia os dados GA4 e retorna objeto de alerta para exibição no card.
@@ -11095,10 +11199,12 @@ async function sincronizarTodosMeta() {
     showNotification(`${novos} novo(s) cliente(s) criado(s) automaticamente!`, 'ok');
   }
 
-  // Passo 2: Sincroniza dados Meta para clientes com accountId
-  const clientes = CLIENTS.list.filter(c => c.meta_ad_account_id);
-  if (clientes.length === 0) {
-    if (novos === 0) showNotification('Nenhum cliente com ID Meta cadastrado.', 'warn');
+  // Passo 2: identifica clientes com Meta e/ou Google Ads
+  const clientesMeta = CLIENTS.list.filter(c => c.meta_ad_account_id);
+  const clientesGads = CLIENTS.list.filter(c => c.google_ads_customer_id);
+
+  if (clientesMeta.length === 0 && clientesGads.length === 0) {
+    if (novos === 0) showNotification('Nenhum cliente com ID Meta ou Google Ads cadastrado.', 'warn');
     return;
   }
 
@@ -11109,16 +11215,27 @@ async function sincronizarTodosMeta() {
     btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando…';
   }
 
-  showNotification(`Sincronizando ${clientes.length} cliente(s)…`, 'ok');
+  const totalClientes = new Set([...clientesMeta.map(c=>c.id), ...clientesGads.map(c=>c.id)]).size;
+  showNotification(`Sincronizando ${totalClientes} cliente(s) — Meta + Google Ads em paralelo…`, 'ok');
 
-  /* Busca todos em paralelo — mais rápido que loop sequencial */
-  const results = await Promise.all(clientes.map(c => atualizarDadosMeta(c).catch(() => null)));
-  const ok = results.filter(Boolean).length;
+  // Invalida cache do Google Ads para forçar re-fetch
+  Object.keys(_gadsCache).forEach(k => delete _gadsCache[k]);
 
-  // Contabiliza formas de pagamento detectadas e saldos obtidos
-  const withBalance  = results.filter(r => r?.meta_balance > 0).length;
-  const prePagos     = results.filter(r => r?.metodo_pagamento === 'pre_pago').length;
-  const cartoes      = results.filter(r => r?.metodo_pagamento === 'cartao').length;
+  /* Busca Meta e Google Ads simultaneamente */
+  const [resultsMeta, resultsGads] = await Promise.all([
+    Promise.all(clientesMeta.map(c => atualizarDadosMeta(c).catch(() => null))),
+    Promise.all(clientesGads.map(c => atualizarDadosGads(c).catch(() => null))),
+  ]);
+
+  const okMeta  = resultsMeta.filter(Boolean).length;
+  const okGads  = resultsGads.filter(Boolean).length;
+
+  // Contabiliza formas de pagamento (Meta)
+  const withBalance  = resultsMeta.filter(r => r?.meta_balance > 0).length;
+  const prePagos     = resultsMeta.filter(r => r?.metodo_pagamento === 'pre_pago').length;
+  const cartoes      = resultsMeta.filter(r => r?.metodo_pagamento === 'cartao').length;
+  // Contas Google Ads pré-pagas com saldo
+  const gadsPrePagos = resultsGads.filter(r => r?.payType === 'prepaid' && r?.balance > 0).length;
 
   renderClients();
   renderGoalAlerts();
@@ -11131,12 +11248,12 @@ async function sincronizarTodosMeta() {
     btn.innerHTML = '<i class="ti ti-refresh"></i> Sincronizar Todos';
   }
 
-  const payInfo = prePagos + cartoes > 0
-    ? ` | 💰 ${prePagos} pré-pago, 💳 ${cartoes} cartão`
-    : '';
-  const balInfo = withBalance > 0 ? ` | ${withBalance} saldo(s) obtido(s)` : '';
+  const metaInfo = clientesMeta.length > 0 ? `Meta: ${okMeta}/${clientesMeta.length}` : '';
+  const gadsInfo = clientesGads.length > 0 ? `Google Ads: ${okGads}/${clientesGads.length}` : '';
+  const payInfo  = prePagos + cartoes > 0 ? ` | 💰 ${prePagos} pré-pago, 💳 ${cartoes} cartão` : '';
+  const balInfo  = withBalance + gadsPrePagos > 0 ? ` | ${withBalance + gadsPrePagos} saldo(s) obtido(s)` : '';
   showNotification(
-    `Sincronização concluída: ${ok}/${clientes.length} cliente(s) atualizados${payInfo}${balInfo}.`,
+    `Sincronização concluída — ${[metaInfo, gadsInfo].filter(Boolean).join(' · ')}${payInfo}${balInfo}.`,
     'ok'
   );
 }
