@@ -1567,6 +1567,24 @@
   }
   .cr-card-plan i { font-size: 11px; color: var(--accent2); }
 
+  /* Vínculo criativo ↔ cliente */
+  .cr-client-link { margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+  .cr-client-link i { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+  .cr-client-sel {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text2);
+    font-size: 10px;
+    font-family: var(--font);
+    padding: 2px 6px;
+    cursor: pointer;
+    outline: none;
+    transition: var(--trans);
+    max-width: 150px;
+  }
+  .cr-client-sel:focus { border-color: var(--accent); color: var(--text); }
+
   .cr-weeks {
     display: flex; flex-direction: column;
     padding: 8px;
@@ -5058,6 +5076,7 @@ const CR = {
   ],
   clients: [
     {
+      clientId: 'cl-1',
       name: 'Alpha Fitness', initials: 'AF', color: 'linear-gradient(135deg,#F97316,#EA580C)',
       weeks: [
         { status: 'finalizado', link: 'https://frame.io/p/alpha-sem01' },
@@ -5067,6 +5086,7 @@ const CR = {
       ]
     },
     {
+      clientId: 'cl-2',
       name: 'Clínica Sorriso', initials: 'CS', color: 'linear-gradient(135deg,#06B6D4,#0891B2)',
       weeks: [
         { status: 'finalizado', link: 'https://frame.io/p/sorriso-sem01' },
@@ -5076,6 +5096,7 @@ const CR = {
       ]
     },
     {
+      clientId: 'cl-3',
       name: 'Tech Store', initials: 'TS', color: 'linear-gradient(135deg,#6366F1,#4F46E5)',
       weeks: [
         { status: 'aprovacao',  link: 'https://drive.google.com/tech-sem01' },
@@ -5125,6 +5146,9 @@ function renderCreatives() {
         </div>
       </div>
     `).join('');
+    const clientOpts = CLIENTS.list.map(cl =>
+      `<option value="${cl.id}" ${c.clientId === cl.id ? 'selected' : ''}>${cl.name}</option>`
+    ).join('');
     return `
       <div class="cr-card">
         <div class="cr-card-header">
@@ -5132,6 +5156,13 @@ function renderCreatives() {
           <div class="cr-card-info">
             <div class="cr-card-name">${c.name}</div>
             <div class="cr-card-plan"><i class="ti ti-rocket"></i> Plano: 1 Vídeo/Semana</div>
+            <div class="cr-client-link">
+              <i class="ti ti-link"></i>
+              <select class="cr-client-sel" title="Vincular a cliente da plataforma" onchange="crLinkClient(${ci}, this.value)">
+                <option value="">— sem vínculo —</option>
+                ${clientOpts}
+              </select>
+            </div>
           </div>
         </div>
         <div class="cr-weeks">${weeksHtml}</div>
@@ -5160,6 +5191,10 @@ function crSetLink(ci, wi, val) {
 function crPreview(ci, wi) {
   const link = CR.clients[ci].weeks[wi].link;
   if (link) window.open(link, '_blank', 'noopener');
+}
+
+function crLinkClient(ci, clientId) {
+  CR.clients[ci].clientId = clientId || null;
 }
 
 /* ========== HISTÓRICO DE TAREFAS ========== */
@@ -8372,7 +8407,57 @@ function _buildDetailGoalPacing(c, goalInfo, isLiveGA4) {
 }
 
 // ── GERADOR DE RELATÓRIO PDF ──────────────────────────────────────────────────
-function generateClientReport(clientId) {
+/* ── Busca anúncios ativos na Meta API para o relatório do cliente ──────────
+   Usa effective_status=ACTIVE, que já garante campanha + conjunto + anúncio
+   ativos. Retorna { total, grouped } ou null (sem conta / sem token / erro).
+── */
+async function fetchActiveAdsForReport(client) {
+  const token = loadMetaToken();
+  if (!token || !client.meta_ad_account_id) return null;
+
+  const acctId = client.meta_ad_account_id;
+  const enc    = encodeURIComponent(token);
+  const fields = encodeURIComponent(
+    'name,effective_status,' +
+    'adset{name,effective_status},' +
+    'campaign{name,objective,effective_status},' +
+    'creative{name,body,title,call_to_action_type}'
+  );
+  // effective_status=["ACTIVE"] filtra anúncios cuja entrega está ativa
+  // (propagação já inclui campanha e conjunto, sem precisar filtrar manualmente)
+  const url = `https://graph.facebook.com/v19.0/${acctId}/ads` +
+              `?effective_status=%5B%22ACTIVE%22%5D` +
+              `&fields=${fields}&limit=50&access_token=${enc}`;
+
+  try {
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (json.error || !json.data?.length) return null;
+
+    // Agrupa: { campNome → { objective, sets: { setNome → [ads] } } }
+    const grouped = {};
+    json.data.forEach(ad => {
+      const campName = ad.campaign?.name || 'Sem campanha';
+      const campObj  = ad.campaign?.objective || '';
+      const setName  = ad.adset?.name || 'Sem conjunto';
+      if (!grouped[campName]) grouped[campName] = { objective: campObj, sets: {} };
+      if (!grouped[campName].sets[setName]) grouped[campName].sets[setName] = [];
+      grouped[campName].sets[setName].push({
+        name:  ad.name,
+        title: ad.creative?.title || '',
+        body:  ad.creative?.body  || '',
+        cta:   ad.creative?.call_to_action_type || ''
+      });
+    });
+
+    return { total: json.data.length, grouped };
+  } catch(e) {
+    console.warn('[fetchActiveAdsForReport]', e.message);
+    return null;
+  }
+}
+
+async function generateClientReport(clientId) {
   const c = CLIENTS.list.find(x => x.id === clientId);
   if (!c) return;
 
@@ -8440,6 +8525,63 @@ function generateClientReport(clientId) {
       <span style="font-size:12px;color:#374151;line-height:1.55">${h.texto_nota}</span>
     </div>`;
   }).join('') : '<p style="font-size:12px;color:#94A3B8;padding:10px 0">Nenhuma otimização registrada ainda.</p>';
+
+  // — Anúncios ativos (Meta API) —
+  const adsData = await fetchActiveAdsForReport(c);
+  const CTA_PT  = {
+    LEARN_MORE:'Saiba Mais', SIGN_UP:'Cadastre-se', CONTACT_US:'Fale Conosco',
+    MESSAGE_PAGE:'Enviar Mensagem', SUBSCRIBE:'Inscreva-se', SHOP_NOW:'Comprar Agora',
+    GET_QUOTE:'Solicitar Orçamento', APPLY_NOW:'Candidatar-se', DOWNLOAD:'Baixar',
+    GET_OFFER:'Ver Oferta', WATCH_MORE:'Assistir', SEND_MESSAGE:'Enviar Mensagem',
+    CALL_NOW:'Ligar Agora', ORDER_NOW:'Pedir Agora', BUY_NOW:'Comprar Agora',
+    BOOK_TRAVEL:'Reservar'
+  };
+
+  let adsHtml = '';
+  if (adsData) {
+    const adsGroupedHtml = Object.entries(adsData.grouped).map(([campName, camp]) => {
+      const objLabel = META_OBJECTIVE_LABEL[camp.objective] || camp.objective || '';
+      const setsHtml = Object.entries(camp.sets).map(([setName, ads]) => {
+        const adItems = ads.map(ad => {
+          const ctaLabel = CTA_PT[ad.cta] || '';
+          const titleTxt = ad.title ? `<div style="font-size:11px;color:#374151;margin-top:3px"><strong>Título:</strong> ${ad.title.slice(0,100)}${ad.title.length > 100 ? '…' : ''}</div>` : '';
+          const bodyTxt  = ad.body  ? `<div style="font-size:11px;color:#64748B;margin-top:2px;line-height:1.45">${ad.body.slice(0,140)}${ad.body.length > 140 ? '…' : ''}</div>` : '';
+          const ctaTag   = ctaLabel ? `<span style="display:inline-block;margin-top:5px;padding:2px 8px;background:#EEF2FF;color:#6C63FF;border-radius:20px;font-size:9px;font-weight:700">${ctaLabel}</span>` : '';
+          return `<div style="padding:9px 0 9px 12px;border-left:2px solid #E2E8F0;margin:5px 0">
+            <div style="font-size:12px;font-weight:600;color:#111827">${ad.name}</div>
+            ${titleTxt}${bodyTxt}${ctaTag}
+          </div>`;
+        }).join('');
+        return `<div style="margin:8px 0 0 12px">
+          <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">${setName}</div>
+          ${adItems}
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block;flex-shrink:0"></span>
+          <span style="font-size:12px;font-weight:700;color:#111827">${campName}</span>
+          ${objLabel ? `<span style="font-size:10px;color:#94A3B8">${objLabel}</span>` : ''}
+        </div>
+        ${setsHtml}
+      </div>`;
+    }).join('');
+
+    adsHtml = `
+  <div class="sec">
+    <div class="sec-title">🟢 Anúncios Ativos — Meta Ads</div>
+    <div style="font-size:11px;color:#64748B;margin-bottom:14px">${adsData.total} anúncio${adsData.total !== 1 ? 's' : ''} ativo${adsData.total !== 1 ? 's' : ''} em ${Object.keys(adsData.grouped).length} campanha${Object.keys(adsData.grouped).length !== 1 ? 's' : ''}</div>
+    ${adsGroupedHtml}
+  </div>`;
+  } else if (c.meta_ad_account_id) {
+    // Conta configurada mas sem anúncios ativos no momento (ou erro de fetch)
+    adsHtml = `
+  <div class="sec">
+    <div class="sec-title">🟢 Anúncios Ativos — Meta Ads</div>
+    <p style="font-size:12px;color:#94A3B8">Nenhum anúncio ativo encontrado no momento.</p>
+  </div>`;
+  }
+  // Sem meta_ad_account_id → seção omitida silenciosamente
 
   // — HTML do relatório —
   const reportHtml = `<!DOCTYPE html>
@@ -8560,6 +8702,8 @@ function generateClientReport(clientId) {
       Total acumulado: <strong style="font-family:monospace;color:#6C63FF">${fmt(totalAcum)}</strong>
     </div>
   </div>` : ''}
+
+  ${adsHtml}
 
   <div class="sec">
     <div class="sec-title">🔧 Histórico de Otimizações</div>
