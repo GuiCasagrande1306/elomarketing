@@ -3160,7 +3160,7 @@
               <button id="rep-ia-btn" class="btn btn-ghost btn-sm" style="flex:1" onclick="gerarAnaliseIA()">
                 <i class="ti ti-sparkles"></i> Gerar análise IA
               </button>
-              <button class="btn btn-primary btn-sm" style="flex:1"><i class="ti ti-file-pdf"></i> Exportar PDF</button>
+              <button id="rep-pdf-btn" class="btn btn-primary btn-sm" style="flex:1" onclick="exportarRelatorioPDF()"><i class="ti ti-file-pdf"></i> Exportar PDF</button>
             </div>
           </div>
 
@@ -9817,6 +9817,210 @@ function copyReportMsg() {
   navigator.clipboard.writeText(msgEl.innerText)
     .then(() => showNotification('Mensagem copiada! ✅', 'ok'))
     .catch(() => showNotification('Não foi possível copiar.', 'warn'));
+}
+
+/* ════════════════════════════════════════════════════════════════
+   exportarRelatorioPDF — gera PDF da página de Relatórios
+   Inclui: KPIs do período, texto para o cliente e anúncios
+   ativos da Meta API (effective_status=ACTIVE).
+════════════════════════════════════════════════════════════════ */
+async function exportarRelatorioPDF() {
+  const clientId = document.getElementById('rep-client')?.value;
+  if (!clientId) { showNotification('Selecione um cliente primeiro.', 'warn'); return; }
+
+  const client = CLIENTS.list.find(c => c.id === clientId);
+  if (!client) return;
+
+  /* — Estado do botão — */
+  const btn = document.getElementById('rep-pdf-btn');
+  const _setLoading = (on) => {
+    if (!btn) return;
+    btn.disabled = on;
+    btn.innerHTML = on
+      ? '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;display:inline-block"></i> Gerando PDF…'
+      : '<i class="ti ti-file-pdf"></i> Exportar PDF';
+  };
+  _setLoading(true);
+
+  /* — Dados da página — */
+  const seg       = REPORT_STATE.seg || client.segment || 'leads';
+  const snapshot  = REPORT_STATE.current;
+  const periodStr = _repPeriodStr();
+  const owner     = USERS.find(u => u.id === client.owner);
+  const segInfo   = CL_SEGMENTS[client.segment] || { label: '—' };
+  const CAT_LABELS = { elo_marketing:'Elo Marketing', bagano:'Bagano', brava_reels:'Brava Reels', ampla_mkt:'Ampla MKT', clipy:'Clipy' };
+  const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const now        = new Date();
+  const dataFmt    = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  const fmt        = n => 'R$ ' + (n||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const fmtK       = n => n >= 1000 ? 'R$' + (n/1000).toFixed(1).replace('.',',') + 'k' : fmt(n);
+
+  /* — KPIs — */
+  const inv  = snapshot?.inv  ?? client.investment ?? 0;
+  const isDelivery = ['delivery','ecommerce'].includes(seg);
+  let kpi2Val = '—', kpi2Lbl = '—', kpi3Val = '—', kpi3Lbl = '—', kpi2Color = '#6C63FF', kpi3Color = '#64748B';
+
+  if (isDelivery) {
+    const fat  = snapshot?.fat  ?? 0;
+    const roas = fat > 0 && inv > 0 ? (fat / inv).toFixed(2).replace('.',',') + 'x' : '—';
+    kpi2Val = fat > 0 ? fmtK(fat) : '—'; kpi2Lbl = 'Faturamento';
+    kpi3Val = roas; kpi3Lbl = 'ROAS';
+    kpi2Color = fat > 0 ? '#10B981' : '#64748B';
+    kpi3Color = roas !== '—' ? (parseFloat(roas) >= 3 ? '#10B981' : '#D97706') : '#64748B';
+  } else {
+    const leads = snapshot?.leads != null ? snapshot.leads : Math.round(client.goal?.realized || 0);
+    const meta  = client.goal?.target || 0;
+    const cpl   = leads > 0 ? 'R$' + (inv / leads).toFixed(2).replace('.',',') : '—';
+    const pct   = meta > 0 ? Math.round(leads / meta * 100) : 0;
+    kpi2Val = String(leads); kpi2Lbl = 'Leads gerados';
+    kpi3Val = cpl;           kpi3Lbl = 'Custo por Lead';
+    kpi2Color = leads > 0 ? '#10B981' : '#64748B';
+    kpi3Color = '#6C63FF';
+    /* 4º KPI extra — meta % */
+    var kpi4Val = meta > 0 ? `${pct}%` : '—';
+    var kpi4Lbl = `Meta (${leads}/${meta})`;
+    var kpi4Color = pct >= 80 ? '#10B981' : pct >= 50 ? '#D97706' : '#DC2626';
+  }
+
+  /* — Texto para o cliente (limpo) — */
+  const msgRaw = document.getElementById('rep-wa-msg')?.innerText?.trim() || '';
+  const msgLines = msgRaw.split('\n').map(l => {
+    // converte *bold* e _italic_ para HTML
+    return l.replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/_(.*?)_/g, '<em>$1</em>');
+  });
+
+  /* — Anúncios ativos (Meta API) — */
+  let adsHtmlRel = '';
+  const adsData = await fetchActiveAdsForReport(client).catch(() => null);
+  if (adsData) {
+    const CTA_PT = {
+      LEARN_MORE:'Saiba Mais', SIGN_UP:'Cadastre-se', CONTACT_US:'Fale Conosco',
+      MESSAGE_PAGE:'Enviar Mensagem', SUBSCRIBE:'Inscreva-se', SHOP_NOW:'Comprar Agora',
+      GET_QUOTE:'Solicitar Orçamento', APPLY_NOW:'Candidatar-se', DOWNLOAD:'Baixar',
+      GET_OFFER:'Ver Oferta', WATCH_MORE:'Assistir', SEND_MESSAGE:'Enviar Mensagem',
+      CALL_NOW:'Ligar Agora', ORDER_NOW:'Pedir Agora', BUY_NOW:'Comprar Agora'
+    };
+    const groupedHtml = Object.entries(adsData.grouped).map(([campName, camp]) => {
+      const objLbl = META_OBJECTIVE_LABEL[camp.objective] || camp.objective || '';
+      const setsH  = Object.entries(camp.sets).map(([setName, ads]) => {
+        const adsH = ads.map(ad => {
+          const cta   = CTA_PT[ad.cta] || '';
+          const title = ad.title ? `<div style="font-size:11px;color:#374151;margin-top:3px"><strong>Título:</strong> ${ad.title.slice(0,100)}${ad.title.length>100?'…':''}</div>` : '';
+          const body  = ad.body  ? `<div style="font-size:11px;color:#64748B;margin-top:2px">${ad.body.slice(0,140)}${ad.body.length>140?'…':''}</div>` : '';
+          const ctaT  = cta ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#EEF2FF;color:#6C63FF;border-radius:20px;font-size:9px;font-weight:700">${cta}</span>` : '';
+          return `<div style="padding:8px 0 8px 12px;border-left:2px solid #E2E8F0;margin:5px 0"><div style="font-size:12px;font-weight:600;color:#111827">${ad.name}</div>${title}${body}${ctaT}</div>`;
+        }).join('');
+        return `<div style="margin:8px 0 0 12px"><div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">${setName}</div>${adsH}</div>`;
+      }).join('');
+      return `<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block;flex-shrink:0"></span><span style="font-size:12px;font-weight:700;color:#111827">${campName}</span>${objLbl ? `<span style="font-size:10px;color:#94A3B8">${objLbl}</span>` : ''}</div>${setsH}</div>`;
+    }).join('');
+    adsHtmlRel = `<div class="sec"><div class="sec-title">🟢 Anúncios Ativos — Meta Ads</div><div style="font-size:11px;color:#64748B;margin-bottom:12px">${adsData.total} anúncio${adsData.total!==1?'s':''} ativo${adsData.total!==1?'s':''} em ${Object.keys(adsData.grouped).length} campanha${Object.keys(adsData.grouped).length!==1?'s':''}</div>${groupedHtml}</div>`;
+  } else if (client.meta_ad_account_id) {
+    adsHtmlRel = `<div class="sec"><div class="sec-title">🟢 Anúncios Ativos — Meta Ads</div><p style="font-size:12px;color:#94A3B8">Nenhum anúncio ativo encontrado no momento.</p></div>`;
+  }
+
+  _setLoading(false);
+
+  /* — HTML do relatório — */
+  const kpi4Block = !isDelivery && typeof kpi4Val !== 'undefined' ? `
+    <div class="kpi">
+      <div class="kpi-lbl">📈 Meta do Período</div>
+      <div class="kpi-val" style="color:${kpi4Color}">${kpi4Val}</div>
+      <div class="kpi-sub">${kpi4Lbl}</div>
+    </div>` : '';
+
+  const relHtml = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório — ${client.name} — ${periodStr}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#111827;font-size:13px;line-height:1.5}
+  .pg{max-width:740px;margin:0 auto;padding:36px 40px}
+  .rpt-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:18px;border-bottom:3px solid #6C63FF;margin-bottom:24px}
+  .agency{font-size:20px;font-weight:800;color:#6C63FF;letter-spacing:-0.5px}
+  .agency-sub{font-size:11px;color:#94A3B8;margin-top:2px}
+  .rpt-period{text-align:right;font-size:12px;color:#64748B}
+  .rpt-period strong{display:block;font-size:16px;font-weight:700;color:#111827}
+  .cl-block{display:flex;align-items:center;gap:16px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 20px;margin-bottom:20px}
+  .cl-av{width:50px;height:50px;border-radius:50%;background:${client.color};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0}
+  .cl-name{font-size:18px;font-weight:700;color:#111827;margin-bottom:4px}
+  .cl-meta{font-size:11px;color:#64748B}
+  .seg-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;background:#EEF2FF;color:#6C63FF;margin-right:4px}
+  .kpi-row{display:grid;grid-template-columns:repeat(${isDelivery || !kpi4Block ? '3' : '4'},1fr);gap:10px;margin-bottom:20px}
+  .kpi{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px}
+  .kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#94A3B8;margin-bottom:6px;font-weight:600}
+  .kpi-val{font-size:20px;font-weight:800;font-family:monospace;color:#111827}
+  .kpi-sub{font-size:10px;color:#94A3B8;margin-top:3px}
+  .sec{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  .sec-title{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#94A3B8;font-weight:700;margin-bottom:13px}
+  .msg-line{font-size:12px;color:#374151;line-height:1.8;min-height:1em}
+  .footer{text-align:center;padding-top:20px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;margin-top:8px}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.pg{padding:20px 24px}}
+</style></head><body>
+<div class="pg">
+
+  <div class="rpt-hdr">
+    <div>
+      <div class="agency">Elo Marketing</div>
+      <div class="agency-sub">Relatório de Performance</div>
+    </div>
+    <div class="rpt-period">
+      <strong>${periodStr}</strong>
+      Gerado em ${dataFmt}
+    </div>
+  </div>
+
+  <div class="cl-block">
+    <div class="cl-av">${client.avatar}</div>
+    <div style="flex:1">
+      <div class="cl-name">${client.name}</div>
+      <div class="cl-meta">
+        <span class="seg-tag">${segInfo.label}</span>
+        ${CAT_LABELS[client.categoria] || client.categoria || ''} &nbsp;·&nbsp;
+        Responsável: <strong>${owner?.name || '—'}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-lbl">💰 Investimento</div>
+      <div class="kpi-val" style="font-size:16px">${fmt(inv)}</div>
+      <div class="kpi-sub">${periodStr}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">${isDelivery ? '📈 Faturamento' : '👥 Leads Gerados'}</div>
+      <div class="kpi-val" style="color:${kpi2Color}">${kpi2Val}</div>
+      <div class="kpi-sub">${kpi2Lbl}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">${isDelivery ? '🚀 ROAS' : '🎯 Custo por Lead'}</div>
+      <div class="kpi-val" style="color:${kpi3Color}">${kpi3Val}</div>
+      <div class="kpi-sub">${kpi3Lbl}</div>
+    </div>
+    ${kpi4Block}
+  </div>
+
+  ${msgLines.length > 0 ? `
+  <div class="sec">
+    <div class="sec-title">💬 Resumo para o Cliente</div>
+    ${msgLines.map(l => `<div class="msg-line">${l || '&nbsp;'}</div>`).join('')}
+  </div>` : ''}
+
+  ${adsHtmlRel}
+
+  <div class="footer">
+    Gerado por <strong style="color:#6C63FF">Elo Marketing</strong> &nbsp;·&nbsp; ${dataFmt} &nbsp;·&nbsp; ${client.name}
+  </div>
+
+</div>
+<script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 400); })<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=880,height=720');
+  if (!w) { showNotification('Permita pop-ups para gerar o PDF.', 'warn'); return; }
+  w.document.write(relHtml);
+  w.document.close();
 }
 
 /* ════════════════════════════════════════════════════════════════
