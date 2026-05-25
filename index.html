@@ -2413,6 +2413,9 @@
 .monday-group-cnt{font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px}
 .monday-table{width:100%;border-collapse:collapse}
 .monday-th{text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
+.monday-th.th-sort{cursor:pointer;user-select:none;transition:color .15s,background .15s}
+.monday-th.th-sort:hover{color:var(--text1);background:rgba(108,99,255,.08)}
+.monday-th.th-sort.th-active{color:var(--accent2)}
 .monday-tr{border-bottom:1px solid var(--row-border);transition:background .1s}
 .monday-tr:last-child{border-bottom:none}
 .monday-tr:hover{background:rgba(255,255,255,0.025)}
@@ -5272,7 +5275,10 @@ function updateNavBadges() {
   const urgentCount = TASKS_DATA.filter(t => {
     if (t.status === 'Pronto') return false;
     const dl = t.dueDate || t.deadline;
-    return dl && new Date(dl) <= today;
+    // Parse como data local (evita UTC shift que adianta/atrasa 1 dia no Brasil)
+    if (!dl) return false;
+    const [ry, rm, rd] = dl.slice(0,10).split('-').map(Number);
+    return new Date(ry, rm - 1, rd) <= today;
   }).length;
   const tb = document.getElementById('nav-badge-tarefas');
   if (tb) { tb.textContent = urgentCount; tb.className = 'nav-badge amber'; tb.style.display = urgentCount > 0 ? '' : 'none'; }
@@ -5943,11 +5949,11 @@ function deleteClientFromDB(id) {
 // localStorage é usado como cache local para UX rápida.
 
 async function loadTasksFromDB() {
-  // Admins recebem TODAS as tarefas (sem filtro) — o dropdown filtra no frontend.
-  // Colaboradores recebem apenas as suas (assignedTo OU created_by).
-  const apiUrl = currentUser?.isAdmin
-    ? '/api/tasks'
-    : `/api/tasks?userId=${encodeURIComponent(currentUser?.id || '')}`;
+  // Sempre envia o userId — o backend decide o filtro com base na role (ADMIN_IDS).
+  // Admin → backend retorna todas as tarefas da agência.
+  // Colaborador → backend filtra apenas as suas.
+  const uid    = currentUser?.id || '';
+  const apiUrl = uid ? `/api/tasks?userId=${encodeURIComponent(uid)}` : '/api/tasks';
   const data = await _apiFetch(apiUrl);
   if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
   TASKS_DATA = data.map(t => ({
@@ -14338,6 +14344,67 @@ function normalizeTaskPriority(t) {
   return m[t.criticality] || 'Média';
 }
 
+/* ── Ordenação de tarefas ──────────────────────────────────────────────────────
+ * TASK_SORT.field : 'dueDate' | 'priority' | 'status' | null
+ * TASK_SORT.dir   : 1 = crescente (mais urgente/alto primeiro) | -1 = decrescente
+ */
+let TASK_SORT = { field: null, dir: 1 };
+
+// Pesos internos para comparação
+const _PRIO_W   = { 'Crítica': 4, 'Alta': 3, 'Média': 2, 'Baixa': 1 };
+const _STATUS_W = { 'Em Andamento': 1, 'Não Iniciada': 2, 'Travado': 3, 'Pronto': 4 };
+
+/** Alterna campo/direção e re-renderiza. Chamado pelo clique nos <th>. */
+function sortTasksBy(field) {
+  if (TASK_SORT.field === field) {
+    TASK_SORT.dir *= -1;                   // mesmo campo → inverte direção
+  } else {
+    TASK_SORT.field = field;
+    // Padrão ao ativar: prioridade/status = mais importante primeiro; prazo = mais próximo primeiro
+    TASK_SORT.dir = 1;
+  }
+  renderTasksGrid();
+}
+
+/** Ordena um array de tasks conforme TASK_SORT. Retorna novo array (imutável). */
+function _applyTaskSort(tasks) {
+  if (!TASK_SORT.field) return tasks;
+  const { field, dir } = TASK_SORT;
+
+  return [...tasks].sort((a, b) => {
+    if (field === 'dueDate') {
+      const da = (a.dueDate || a.deadline || '').slice(0, 10);
+      const db = (b.dueDate || b.deadline || '').slice(0, 10);
+      if (!da && !db) return 0;
+      if (!da) return 1;   // sem prazo vai pro final sempre
+      if (!db) return -1;
+      return dir * (da < db ? -1 : da > db ? 1 : 0);
+    }
+    if (field === 'priority') {
+      const wa = _PRIO_W[a.priority] || 0;
+      const wb = _PRIO_W[b.priority] || 0;
+      return dir * (wb - wa);  // dir=1 → maior peso (Crítica) primeiro
+    }
+    if (field === 'status') {
+      const wa = _STATUS_W[a.status] || 99;
+      const wb = _STATUS_W[b.status] || 99;
+      return dir * (wa - wb);  // dir=1 → Em Andamento primeiro
+    }
+    return 0;
+  });
+}
+
+/** Gera um <th> clicável com ícone de ordenação. */
+function _thSort(field, label, style) {
+  const isActive = TASK_SORT.field === field;
+  const iconCls  = !isActive ? 'ti-arrows-sort'
+                 : TASK_SORT.dir === 1 ? 'ti-arrow-up' : 'ti-arrow-down';
+  const iconOpacity = isActive ? '1' : '.3';
+  const activeStyle = isActive ? 'color:var(--accent2);' : '';
+  return `<th class="monday-th th-sort${isActive ? ' th-active' : ''}" style="${style}${activeStyle}" onclick="sortTasksBy('${field}')">` +
+    `${label}<i class="ti ${iconCls}" style="font-size:9px;margin-left:4px;vertical-align:middle;opacity:${iconOpacity}"></i></th>`;
+}
+
 function renderTasksGrid() {
   const board = document.getElementById('monday-board');
   if (!board) return;
@@ -14372,6 +14439,9 @@ function renderTasksGrid() {
   if (ownerF)  tasks = tasks.filter(t => t.assignedTo === ownerF || t.created_by === ownerF || t.owner === ownerF);
   if (clientF) tasks = tasks.filter(t => t.client === clientF);
   if (statusF) tasks = tasks.filter(t => t.status === statusF);
+
+  // Ordenação por coluna clicável
+  tasks = _applyTaskSort(tasks);
 
   board.innerHTML = '';
   TASK_GROUPS_CFG.forEach(g => {
@@ -14429,10 +14499,10 @@ function _buildTaskGroup(group, tasks) {
     <th class="monday-th" style="width:30%;padding-left:46px">Tarefa</th>
     <th class="monday-th" style="width:13%">Cliente</th>
     <th class="monday-th" style="width:9%">Responsável</th>
-    <th class="monday-th" style="width:12%">Status</th>
+    ${_thSort('status',   'Status',     'width:12%')}
     <th class="monday-th" style="width:9%">Tempo</th>
-    <th class="monday-th" style="width:11%">Prioridade</th>
-    <th class="monday-th" style="width:8%">Prazo</th>
+    ${_thSort('priority', 'Prioridade', 'width:11%')}
+    ${_thSort('dueDate',  'Prazo',      'width:8%')}
     <th class="monday-th" style="width:4%"></th>
   </tr></thead>`;
   table.innerHTML = thead;
@@ -14483,7 +14553,10 @@ function _buildTaskRow(task) {
   const due = task.dueDate || task.deadline || '';
   let dueHtml = '<span style="color:var(--text3);font-size:11px">—</span>';
   if (due) {
-    const dt = new Date(due); const now = new Date(); const diff = (dt - now) / 86400000;
+    // Parse como data local (evita UTC shift que adianta/atrasa 1 dia no Brasil)
+    const [dy, dm, dd] = due.slice(0,10).split('-').map(Number);
+    const dt = new Date(dy, dm - 1, dd);
+    const now = new Date(); const diff = (dt - now) / 86400000;
     const fmt = dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
     const cls = diff < 0 ? 'overdue' : diff < 3 ? 'soon' : '';
     dueHtml = `<span class="m-due ${cls}">${fmt}</span>`;
