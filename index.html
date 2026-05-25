@@ -5779,14 +5779,19 @@ async function saveTask() {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando…'; }
 
   try {
+    // Timeout de 10s: se o Render demorar mais (cold start), fecha o modal
+    // e sincroniza automaticamente na próxima vez que o usuário abrir a aba.
+    const _ctrl = new AbortController();
+    const _tid  = setTimeout(() => _ctrl.abort(), 10000);
     const r = await _apiFetch('/api/tasks', {
       method: 'POST',
+      signal: _ctrl.signal,
       body: JSON.stringify({
         ...taskObj,
         created_by: taskObj.created_by || currentUser?.id,
         updated_by: currentUser?.id,
       })
-    });
+    }).finally(() => clearTimeout(_tid));
 
     // A task já está salva no localStorage independente do resultado do servidor.
     // Distingue apenas sucesso confirmado de situações onde o servidor não respondeu.
