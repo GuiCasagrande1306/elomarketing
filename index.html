@@ -997,7 +997,8 @@
 
   .esteira-day-block {
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 12px; margin-bottom: 10px; overflow: hidden;
+    border-radius: 12px; margin-bottom: 10px;
+    /* SEM overflow:hidden no bloco — o accordion cresce naturalmente e empurra os blocos abaixo */
   }
   .esteira-day-block.today {
     border-color: rgba(108,99,255,0.45);
@@ -1008,25 +1009,27 @@
     padding: 13px 18px; cursor: pointer;
     user-select: none; transition: background 0.13s;
     gap: 10px;
+    border-radius: 12px; /* mantém bordas arredondadas sem overflow:hidden no pai */
   }
   .esteira-day-header:hover { background: var(--row-hover); }
   .esteira-day-block.today .esteira-day-header { background: rgba(108,99,255,0.05); }
-  .esteira-chevron { font-size: 14px; color: var(--text3); transition: transform 0.32s ease; flex-shrink: 0; }
+  .esteira-chevron { font-size: 14px; color: var(--text3); transition: transform 0.3s ease; flex-shrink: 0; }
   .esteira-chevron.closed { transform: rotate(-90deg); }
+  /* Accordion: grid-rows de 0fr → 1fr empurra conteúdo abaixo no fluxo normal do documento */
   .esteira-day-body {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows 0.32s ease, opacity 0.32s ease, border-top-width 0.1s ease;
+    transition: grid-template-rows 0.3s ease, opacity 0.3s ease;
     opacity: 1;
-    overflow: hidden;
     border-top: 1px solid var(--border);
   }
   .esteira-day-body.collapsed {
     grid-template-rows: 0fr;
     opacity: 0;
-    border-top-width: 0;
+    border-top-color: transparent;
   }
-  .esteira-body-inner { overflow: hidden; min-height: 0; }
+  /* Camada interna: overflow:hidden aqui garante o corte da animação sem afetar o bloco pai */
+  .esteira-body-inner { overflow: hidden; min-height: 0; border-radius: 0 0 12px 12px; }
 
   .esteira-table { width: 100%; border-collapse: collapse; }
   .esteira-table th {
@@ -8006,7 +8009,13 @@ function renderEsteira() {
   const daysEl = document.getElementById('esteira-days');
   if (!daysEl) return;
 
-  daysEl.innerHTML = DIAS_SEMANA.map(dia => {
+  // Hoje aparece sempre primeiro; dias restantes continuam em sequência
+  const todayIdx       = DIAS_SEMANA.findIndex(d => d.key === todayKey);
+  const diasOrdenados  = todayIdx >= 0
+    ? [...DIAS_SEMANA.slice(todayIdx), ...DIAS_SEMANA.slice(0, todayIdx)]
+    : DIAS_SEMANA;
+
+  daysEl.innerHTML = diasOrdenados.map(dia => {
     const isToday = dia.key === todayKey;
 
     const dayDate = new Date(today);
