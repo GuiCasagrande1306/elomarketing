@@ -5703,14 +5703,15 @@ const CRIT_MAP = {
 
 function buildTaskItem(task) { return document.createElement('div'); } // legado - não usado
 
-function saveTask() {
+async function saveTask() {
   const title = document.getElementById('task-title').value.trim();
   if (!title) { document.getElementById('task-title').focus(); return; }
-  const editId     = document.getElementById('task-edit-id').value;
-  const isEdit     = !!editId;
-  const newStatus  = document.getElementById('task-status').value;
-  const existing   = isEdit ? TASKS_DATA.find(t => t.id === editId) : null;
-  const prevStatus = existing ? normalizeTaskStatus(existing.status) : null;
+  const editIdInput = document.getElementById('task-edit-id');
+  const editId      = editIdInput.value;
+  const isEdit      = !!editId;
+  const newStatus   = document.getElementById('task-status').value;
+  const existing    = isEdit ? TASKS_DATA.find(t => t.id === editId) : null;
+  const prevStatus  = existing ? normalizeTaskStatus(existing.status) : null;
 
   // ── Timer automation ──────────────────────────────────────────────────
   let timerStartedAt = existing?.timerStartedAt || null;
@@ -5728,8 +5729,10 @@ function saveTask() {
     ? 'concluidos'
     : (document.getElementById('task-group')?.value || 'semana');
 
+  // Gera o ID uma única vez — reutilizado no retry para evitar duplicatas
+  const taskId = isEdit ? editId : (editIdInput.dataset.pendingId || crypto.randomUUID());
   const taskObj = {
-    id:          isEdit ? editId : crypto.randomUUID(),
+    id:          taskId,
     title,
     description: document.getElementById('task-description').value.trim(),
     status:      newStatus,
@@ -5746,20 +5749,56 @@ function saveTask() {
     timeSpent,
     timerStartedAt,
   };
+
+  // ── 1. Salva localmente de imediato (task não se perde mesmo se o servidor falhar) ──
   if (isEdit) {
-    const idx = TASKS_DATA.findIndex(t => t.id === editId);
+    const idx = TASKS_DATA.findIndex(t => t.id === taskId);
     if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
-    updateTaskInDB(editId, taskObj);
+    else TASKS_DATA.unshift(taskObj);
   } else {
-    TASKS_DATA.unshift(taskObj);
-    createTaskInDB(taskObj);
+    // Evita duplicata no retry: se já existe com esse ID, apenas atualiza
+    const exists = TASKS_DATA.findIndex(t => t.id === taskId);
+    if (exists !== -1) TASKS_DATA[exists] = { ...TASKS_DATA[exists], ...taskObj };
+    else TASKS_DATA.unshift(taskObj);
+    // Guarda o ID no data-attribute para que retry reutilize o mesmo UUID
+    editIdInput.dataset.pendingId = taskId;
   }
   saveTasks();
   renderTasksGrid();
   updateNavBadges();
-  closeModal();
-  resetTaskForm();
-  showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
+
+  // ── 2. Tenta salvar no servidor; mantém formulário aberto em caso de falha ──
+  const saveBtn = document.querySelector('#task-form button[type="submit"]');
+  const origLabel = saveBtn?.innerHTML || '<i class="ti ti-check"></i> Salvar Tarefa';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando…'; }
+
+  try {
+    const r = await _apiFetch('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...taskObj,
+        created_by: taskObj.created_by || currentUser?.id,
+        updated_by: currentUser?.id,
+      })
+    });
+
+    if (!r || r._coldStart || (!r.ok && !r.task)) {
+      // Servidor indisponível ou cold start — task salva localmente, exibe erro
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origLabel; }
+      showNotification('Erro ao salvar tarefa no servidor. Tente novamente.', 'error');
+      return; // formulário permanece aberto
+    }
+
+    // ── Sucesso ───────────────────────────────────────────────────────
+    console.log('[Tasks] tarefa salva no MongoDB:', taskId);
+    delete editIdInput.dataset.pendingId;
+    closeModal();
+    resetTaskForm();
+    showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
+  } catch(e) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origLabel; }
+    showNotification('Erro ao salvar tarefa no servidor. Tente novamente.', 'error');
+  }
 }
 
 /* ==========================================================================
