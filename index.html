@@ -3247,11 +3247,15 @@
     <div class="page" id="page-tarefas">
       <!-- Toolbar -->
       <div class="monday-toolbar">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <input type="text" class="monday-search" id="task-search" placeholder="🔍 Buscar tarefa..." oninput="renderTasksGrid()">
-          <select class="monday-filter-sel" id="task-filter-owner" onchange="renderTasksGrid()">
-            <option value="">Todos os responsáveis</option>
-          </select>
+          <!-- Filtro de Colaborador — visível apenas para admins (loginUser controla display) -->
+          <div id="task-collab-filter-wrap" style="display:flex;align-items:center;gap:6px">
+            <span class="esteira-filter-label"><i class="ti ti-users" style="font-size:11px;margin-right:3px"></i>Colaborador</span>
+            <select class="esteira-filter-select" id="task-filter-owner" onchange="renderTasksGrid()" style="min-width:185px">
+              <option value="">Todos os Colaboradores</option>
+            </select>
+          </div>
           <select class="monday-filter-sel" id="task-filter-client" onchange="renderTasksGrid()">
             <option value="">Todos os clientes</option>
           </select>
@@ -3263,9 +3267,16 @@
             <option value="Pronto">Pronto</option>
           </select>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="openTaskModal()">
-          <i class="ti ti-plus"></i> Nova Tarefa
-        </button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" id="task-sync-btn"
+            onclick="syncTasksToDB()"
+            title="Envia todas as tarefas salvas localmente para o servidor (sincroniza equipe)">
+            <i class="ti ti-cloud-upload"></i> Sincronizar
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="openTaskModal()">
+            <i class="ti ti-plus"></i> Nova Tarefa
+          </button>
+        </div>
       </div>
       <!-- Board dinâmico -->
       <div id="monday-board"></div>
@@ -5277,14 +5288,15 @@ function saveTasks() {
 }
 
 function loadTasks() {
-  // Carrega do localStorage v2 (novo formato)
+  // 1. Renderiza imediatamente com dados do localStorage (sem esperar servidor)
   const raw = localStorage.getItem('tp_tasks_v2');
   if (raw) {
     try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) TASKS_DATA = parsed; } catch(e) {}
   }
   renderTasksGrid();
   updateNavBadges();
-  loadTasksFromDB().catch(() => {});
+  // 2. Em background: sobe tarefas locais para o BD e depois busca todas do servidor
+  _autoSyncAndLoad().catch(() => {});
 }
 
 function migrateDefaultDoneTasks() {
@@ -5892,7 +5904,12 @@ function deleteClientFromDB(id) {
 // localStorage é usado como cache local para UX rápida.
 
 async function loadTasksFromDB() {
-  const data = await _apiFetch('/api/tasks');
+  // Admins recebem TODAS as tarefas (sem filtro) — o dropdown filtra no frontend.
+  // Colaboradores recebem apenas as suas (assignedTo OU created_by).
+  const apiUrl = currentUser?.isAdmin
+    ? '/api/tasks'
+    : `/api/tasks?userId=${encodeURIComponent(currentUser?.id || '')}`;
+  const data = await _apiFetch(apiUrl);
   if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
   TASKS_DATA = data.map(t => ({
     ...t,
@@ -5915,8 +5932,54 @@ function createTaskInDB(task) {
   if (!currentUser) return;
   _apiFetch('/api/tasks', {
     method: 'POST',
-    body: JSON.stringify({ ...task, updated_by: currentUser.id, created_by: currentUser.id })
+    body: JSON.stringify({ ...task, updated_by: currentUser.id, created_by: task.created_by || currentUser.id })
   }).then(r => { if (!r?.ok) console.warn('[Tasks] falha ao criar:', task.id); });
+}
+
+/**
+ * Sobe TODAS as tarefas do TASKS_DATA para o servidor (upsert silencioso)
+ * e em seguida busca todas as tarefas do BD (incluindo as de outros usuários).
+ * Chamado automaticamente em loadTasks() — sem notificações.
+ */
+async function _autoSyncAndLoad() {
+  if (!currentUser) return;
+  // Dispara todos os upserts em paralelo (sem bloquear UI)
+  await Promise.allSettled(
+    TASKS_DATA.map(task =>
+      _apiFetch('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...task,
+          created_by: task.created_by || currentUser.id,
+          updated_by: currentUser.id,
+        }),
+      }).catch(() => null)
+    )
+  );
+  // Após salvar, busca todas as tarefas do servidor (inclui as de outros usuários)
+  await loadTasksFromDB();
+}
+
+/**
+ * Versão manual do sync — mostra spinner no botão e exibe notificação de resultado.
+ */
+async function syncTasksToDB() {
+  if (!currentUser) { showNotification('Faça login antes de sincronizar.', 'warn'); return; }
+  const btn = document.getElementById('task-sync-btn');
+  const restore = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando…'; }
+
+  const before = TASKS_DATA.length;
+  await _autoSyncAndLoad();
+  const after = TASKS_DATA.length;
+
+  if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+  showNotification(
+    after > before
+      ? `✅ Sincronizado! ${after - before} tarefa${after - before !== 1 ? 's novas' : ' nova'} encontrada${after - before !== 1 ? 's' : ''}.`
+      : `✅ Tudo sincronizado com o servidor.`,
+    'success'
+  );
 }
 
 function updateTaskInDB(id, updates) {
@@ -6263,9 +6326,9 @@ function loginUser(user) {
     // Admins começam com visão geral; colaboradores ficam travados no próprio ID
     sel.value = user.isAdmin ? 'all' : user.id;
   }
-  // Esconde filtro de responsável nas Tarefas para colaboradores (visão travada no próprio ID)
-  const taskOwnerSel = document.getElementById('task-filter-owner');
-  if (taskOwnerSel) taskOwnerSel.style.display = user.isAdmin ? '' : 'none';
+  // Esconde filtro de colaborador nas Tarefas para não-admins (visão travada no próprio ID)
+  const taskCollabWrap = document.getElementById('task-collab-filter-wrap');
+  if (taskCollabWrap) taskCollabWrap.style.display = user.isAdmin ? '' : 'none';
   filterByCollaborator(user.isAdmin ? 'all' : user.id);
   refreshTaskOwnerChips();
   resetTaskForm();
@@ -14238,7 +14301,8 @@ function renderTasksGrid() {
   });
 
   if (search)  tasks = tasks.filter(t => t.title.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search));
-  if (ownerF)  tasks = tasks.filter(t => t.assignedTo === ownerF);
+  // Filtra por colaborador: responsável OU criador da tarefa
+  if (ownerF)  tasks = tasks.filter(t => t.assignedTo === ownerF || t.created_by === ownerF || t.owner === ownerF);
   if (clientF) tasks = tasks.filter(t => t.client === clientF);
   if (statusF) tasks = tasks.filter(t => t.status === statusF);
 
@@ -14254,11 +14318,24 @@ function renderTasksGrid() {
 function _populateTaskFilters() {
   const ownerSel  = document.getElementById('task-filter-owner');
   const clientSel = document.getElementById('task-filter-client');
-  if (ownerSel && ownerSel.options.length <= 1) {
-    USERS.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.name; ownerSel.appendChild(o); });
+  // Reconstrói owner options sempre (pode ter novos usuários desde o último render)
+  if (ownerSel) {
+    const prev = ownerSel.value; // preserva seleção atual
+    ownerSel.innerHTML = '<option value="">Todos os Colaboradores</option>';
+    USERS.forEach(u => {
+      const o = document.createElement('option');
+      o.value = u.id;
+      o.textContent = u.name + (u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : '');
+      ownerSel.appendChild(o);
+    });
+    if (prev) ownerSel.value = prev; // restaura seleção
   }
   if (clientSel && clientSel.options.length <= 1) {
-    (CLIENTS.list || []).forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; clientSel.appendChild(o); });
+    (CLIENTS.list || []).forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      clientSel.appendChild(o);
+    });
   }
 }
 
