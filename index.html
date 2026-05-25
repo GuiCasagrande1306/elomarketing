@@ -5933,7 +5933,17 @@ function createTaskInDB(task) {
   _apiFetch('/api/tasks', {
     method: 'POST',
     body: JSON.stringify({ ...task, updated_by: currentUser.id, created_by: task.created_by || currentUser.id })
-  }).then(r => { if (!r?.ok) console.warn('[Tasks] falha ao criar:', task.id); });
+  }).then(r => {
+    if (!r) {
+      console.error('[Tasks] POST falhou (rede) — tarefa salva localmente, será sincronizada ao reabrir a página:', task.id);
+    } else if (r._coldStart) {
+      console.warn('[Tasks] servidor acordando — tarefa salva localmente, sync automático ao reabrir:', task.id);
+    } else if (!r.ok) {
+      console.error('[Tasks] POST retornou erro do servidor:', task.id, r);
+    } else {
+      console.log('[Tasks] tarefa salva no MongoDB:', task.id);
+    }
+  });
 }
 
 /**
@@ -5988,7 +5998,10 @@ function updateTaskInDB(id, updates) {
     method: 'PUT',
     body:   JSON.stringify({ ...updates, updated_by: currentUser.id })
   }).then(r => {
-    if (!r?.ok) console.warn('[Tasks] falha ao atualizar:', id);
+    if (!r)             console.error('[Tasks] PUT falhou (rede):', id);
+    else if (r._coldStart) console.warn('[Tasks] PUT cold start — será sincronizado:', id);
+    else if (!r.ok)     console.error('[Tasks] PUT erro servidor:', id, r);
+    else                console.log('[Tasks] tarefa atualizada no MongoDB:', id);
   });
   // Supabase (legado — mantido se configurado)
   if (db && currentUser) {
@@ -14584,12 +14597,34 @@ function _hasRunningTimers() {
 
 /* ── API helpers ──────────────────────────────────────────────────────────── */
 function _apiBase() { return (PROD_CONFIG.apiUrl || '').replace(/\/$/, ''); }
+
+/**
+ * Fetch para o backend REST (Render).
+ * Detecta cold start (Render dormindo → HTML 502/503) e retorna { _coldStart: true }
+ * em vez de engolir o erro silenciosamente.
+ * Erros de rede retornam null (com log no console).
+ */
 function _apiFetch(path, opts = {}) {
   const base = _apiBase();
   if (!base) return Promise.resolve(null);
-  return fetch(base + path, { headers: { 'Content-Type': 'application/json' }, ...opts })
-    .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
-    .catch(e => { console.warn('[API]', path, e); return null; });
+  const fetchOpts = { headers: { 'Content-Type': 'application/json' }, ...opts };
+  return fetch(base + path, fetchOpts)
+    .then(async r => {
+      const text = await r.text().catch(() => '');
+      // Render dormindo devolve página HTML em vez de JSON
+      if (text.trim().startsWith('<') || (r.status >= 500 && !text.trim().startsWith('{'))) {
+        console.warn(`[API] cold start / erro servidor ${r.status}:`, path);
+        return { _coldStart: true, _status: r.status };
+      }
+      let json = null;
+      try { json = JSON.parse(text); } catch { json = null; }
+      if (!r.ok) {
+        console.warn(`[API] HTTP ${r.status}:`, path, json);
+        return json; // devolve body do erro (pode ter { error: '...' })
+      }
+      return json;
+    })
+    .catch(e => { console.warn('[API] rede:', path, e.message); return null; });
 }
 
 /**
