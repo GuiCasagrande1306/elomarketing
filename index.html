@@ -6019,8 +6019,9 @@ function deleteTaskInDB(id) {
 // ── INIT & REALTIME ───────────────────────────────────────────────────────────
 async function initSupabaseSync() {
   if (!db) {
-    // Sem DB: renderiza com dados seed locais
+    // Sem DB: renderiza com dados seed locais e busca tasks do MongoDB
     renderClients(); renderGoalAlerts(); renderPacingAlerts(); renderDashboard();
+    _autoSyncAndLoad().catch(() => {}); // sobe localStorage → Atlas e baixa tudo no login
     return;
   }
   setSyncStatus('syncing');
