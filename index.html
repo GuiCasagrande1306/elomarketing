@@ -5788,11 +5788,21 @@ async function saveTask() {
       })
     });
 
-    if (!r || r._coldStart || (!r.ok && !r.task)) {
-      // Servidor indisponível ou cold start — task salva localmente, exibe erro
+    if (r === null || r._coldStart) {
+      // Rede offline ou servidor acordando — task já salva localmente, fecha normalmente
+      console.warn('[Tasks] servidor offline/cold-start — tarefa salva localmente, sync automático:', taskId);
+      delete editIdInput.dataset.pendingId;
+      closeModal();
+      resetTaskForm();
+      showNotification('Tarefa salva localmente. Sincronizará ao reconectar. ☁️', 'warn');
+      return;
+    }
+
+    if (!r.ok && !r.task) {
+      // Erro real do servidor (4xx/5xx com JSON de erro) — mantém formulário aberto
       if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origLabel; }
       showNotification('Erro ao salvar tarefa no servidor. Tente novamente.', 'error');
-      return; // formulário permanece aberto
+      return;
     }
 
     // ── Sucesso ───────────────────────────────────────────────────────
@@ -5802,8 +5812,12 @@ async function saveTask() {
     resetTaskForm();
     showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
   } catch(e) {
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origLabel; }
-    showNotification('Erro ao salvar tarefa no servidor. Tente novamente.', 'error');
+    // Erro de rede inesperado — fecha modal (task salva localmente)
+    console.warn('[Tasks] erro de rede ao salvar:', e.message);
+    delete editIdInput.dataset.pendingId;
+    closeModal();
+    resetTaskForm();
+    showNotification('Tarefa salva localmente. Sincronizará ao reconectar. ☁️', 'warn');
   }
 }
 
