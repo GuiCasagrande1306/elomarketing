@@ -13918,11 +13918,20 @@ function closeGroupPicker() {
   if (overlay) overlay.style.display = 'none';
 }
 
+/* Limpa todo o estado do picker e refaz a busca — chamado pelo botão "Tentar novamente". */
+function _retryLoadWaGroups() {
+  _waAllGroups = [];
+  const count = document.getElementById('wa-group-count');
+  if (count) count.textContent = '';
+  _loadWaGroups();
+}
+
 async function _loadWaGroups() {
   const list  = document.getElementById('wa-group-list');
   const count = document.getElementById('wa-group-count');
   if (!list) return;
 
+  _waAllGroups = []; // garante estado limpo a cada chamada
   if (count) count.textContent = '';
   list.innerHTML = `
     <div id="wa-loading-msg" style="display:flex;flex-direction:column;align-items:center;gap:10px;
@@ -13944,14 +13953,14 @@ async function _loadWaGroups() {
   clearTimeout(hintTimer);
   clearTimeout(abortTimer);
 
-  // Helper: mostra erro com botão de retry
+  // Helper: mostra erro com botão de retry (usa _retryLoadWaGroups para reset limpo)
   const showErr = (icon, title, sub) => {
     list.innerHTML = `
       <div style="padding:24px 16px;text-align:center">
         <div style="font-size:28px;margin-bottom:8px">${icon}</div>
         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">${title}</div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.5">${sub}</div>
-        <button onclick="_loadWaGroups()"
+        <button onclick="_retryLoadWaGroups()"
           style="padding:7px 16px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);
                  border-radius:8px;color:#25D366;font-size:12px;font-weight:600;cursor:pointer">
           <i class="ti ti-refresh"></i> Tentar novamente
@@ -13971,16 +13980,30 @@ async function _loadWaGroups() {
   }
 
   if (data.error) {
-    // 504 = timeout Evolution API; outros = erro genérico
-    const isTimeout = data.error.includes('15s') || data.error.includes('timeout');
-    const isKey     = data.error.includes('inválida') || data.error.includes('API Key');
-    const icon  = isTimeout ? '⏱️' : isKey ? '🔑' : '❌';
-    const sub   = isKey
-      ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API</b>.'
+    const err = data.error;
+    const isTimeout = err.includes('15s') || err.includes('timeout') || err.includes('50s');
+    const isKey     = err.includes('inválida') || err.includes('API Key');
+    const isNoInst  = err.includes('não encontrada') || err.includes('instância');
+    const isRoute   = err.includes('Rota não encontrada') || err.includes('rota') || err.includes('404');
+    const isReject  = err.includes('400') || err.includes('rejeitou');
+
+    const icon = isKey ? '🔑' : isTimeout ? '⏱️' : isNoInst ? '📵' : isRoute ? '🔌' : '❌';
+
+    const sub = isKey
+      ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.'
       : isTimeout
         ? 'A Evolution API não respondeu a tempo.<br>Verifique se a instância está ativa no Railway.'
-        : `Detalhe: ${data.error}`;
-    showErr(icon, data.error, sub);
+        : isNoInst
+          ? 'Conecte o WhatsApp primeiro em <b>Integrações → WhatsApp → Conectar</b>.'
+          : isRoute
+            ? 'O endpoint da Evolution API não foi encontrado.<br>Verifique a URL da Evolution API em <b>Integrações → Evolution API</b>.<br>'
+              + (data.detail ? `<code style="font-size:9px;opacity:0.7">${String(data.detail).substring(0,120)}</code>` : '')
+            : isReject
+              ? 'Verifique se a instância WhatsApp está ativa e conectada no Railway.<br>'
+                + (data.detail ? `<code style="font-size:9px;opacity:0.7">${String(data.detail).substring(0,100)}</code>` : '')
+              : `${err}${data.detail ? '<br><code style="font-size:9px;opacity:0.7">' + String(data.detail).substring(0,120) + '</code>' : ''}`;
+
+    showErr(icon, err, sub);
     return;
   }
 
