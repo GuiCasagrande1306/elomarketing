@@ -1011,9 +1011,22 @@
   }
   .esteira-day-header:hover { background: var(--row-hover); }
   .esteira-day-block.today .esteira-day-header { background: rgba(108,99,255,0.05); }
-  .esteira-chevron { font-size: 14px; color: var(--text3); transition: transform 0.2s; flex-shrink: 0; }
+  .esteira-chevron { font-size: 14px; color: var(--text3); transition: transform 0.32s ease; flex-shrink: 0; }
   .esteira-chevron.closed { transform: rotate(-90deg); }
-  .esteira-day-body { border-top: 1px solid var(--border); }
+  .esteira-day-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.32s ease, opacity 0.32s ease, border-top-width 0.1s ease;
+    opacity: 1;
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+  }
+  .esteira-day-body.collapsed {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    border-top-width: 0;
+  }
+  .esteira-body-inner { overflow: hidden; min-height: 0; }
 
   .esteira-table { width: 100%; border-collapse: collapse; }
   .esteira-table th {
@@ -3766,10 +3779,6 @@
           <option value="sexta">Sexta-feira</option>
         </select>
         <div style="font-size:10px;color:var(--text3);margin-top:4px">Define em qual dia este cliente aparece na Esteira de Otimizações</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label"><i class="ti ti-brand-whatsapp" style="color:#25D366;margin-right:4px"></i>WhatsApp do Cliente</label>
-        <input type="text" id="cl-form-whatsapp" class="form-input" placeholder="Ex: 5511999999999 (com DDI)" autocomplete="off">
       </div>
       <div class="form-group">
         <label class="form-label"><i class="ti ti-users-group" style="color:#25D366;margin-right:4px"></i>Grupo do WhatsApp para Relatórios</label>
@@ -7514,7 +7523,6 @@ function openNewClientModal(id) {
   document.getElementById('cl-form-goal-realized').value = '';
   document.getElementById('cl-form-budget').value       = '';
   document.getElementById('cl-form-investment').value   = '';
-  document.getElementById('cl-form-whatsapp').value          = '';
   document.getElementById('cl-form-dia-otimizacao').value    = '';
   document.getElementById('cl-form-categoria').value         = 'elo_marketing';
   const _grpJidReset  = document.getElementById('cl-form-wa-group-jid');
@@ -7554,7 +7562,6 @@ function openNewClientModal(id) {
       document.getElementById('cl-form-segment').value   = c.segment;
       document.getElementById('cl-form-objective').value = c.objective || '';
       document.getElementById('cl-form-owner').value     = c.owner;
-      document.getElementById('cl-form-whatsapp').value          = c.whatsapp || '';
       document.getElementById('cl-form-dia-otimizacao').value    = c.dia_otimizacao || '';
       // Grupo WhatsApp para Relatórios
       const _grpJidEl  = document.getElementById('cl-form-wa-group-jid');
@@ -8051,25 +8058,27 @@ function renderEsteira() {
           <span style="font-size:12px;color:var(--text3);margin-right:8px">${clients.length} cliente${clients.length!==1?'s':''}</span>
           <i class="ti ti-chevron-down esteira-chevron${isOpen?'':' closed'}"></i>
         </div>
-        <div class="esteira-day-body" style="${isOpen?'':'display:none'}">
-          <table class="esteira-table">
-            <thead>
-              <tr><th>Cliente</th><th>Status</th><th>Última Otimização</th><th></th></tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-          </table>
+        <div class="esteira-day-body${isOpen ? '' : ' collapsed'}">
+          <div class="esteira-body-inner">
+            <table class="esteira-table">
+              <thead>
+                <tr><th>Cliente</th><th>Status</th><th>Última Otimização</th><th></th></tr>
+              </thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+          </div>
         </div>
       </div>`;
   }).join('');
 }
 
 function toggleEsteiraDay(header) {
-  const block   = header.closest('.esteira-day-block');
-  const body    = block.querySelector('.esteira-day-body');
-  const chevron = header.querySelector('.esteira-chevron');
-  const isOpen  = body.style.display !== 'none';
-  body.style.display = isOpen ? 'none' : '';
-  chevron.classList.toggle('closed', isOpen);
+  const block      = header.closest('.esteira-day-block');
+  const body       = block.querySelector('.esteira-day-body');
+  const chevron    = header.querySelector('.esteira-chevron');
+  const isCollapsed = body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', !isCollapsed);
+  chevron.classList.toggle('closed', !isCollapsed);
 }
 
 function openOptimizationDrawer(clientId) {
@@ -8271,7 +8280,6 @@ function saveNewClient() {
   const segment   = document.getElementById('cl-form-segment').value;
   const objective = document.getElementById('cl-form-objective').value.trim();
   const owner     = document.getElementById('cl-form-owner').value;
-  const whatsapp              = document.getElementById('cl-form-whatsapp').value.trim().replace(/\D/g, '');
   const whatsapp_group_jid    = document.getElementById('cl-form-wa-group-jid')?.value.trim()  || '';
   const whatsapp_group_name   = document.getElementById('cl-form-wa-group-name')?.value.trim() || '';
   const dia_otimizacao        = document.getElementById('cl-form-dia-otimizacao')?.value || '';
@@ -8320,12 +8328,12 @@ function saveNewClient() {
 
   if (clEditingId) {
     const idx = CLIENTS.list.findIndex(c => c.id === clEditingId);
-    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
+    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
   } else {
     CLIENTS.list.push({
       id: `cl-${CLIENTS.nextId++}`,
       name, segment, categoria, importance: clImportanceVal, objective, owner, goal, budget, investment,
-      avatar: initials, whatsapp, whatsapp_group_jid, whatsapp_group_name,
+      avatar: initials, whatsapp_group_jid, whatsapp_group_name,
       meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
       color: CL_COLORS[(CLIENTS.list.length) % CL_COLORS.length],
       investments, dia_otimizacao,
@@ -13148,7 +13156,7 @@ async function sincronizarTodosMeta() {
         budget: conta.budget || 0, investment: conta.gasto || 0,
         meta_balance: 0, meta_spend7d: 0, metodo_pagamento: '',
         ga4_property_id: '', meta_ad_account_id: conta.accountId || '',
-        whatsapp: '', goal: {target:0, realized:0}, investments: [],
+        whatsapp_group_jid: '', whatsapp_group_name: '', goal: {target:0, realized:0}, investments: [],
         faturamentoMetaAds: 0, metaCompras: 0, metaAddToCart: 0, metaSessoes: 0,
         dia_otimizacao: '', ultima_otimizacao: '', historico_otimizacoes: []
       };
@@ -13702,31 +13710,60 @@ async function _loadWaGroups() {
   const count = document.getElementById('wa-group-count');
   if (!list) return;
 
+  if (count) count.textContent = '';
   list.innerHTML = `
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;
                 padding:32px 16px;color:var(--text3)">
       <i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite;color:#25D366"></i>
-      <span style="font-size:12px">Carregando grupos...</span>
+      <span style="font-size:12px">Buscando grupos na Evolution API...</span>
     </div>`;
 
   const userId = currentUser?.id;
   const data   = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`);
 
+  // Helper: mostra erro com botão de retry
+  const showErr = (icon, title, sub) => {
+    list.innerHTML = `
+      <div style="padding:24px 16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">${icon}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">${title}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.5">${sub}</div>
+        <button onclick="_loadWaGroups()"
+          style="padding:7px 16px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);
+                 border-radius:8px;color:#25D366;font-size:12px;font-weight:600;cursor:pointer">
+          <i class="ti ti-refresh"></i> Tentar novamente
+        </button>
+      </div>`;
+  };
+
   if (!data || data._coldStart) {
-    list.innerHTML = `<div style="padding:24px 16px;text-align:center;font-size:12px;color:var(--text3)">
-      ⏳ Backend acordando — tente novamente em alguns segundos.</div>`;
-    if (count) count.textContent = '';
+    showErr('⏳', 'Backend acordando', 'O servidor está iniciando (30–60s).<br>Aguarde e tente novamente.');
     return;
   }
 
   if (data.error) {
-    list.innerHTML = `<div style="padding:24px 16px;text-align:center;font-size:12px;color:var(--red)">
-      ❌ ${data.error}</div>`;
-    if (count) count.textContent = '';
+    // 504 = timeout Evolution API; outros = erro genérico
+    const isTimeout = data.error.includes('15s') || data.error.includes('timeout');
+    const isKey     = data.error.includes('inválida') || data.error.includes('API Key');
+    const icon  = isTimeout ? '⏱️' : isKey ? '🔑' : '❌';
+    const sub   = isKey
+      ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API</b>.'
+      : isTimeout
+        ? 'A Evolution API não respondeu a tempo.<br>Verifique se a instância está ativa no Railway.'
+        : `Detalhe: ${data.error}`;
+    showErr(icon, data.error, sub);
     return;
   }
 
   _waAllGroups = data.groups || [];
+  const dbg = data._debug;
+  if (dbg && dbg.total > 0 && dbg.filtered === 0) {
+    // Grupos vieram mas nenhum passou no filtro @g.us — problema de formato
+    showErr('⚠️', 'Grupos recebidos mas não reconhecidos',
+      `A API retornou ${dbg.total} item(s) mas nenhum tinha JID @g.us.<br>Verifique o console do backend.`);
+    return;
+  }
+
   if (count) count.textContent = `${_waAllGroups.length} grupo${_waAllGroups.length !== 1 ? 's' : ''}`;
   _filterWaGroups('');
 }
@@ -13896,12 +13933,20 @@ async function sendReportViaWhatsApp() {
   const clientId = document.getElementById('rep-client')?.value;
   const client   = CLIENTS.list.find(c => c.id === clientId);
   if (!client) { showNotification('Selecione um cliente primeiro.', 'warn'); return; }
-  if (!client.whatsapp) {
-    showNotification('Número de WhatsApp não cadastrado. Edite o cliente e adicione.', 'warn'); return;
+
+  // ── Validação: grupo obrigatório ─────────────────────────────────────────────
+  if (!client.whatsapp_group_jid) {
+    showNotification(
+      '⚠️ Erro: Este cliente não possui um grupo de WhatsApp configurado no seu cadastro.',
+      'warn'
+    );
+    // Abre o formulário de edição do cliente direto no campo de grupo
+    setTimeout(() => openNewClientModal(clientId), 400);
+    return;
   }
 
-  const msgEl = document.getElementById('rep-wa-msg');
-  const msg   = msgEl ? msgEl.innerText : '';
+  const msgEl  = document.getElementById('rep-wa-msg');
+  const msg    = msgEl ? msgEl.innerText : '';
   const userId = currentUser?.id;
 
   const btn = document.getElementById('rep-send-btn');
@@ -13913,13 +13958,12 @@ async function sendReportViaWhatsApp() {
       : '<i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp';
   };
 
-  // Fallback: abre wa.me se Render não estiver configurado ou usuário não logado
+  // Sem backend configurado → avisa e para (grupos não têm fallback wa.me)
   if (!userId || !PROD_CONFIG.renderUrl) {
-    window.open(`https://wa.me/${client.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    showNotification('⚠️ Configure o backend Render antes de enviar para grupos.', 'warn');
     return;
   }
 
-  const waFallbackUrl = `https://wa.me/${client.whatsapp}?text=${encodeURIComponent(msg)}`;
   const goToIntegracoes = () => {
     document.getElementById('wa-fallback-toast')?.remove();
     navigate('integracoes', document.querySelector('.nav-item[onclick*="integracoes"]'));
@@ -13927,17 +13971,13 @@ async function sendReportViaWhatsApp() {
 
   setBtn(true);
 
-  // ── Pré-verificação: instância conectada antes de tentar enviar ──────────────
+  // ── Pré-verificação: instância conectada ────────────────────────────────────
   try {
     const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
 
     if (!stateData || stateData._coldStart) {
       setBtn(false);
-      _showWaError(
-        '⏳ Backend WhatsApp está acordando (pode levar 30–60s).',
-        'Aguarde e tente novamente. Se preferir, envie manualmente:',
-        waFallbackUrl
-      );
+      showNotification('⏳ Backend WhatsApp está acordando — tente novamente em 30s.', 'warn');
       return;
     }
 
@@ -13946,41 +13986,36 @@ async function sendReportViaWhatsApp() {
       _showWaError(
         '❌ WhatsApp não está conectado.',
         'Escaneie o QR code em Integrações para conectar, depois tente novamente.',
-        waFallbackUrl,
+        null,
         { label: '⚙️ Ir para Integrações', fn: goToIntegracoes }
       );
       return;
     }
   } catch(eState) {
-    // Se a pré-verificação falhar por rede, ainda tenta enviar
     console.warn('[WhatsApp precheck]', eState.message);
   }
 
-  // ── Envio ────────────────────────────────────────────────────────────────────
+  // ── Envio para o grupo ───────────────────────────────────────────────────────
   try {
-    const data = await _renderFetch('/api/whatsapp/send', {
+    const data = await _renderFetch('/api/whatsapp/send-group', {
       method: 'POST',
-      body: JSON.stringify({ userId, phone: client.whatsapp, message: msg }),
+      body:   JSON.stringify({ userId, groupJid: client.whatsapp_group_jid, message: msg }),
     });
     setBtn(false);
 
-    /* — Sucesso — */
     if (data?.ok) {
-      showNotification('✅ Mensagem enviada com sucesso via WhatsApp!', 'success');
-      return;
-    }
-
-    /* — Backend Render dormindo (cold start) — */
-    if (!data || data._coldStart) {
-      _showWaError(
-        '⏳ Backend WhatsApp está acordando (pode levar 30–60s).',
-        'Tente novamente em instantes. Se persistir, envie manualmente:',
-        waFallbackUrl
+      showNotification(
+        `✅ Relatório enviado para o grupo "${client.whatsapp_group_name || 'grupo'}"!`,
+        'success'
       );
       return;
     }
 
-    /* — Classifica o erro usando error + detail — */
+    if (!data || data._coldStart) {
+      showNotification('⏳ Backend acordando — tente novamente em instantes.', 'warn');
+      return;
+    }
+
     const errMsg    = data?.error  || '';
     const errDetail = data?.detail || '';
     const fullErr   = (errMsg + ' ' + errDetail).toLowerCase();
@@ -13988,27 +14023,19 @@ async function sendReportViaWhatsApp() {
     if (/not connected|not found|instance|disconnected|closed|401|403/.test(fullErr)) {
       _showWaError(
         '❌ WhatsApp não está conectado.',
-        'Escaneie o QR code em Integrações para reconectar, depois tente novamente.',
-        waFallbackUrl,
+        'Escaneie o QR code em Integrações para reconectar.',
+        null,
         { label: '⚙️ Ir para Integrações', fn: goToIntegracoes }
       );
       return;
     }
 
-    const displayDetail = errDetail ? errDetail.replace(/[{}"]/g, '').substring(0, 90) : '';
-    _showWaError(
-      `❌ Falha ao enviar: ${errMsg || 'Erro desconhecido'}`,
-      displayDetail || 'Você pode enviar manualmente clicando abaixo:',
-      waFallbackUrl
-    );
+    showNotification(`❌ Falha ao enviar: ${errMsg || 'Erro desconhecido'}`, 'error');
+    console.error('[sendReportViaWhatsApp]', data);
 
   } catch(e) {
     setBtn(false);
-    _showWaError(
-      '❌ Erro de conexão com o servidor.',
-      'Verifique sua internet ou envie manualmente:',
-      waFallbackUrl
-    );
+    showNotification('❌ Erro de conexão com o servidor.', 'error');
     console.error('[WhatsApp send]', e.message);
   }
 }
