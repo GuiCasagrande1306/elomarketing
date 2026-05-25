@@ -3772,6 +3772,34 @@
         <input type="text" id="cl-form-whatsapp" class="form-input" placeholder="Ex: 5511999999999 (com DDI)" autocomplete="off">
       </div>
       <div class="form-group">
+        <label class="form-label"><i class="ti ti-users-group" style="color:#25D366;margin-right:4px"></i>Grupo do WhatsApp para Relatórios</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="cl-form-wa-group-name" class="form-input" readonly
+            placeholder="Nenhum grupo selecionado"
+            style="background:var(--bg2);cursor:pointer;flex:1"
+            onclick="openGroupPicker()">
+          <input type="hidden" id="cl-form-wa-group-jid">
+          <button type="button" onclick="openGroupPicker()"
+            style="flex-shrink:0;display:flex;align-items:center;gap:5px;padding:8px 12px;
+                   background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.35);
+                   border-radius:8px;color:#25D366;font-size:12px;font-weight:600;cursor:pointer;
+                   white-space:nowrap;transition:background 0.15s"
+            onmouseover="this.style.background='rgba(37,211,102,0.2)'"
+            onmouseout="this.style.background='rgba(37,211,102,0.12)'">
+            <i class="ti ti-search"></i> Buscar Grupos
+          </button>
+          <button type="button" id="cl-form-wa-group-clear" onclick="clearGroupSelection()"
+            title="Remover grupo" style="display:none;flex-shrink:0;padding:8px;
+                   background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+                   color:var(--text3);cursor:pointer;font-size:13px">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">
+          O JID do grupo é armazenado de forma segura — os relatórios serão enviados diretamente para este grupo
+        </div>
+      </div>
+      <div class="form-group">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <label class="form-label" style="margin:0"><i class="ti ti-brand-facebook" style="color:#1877F2;margin-right:4px"></i>Meta Ads — Conta de Anúncios</label>
           <button type="button" onclick="carregarContasMeta(true)" title="Recarregar contas"
@@ -7283,6 +7311,12 @@ function buildClientCard(c) {
         <button class="cl-pdf-btn" onclick="event.stopPropagation();generateClientReport('${c.id}')" title="Gerar Relatório PDF">
           <i class="ti ti-file-description"></i>
         </button>
+        ${c.whatsapp_group_jid ? `
+        <button class="cl-pdf-btn" onclick="event.stopPropagation();sendGroupReport('${c.id}')"
+          title="Enviar Relatório no Grupo WhatsApp: ${(c.whatsapp_group_name||'').replace(/'/g,'&#39;')}"
+          style="color:#25D366;border-color:rgba(37,211,102,0.35)">
+          <i class="ti ti-brand-whatsapp"></i>
+        </button>` : ''}
       </div>
     </div>
     ${goalHtml}
@@ -7483,6 +7517,12 @@ function openNewClientModal(id) {
   document.getElementById('cl-form-whatsapp').value          = '';
   document.getElementById('cl-form-dia-otimizacao').value    = '';
   document.getElementById('cl-form-categoria').value         = 'elo_marketing';
+  const _grpJidReset  = document.getElementById('cl-form-wa-group-jid');
+  const _grpNameReset = document.getElementById('cl-form-wa-group-name');
+  const _grpClearReset = document.getElementById('cl-form-wa-group-clear');
+  if (_grpJidReset)   _grpJidReset.value  = '';
+  if (_grpNameReset)  _grpNameReset.value = '';
+  if (_grpClearReset) _grpClearReset.style.display = 'none';
   document.getElementById('cl-form-meta-balance').value = '';
   document.getElementById('cl-form-meta-spend7d').value = '';
   document.getElementById('cl-form-metodo-pagamento').value = '';
@@ -7516,6 +7556,13 @@ function openNewClientModal(id) {
       document.getElementById('cl-form-owner').value     = c.owner;
       document.getElementById('cl-form-whatsapp').value          = c.whatsapp || '';
       document.getElementById('cl-form-dia-otimizacao').value    = c.dia_otimizacao || '';
+      // Grupo WhatsApp para Relatórios
+      const _grpJidEl  = document.getElementById('cl-form-wa-group-jid');
+      const _grpNameEl = document.getElementById('cl-form-wa-group-name');
+      const _grpClear  = document.getElementById('cl-form-wa-group-clear');
+      if (_grpJidEl)  _grpJidEl.value  = c.whatsapp_group_jid  || '';
+      if (_grpNameEl) _grpNameEl.value = c.whatsapp_group_name || '';
+      if (_grpClear)  _grpClear.style.display = c.whatsapp_group_jid ? '' : 'none';
       document.getElementById('cl-form-categoria').value         = c.categoria || 'elo_marketing';
       // restore meta account dropdown — wait for accounts if cache is empty
       if (META_AD_ACCOUNTS.length > 0) {
@@ -8224,8 +8271,10 @@ function saveNewClient() {
   const segment   = document.getElementById('cl-form-segment').value;
   const objective = document.getElementById('cl-form-objective').value.trim();
   const owner     = document.getElementById('cl-form-owner').value;
-  const whatsapp           = document.getElementById('cl-form-whatsapp').value.trim().replace(/\D/g, '');
-  const dia_otimizacao     = document.getElementById('cl-form-dia-otimizacao')?.value || '';
+  const whatsapp              = document.getElementById('cl-form-whatsapp').value.trim().replace(/\D/g, '');
+  const whatsapp_group_jid    = document.getElementById('cl-form-wa-group-jid')?.value.trim()  || '';
+  const whatsapp_group_name   = document.getElementById('cl-form-wa-group-name')?.value.trim() || '';
+  const dia_otimizacao        = document.getElementById('cl-form-dia-otimizacao')?.value || '';
   const categoria          = document.getElementById('cl-form-categoria')?.value || 'elo_marketing';
   const _canEditApiIds     = currentUser?.isAdmin;
   const meta_ad_account_id = _canEditApiIds
@@ -8271,12 +8320,13 @@ function saveNewClient() {
 
   if (clEditingId) {
     const idx = CLIENTS.list.findIndex(c => c.id === clEditingId);
-    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
+    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
   } else {
     CLIENTS.list.push({
       id: `cl-${CLIENTS.nextId++}`,
       name, segment, categoria, importance: clImportanceVal, objective, owner, goal, budget, investment,
-      avatar: initials, whatsapp, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
+      avatar: initials, whatsapp, whatsapp_group_jid, whatsapp_group_name,
+      meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
       color: CL_COLORS[(CLIENTS.list.length) % CL_COLORS.length],
       investments, dia_otimizacao,
       ultima_otimizacao: '', historico_otimizacoes: [],
@@ -13623,6 +13673,225 @@ async function resetInstance() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  WHATSAPP GROUP PICKER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let _waAllGroups = [];  // cache dos grupos carregados
+
+function openGroupPicker() {
+  const userId = currentUser?.id;
+  if (!userId || !PROD_CONFIG.renderUrl) {
+    showNotification('⚠️ Faça login e configure o backend antes de buscar grupos.', 'warn');
+    return;
+  }
+  const overlay = document.getElementById('wa-group-picker-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  document.getElementById('wa-group-search').value = '';
+  _loadWaGroups();
+}
+
+function closeGroupPicker() {
+  const overlay = document.getElementById('wa-group-picker-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function _loadWaGroups() {
+  const list  = document.getElementById('wa-group-list');
+  const count = document.getElementById('wa-group-count');
+  if (!list) return;
+
+  list.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;
+                padding:32px 16px;color:var(--text3)">
+      <i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite;color:#25D366"></i>
+      <span style="font-size:12px">Carregando grupos...</span>
+    </div>`;
+
+  const userId = currentUser?.id;
+  const data   = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`);
+
+  if (!data || data._coldStart) {
+    list.innerHTML = `<div style="padding:24px 16px;text-align:center;font-size:12px;color:var(--text3)">
+      ⏳ Backend acordando — tente novamente em alguns segundos.</div>`;
+    if (count) count.textContent = '';
+    return;
+  }
+
+  if (data.error) {
+    list.innerHTML = `<div style="padding:24px 16px;text-align:center;font-size:12px;color:var(--red)">
+      ❌ ${data.error}</div>`;
+    if (count) count.textContent = '';
+    return;
+  }
+
+  _waAllGroups = data.groups || [];
+  if (count) count.textContent = `${_waAllGroups.length} grupo${_waAllGroups.length !== 1 ? 's' : ''}`;
+  _filterWaGroups('');
+}
+
+function _filterWaGroups(query) {
+  const list = document.getElementById('wa-group-list');
+  if (!list) return;
+
+  const q     = query.trim().toLowerCase();
+  const items = q ? _waAllGroups.filter(g => g.name.toLowerCase().includes(q)) : _waAllGroups;
+
+  if (!items.length) {
+    list.innerHTML = `<div style="padding:24px 16px;text-align:center;font-size:12px;color:var(--text3)">
+      ${_waAllGroups.length === 0
+        ? 'Nenhum grupo encontrado. Verifique se o WhatsApp está conectado em Integrações.'
+        : 'Nenhum grupo corresponde à busca.'}</div>`;
+    return;
+  }
+
+  // Lê o JID já selecionado para marcar o item ativo
+  const currentJid = document.getElementById('cl-form-wa-group-jid')?.value || '';
+
+  list.innerHTML = items.map(g => {
+    const isActive = g.jid === currentJid;
+    const initial  = (g.name || '?')[0].toUpperCase();
+    return `
+      <div onclick="_selectWaGroup('${g.jid.replace(/'/g,"\\'")}','${g.name.replace(/'/g,"\\'")}')"
+        style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;
+               cursor:pointer;transition:background 0.12s;
+               background:${isActive ? 'rgba(37,211,102,0.12)' : 'transparent'};
+               border:1px solid ${isActive ? 'rgba(37,211,102,0.4)' : 'transparent'};
+               margin-bottom:3px"
+        onmouseover="if(!this.dataset.active)this.style.background='var(--bg2)'"
+        onmouseout="if(!this.dataset.active)this.style.background='${isActive ? 'rgba(37,211,102,0.12)' : 'transparent'}'"
+        ${isActive ? 'data-active="1"' : ''}>
+        <div style="width:36px;height:36px;border-radius:50%;background:rgba(37,211,102,0.18);
+                    display:flex;align-items:center;justify-content:center;
+                    font-weight:700;font-size:13px;color:#25D366;flex-shrink:0">
+          ${initial}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px;
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.jid}</div>
+        </div>
+        ${isActive ? '<i class="ti ti-check" style="color:#25D366;font-size:16px;flex-shrink:0"></i>' : ''}
+      </div>`;
+  }).join('');
+}
+
+function _selectWaGroup(jid, name) {
+  const jidEl   = document.getElementById('cl-form-wa-group-jid');
+  const nameEl  = document.getElementById('cl-form-wa-group-name');
+  const clearEl = document.getElementById('cl-form-wa-group-clear');
+  if (jidEl)   jidEl.value   = jid;
+  if (nameEl)  nameEl.value  = name;
+  if (clearEl) clearEl.style.display = '';
+  closeGroupPicker();
+  showNotification(`✅ Grupo selecionado: ${name}`, 'success');
+}
+
+function clearGroupSelection() {
+  const jidEl   = document.getElementById('cl-form-wa-group-jid');
+  const nameEl  = document.getElementById('cl-form-wa-group-name');
+  const clearEl = document.getElementById('cl-form-wa-group-clear');
+  if (jidEl)   jidEl.value   = '';
+  if (nameEl)  nameEl.value  = '';
+  if (clearEl) clearEl.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  RELATÓRIO DE GRUPO — TEMPLATE E DISPARO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Monta o texto do relatório formatado para WhatsApp (negrito com *asteriscos*) */
+function _buildGroupReportText(client) {
+  const CAT_LABELS = {
+    elo_marketing: 'Elo Marketing', bagano: 'Bagano', brava_reels: 'Brava Reels',
+    ampla_mkt: 'Ampla MKT', clipy: 'Clipy'
+  };
+  const agencia  = CAT_LABELS[client.categoria] || client.categoria || 'Agência';
+  const now      = new Date();
+  const months   = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesAtual = `${months[now.getMonth()]}/${now.getFullYear()}`;
+
+  // ── Investimento ────────────────────────────────────────────────────────────
+  const invMeta = client.investment || 0;
+  const budget  = client.budget     || 0;
+  const pacing  = budget > 0 ? Math.min(100, (invMeta / budget) * 100).toFixed(0) : null;
+
+  // ── Monta linhas do relatório ─────────────────────────────────────────────
+  const lines = [];
+  lines.push(`📊 *RELATÓRIO — ${client.name.toUpperCase()}*`);
+  lines.push(`_${agencia} · ${mesAtual}_`);
+  lines.push('');
+
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push('💰 *INVESTIMENTO*');
+  lines.push(`• Gasto acumulado: *${fmtBRL(invMeta)}*`);
+  if (budget > 0) {
+    lines.push(`• Orçamento mensal: ${fmtBRL(budget)}`);
+    lines.push(`• Pacing: *${pacing}%* ${pacing >= 90 ? '⚠️' : pacing >= 60 ? '✅' : '📈'}`);
+  }
+  if (client.metodo_pagamento === 'pre_pago' && client.meta_balance > 0) {
+    const dias = client.meta_spend7d > 0
+      ? Math.floor(client.meta_balance / (client.meta_spend7d / 7))
+      : null;
+    lines.push(`• Saldo pré-pago: ${fmtBRL(client.meta_balance)}${dias !== null ? ` (≈${dias} dias)` : ''}`);
+  }
+  lines.push('');
+
+  lines.push(`_Gerado por ${agencia} · ${new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}_`);
+
+  return lines.join('\n');
+}
+
+/** Envia o relatório para o grupo WhatsApp configurado no cliente */
+async function sendGroupReport(clientId) {
+  const client = CLIENTS.list.find(c => c.id === clientId);
+  if (!client) { showNotification('Cliente não encontrado.', 'warn'); return; }
+
+  if (!client.whatsapp_group_jid) {
+    showNotification('⚠️ Grupo de WhatsApp não configurado para este cliente. Edite o cliente e selecione um grupo.', 'warn');
+    return;
+  }
+
+  const userId = currentUser?.id;
+  if (!userId || !PROD_CONFIG.renderUrl) {
+    showNotification('⚠️ Faça login e configure o backend antes de enviar.', 'warn');
+    return;
+  }
+
+  // Verifica estado da instância
+  const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`).catch(() => null);
+  if (!stateData || stateData._coldStart) {
+    showNotification('⏳ Backend acordando — tente novamente em 30s.', 'warn');
+    return;
+  }
+  if (stateData.state !== 'open') {
+    showNotification('❌ WhatsApp não está conectado. Vá em Integrações → WhatsApp para reconectar.', 'error');
+    return;
+  }
+
+  const msg = _buildGroupReportText(client);
+  showNotification(`📤 Enviando relatório para o grupo "${client.whatsapp_group_name || 'grupo'}"…`, 'info');
+
+  const data = await _renderFetch('/api/whatsapp/send-group', {
+    method: 'POST',
+    body:   JSON.stringify({ userId, groupJid: client.whatsapp_group_jid, message: msg }),
+  }).catch(e => { console.error('[sendGroupReport]', e); return null; });
+
+  if (data?.ok) {
+    showNotification(`✅ Relatório enviado com sucesso para "${client.whatsapp_group_name || 'grupo'}"!`, 'success');
+  } else if (!data || data._coldStart) {
+    showNotification('⏳ Backend acordando — tente novamente em instantes.', 'warn');
+  } else {
+    const errMsg = data?.error || 'Erro desconhecido';
+    showNotification(`❌ Falha ao enviar: ${errMsg}`, 'error');
+    console.error('[sendGroupReport] resposta:', data);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+
 async function sendReportViaWhatsApp() {
   const clientId = document.getElementById('rep-client')?.value;
   const client   = CLIENTS.list.find(c => c.id === clientId);
@@ -15179,5 +15448,50 @@ document.addEventListener('change', function(e) {
 </script>
 <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImportFile(event)">
 <div id="welcome-toast"></div>
+
+<!-- ── Group Picker Modal ──────────────────────────────────────────────────── -->
+<div id="wa-group-picker-overlay"
+  onclick="if(event.target===this)closeGroupPicker()"
+  style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.55);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:16px;
+              width:min(460px,94vw);max-height:80vh;display:flex;flex-direction:column;
+              box-shadow:0 24px 64px rgba(0,0,0,0.4);overflow:hidden">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 18px;
+                border-bottom:1px solid var(--border)">
+      <div style="width:34px;height:34px;border-radius:10px;background:rgba(37,211,102,0.15);
+                  display:flex;align-items:center;justify-content:center;color:#25D366;font-size:17px">
+        <i class="ti ti-users-group"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Selecionar Grupo de WhatsApp</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px">Grupos da instância conectada</div>
+      </div>
+      <button onclick="closeGroupPicker()" style="background:none;border:none;cursor:pointer;
+              color:var(--text3);font-size:18px;padding:4px;border-radius:6px">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <!-- Search -->
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+      <div style="position:relative">
+        <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
+           color:var(--text3);font-size:14px;pointer-events:none"></i>
+        <input id="wa-group-search" type="text" placeholder="Buscar grupo pelo nome..."
+          class="form-input" style="padding-left:32px"
+          oninput="_filterWaGroups(this.value)">
+      </div>
+    </div>
+    <!-- List -->
+    <div id="wa-group-list" style="flex:1;overflow-y:auto;padding:8px 8px"></div>
+    <!-- Footer -->
+    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;
+                align-items:center;justify-content:space-between">
+      <span id="wa-group-count" style="font-size:11px;color:var(--text3)"></span>
+      <button onclick="closeGroupPicker()" class="btn btn-ghost btn-sm">Cancelar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
