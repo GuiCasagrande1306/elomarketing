@@ -13712,14 +13712,24 @@ async function _loadWaGroups() {
 
   if (count) count.textContent = '';
   list.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;
+    <div id="wa-loading-msg" style="display:flex;flex-direction:column;align-items:center;gap:10px;
                 padding:32px 16px;color:var(--text3)">
       <i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite;color:#25D366"></i>
-      <span style="font-size:12px">Buscando grupos na Evolution API...</span>
+      <span id="wa-loading-text" style="font-size:12px">Buscando grupos na Evolution API...</span>
     </div>`;
 
+  // Após 7s sem resposta, avisa que o servidor pode estar acordando
+  const hintTimer = setTimeout(() => {
+    const el = document.getElementById('wa-loading-text');
+    if (el) el.innerHTML = 'Aguardando o servidor acordar…<br><span style="font-size:10px;opacity:0.7">(pode levar até 60s no plano gratuito do Render)</span>';
+  }, 7000);
+
   const userId = currentUser?.id;
-  const data   = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`);
+  const ctrl   = new AbortController();
+  const abortTimer = setTimeout(() => ctrl.abort(), 50000); // 50s timeout total
+  const data   = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
+  clearTimeout(hintTimer);
+  clearTimeout(abortTimer);
 
   // Helper: mostra erro com botão de retry
   const showErr = (icon, title, sub) => {
@@ -13735,6 +13745,12 @@ async function _loadWaGroups() {
         </button>
       </div>`;
   };
+
+  if (data?._timeout) {
+    showErr('⏱️', 'Servidor não respondeu a tempo',
+      'O backend demorou mais de 50s para responder.<br>Clique em "Tentar novamente" após alguns instantes.');
+    return;
+  }
 
   if (!data || data._coldStart) {
     showErr('⏳', 'Backend acordando', 'O servidor está iniciando (30–60s).<br>Aguarde e tente novamente.');
@@ -14519,7 +14535,11 @@ function _renderFetch(path, opts = {}) {
         return r.status >= 500 ? { _coldStart: true, _status: r.status } : null;
       }
     })
-    .catch(e => { console.error('[Render]', path, e.message); return null; });
+    .catch(e => {
+      if (e.name === 'AbortError') return { _timeout: true };
+      console.error('[Render]', path, e.message);
+      return null;
+    });
 }
 
 /**
