@@ -3698,6 +3698,11 @@
         <input type="text" id="cl-form-name" class="form-input" placeholder="Ex: Instituto Lara" required autocomplete="off">
       </div>
       <div class="form-group">
+        <label class="form-label"><i class="ti ti-photo" style="margin-right:4px"></i>Logo do Cliente (URL)</label>
+        <input type="url" id="cl-form-logo-url" class="form-input" placeholder="https://exemplo.com/logo.png" autocomplete="off">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">URL do logotipo (PNG, JPG, SVG). Aparece nos relatórios PDF e nos avatares.</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Segmento</label>
         <select id="cl-form-segment" class="form-select" onchange="onClSegmentChange()">
           <option value="">Selecione...</option>
@@ -7250,6 +7255,39 @@ function renderContasPage() {
   }).join('');
 }
 
+/* ─── White-label avatar helpers ─────────────────────────────────────────────
+ * _clAvatar(c, size, br)
+ *   Returns an HTML string for the client avatar.
+ *   If c.logoUrl is set → renders an <img> with object-fit:cover + img error fallback.
+ *   If not → renders the classic color-circle/rounded-rect with initials.
+ *
+ *   @param {object} c    – client object (needs .logoUrl, .color, .avatar)
+ *   @param {number} size – width/height in px  (default 36)
+ *   @param {string} br   – border-radius value  (default '50%' = circle)
+ * ─────────────────────────────────────────────────────────────────────────── */
+function _clAvatar(c, size, br) {
+  const sz  = size || 36;
+  const brd = br   || '50%';
+  const fs  = Math.round(sz * 0.35);
+  const css = 'width:' + sz + 'px;height:' + sz + 'px;border-radius:' + brd + ';flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;';
+  if (c.logoUrl) {
+    return '<div style="' + css + 'background:#F8FAFC;">'
+         + '<img src="' + (c.logoUrl||'').replace(/"/g,'&quot;') + '" alt="" '
+         + 'style="width:100%;height:100%;object-fit:cover;" '
+         + 'onerror="_clAvFallback(this,\'' + (c.color||'#6C63FF') + '\',\'' + (c.avatar||'') + '\',' + fs + ')">'
+         + '</div>';
+  }
+  return '<div style="' + css + 'background:' + (c.color||'#6C63FF') + ';font-size:' + fs + 'px;font-weight:700;color:#fff;">' + (c.avatar||'') + '</div>';
+}
+
+/* Called by the onerror attribute of <img> inside _clAvatar when the logo URL fails to load. */
+function _clAvFallback(img, color, av, fs) {
+  const p = img.parentElement;
+  if (!p) return;
+  p.style.background = color;
+  p.innerHTML = '<span style="font-size:' + fs + 'px;font-weight:700;color:#fff;">' + av + '</span>';
+}
+
 function renderClients() {
   const grid = document.getElementById('clients-grid');
   if (!grid) return;
@@ -7448,7 +7486,7 @@ function buildClientCard(c) {
 
   el.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:12px">
-      <div class="client-card-av" style="background:${c.color}">${c.avatar}</div>
+      ${_clAvatar(c, 44, '12px')}
       <div style="flex:1;min-width:0">
         <div class="client-card-name">${c.name}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
@@ -7578,7 +7616,7 @@ function renderGoalAlerts(filtro) {
     return `
       <div style="padding:9px 0;border-top:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <div style="width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;background:${c.color};flex-shrink:0">${c.avatar}</div>
+          ${_clAvatar(c, 26, '7px')}
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${statusDot} ${c.name}${ga4Badge}</div>
             <div style="font-size:10px;color:var(--text3)">
@@ -7665,6 +7703,7 @@ function openNewClientModal(id) {
   const delBtn = document.getElementById('cl-modal-delete-btn');
   if (delBtn) delBtn.style.display = (id && currentUser?.isAdmin) ? 'inline-flex' : 'none';
   document.getElementById('cl-form-name').value      = '';
+  document.getElementById('cl-form-logo-url').value  = '';
   document.getElementById('cl-form-segment').value   = '';
   document.getElementById('cl-form-objective').value = '';
   document.getElementById('cl-form-owner').value     = currentUser?.id || 'guilherme';
@@ -7709,6 +7748,7 @@ function openNewClientModal(id) {
     const c = CLIENTS.list.find(x => x.id === id);
     if (c) {
       document.getElementById('cl-form-name').value      = c.name;
+      document.getElementById('cl-form-logo-url').value  = c.logoUrl || '';
       document.getElementById('cl-form-segment').value   = c.segment;
       document.getElementById('cl-form-objective').value = c.objective || '';
       document.getElementById('cl-form-owner').value     = c.owner;
@@ -8185,7 +8225,7 @@ function renderEsteira() {
             <tr class="esteira-client-row">
               <td>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <div style="width:28px;height:28px;border-radius:50%;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${c.avatar}</div>
+                  ${_clAvatar(c, 28, '50%')}
                   <div>
                     <div style="font-weight:500;font-size:13px">${c.name}</div>
                     <div style="font-size:11px;color:var(--text3)">${(CL_SEGMENTS[c.segment]||{label:'—'}).label} · ${ownerLbl}</div>
@@ -8249,7 +8289,7 @@ function openOptimizationDrawer(clientId) {
   if (headerEl) {
     headerEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:38px;height:38px;border-radius:50%;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${c.avatar}</div>
+        ${_clAvatar(c, 38, '50%')}
         <div>
           <div style="font-weight:600;font-size:14px">${c.name}</div>
           <div style="font-size:11px;color:var(--text3)">${segLabel} · ${diaLabel}</div>
@@ -8480,16 +8520,17 @@ function saveNewClient() {
   const tiktok_access_token   = (document.getElementById('sc-tt-token')?.value       || '').trim();
   const socialFields = { fb_page_id, fb_page_access_token, instagram_business_id, ig_username, linkedin_access_token, tiktok_access_token };
 
+  const logoUrl  = (document.getElementById('cl-form-logo-url')?.value || '').trim();
   const initials = name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase() || 'XX';
 
   if (clEditingId) {
     const idx = CLIENTS.list.findIndex(c => c.id === clEditingId);
-    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
+    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, logoUrl, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
   } else {
     CLIENTS.list.push({
       id: `cl-${CLIENTS.nextId++}`,
       name, segment, categoria, importance: clImportanceVal, objective, owner, goal, budget, investment,
-      avatar: initials, whatsapp_group_jid, whatsapp_group_name,
+      avatar: initials, logoUrl, whatsapp_group_jid, whatsapp_group_name,
       meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
       color: CL_COLORS[(CLIENTS.list.length) % CL_COLORS.length],
       investments, dia_otimizacao,
@@ -8808,6 +8849,16 @@ async function generateClientReport(clientId) {
   const adsData = await fetchActiveAdsForReport(c);
   const adsHtml = _buildAdsHtml(adsData, !!c.meta_ad_account_id);
 
+  // — Avatar HTML do cliente para o PDF (usa logo se disponível) —
+  const _pdfAvHtml = c.logoUrl
+    ? `<img src="${c.logoUrl}" alt="" style="width:50px;height:50px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+    : `<div class="cl-av">${c.avatar}</div>`;
+
+  // — Logo/cabeçalho da agência (white-label: mostra logo do cliente no topo) —
+  const _pdfHdrLogoHtml = c.logoUrl
+    ? `<img src="${c.logoUrl}" alt="${c.name.replace(/"/g,'&quot;')}" style="height:36px;max-width:180px;object-fit:contain;display:block;margin-bottom:4px;">`
+    : '';
+
   // — HTML do relatório —
   const reportHtml = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
@@ -8817,8 +8868,7 @@ async function generateClientReport(clientId) {
   body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#111827;font-size:13px;line-height:1.5}
   .pg{max-width:740px;margin:0 auto;padding:36px 40px}
   /* Header */
-  .rpt-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:18px;border-bottom:3px solid #6C63FF;margin-bottom:24px}
-  .agency{font-size:20px;font-weight:800;color:#6C63FF;letter-spacing:-0.5px}
+  .rpt-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:18px;border-bottom:3px solid #CBD5E1;margin-bottom:24px}
   .agency-sub{font-size:11px;color:#94A3B8;margin-top:2px}
   .rpt-period{text-align:right;font-size:12px;color:#64748B}
   .rpt-period strong{display:block;font-size:16px;font-weight:700;color:#111827}
@@ -8827,9 +8877,9 @@ async function generateClientReport(clientId) {
   .cl-av{width:50px;height:50px;border-radius:50%;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0}
   .cl-name{font-size:18px;font-weight:700;color:#111827;margin-bottom:4px}
   .cl-meta{font-size:11px;color:#64748B}
-  .seg-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;background:#EEF2FF;color:#6C63FF;margin-right:4px}
+  .seg-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;background:#F1F5F9;color:#475569;margin-right:4px}
   /* Objetivo */
-  .obj-box{background:#EEF2FF;border-left:3px solid #6C63FF;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:20px}
+  .obj-box{background:#F8FAFC;border-left:3px solid #CBD5E1;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:20px}
   /* KPIs */
   .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
   .kpi{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px}
@@ -8854,7 +8904,7 @@ async function generateClientReport(clientId) {
 
   <div class="rpt-hdr">
     <div>
-      <div class="agency">Elo Marketing</div>
+      ${_pdfHdrLogoHtml}
       <div class="agency-sub">Relatório Mensal de Performance</div>
     </div>
     <div class="rpt-period">
@@ -8864,7 +8914,7 @@ async function generateClientReport(clientId) {
   </div>
 
   <div class="cl-block">
-    <div class="cl-av">${c.avatar}</div>
+    ${_pdfAvHtml}
     <div style="flex:1">
       <div class="cl-name">${c.name}</div>
       <div class="cl-meta">
@@ -8924,7 +8974,7 @@ async function generateClientReport(clientId) {
     <div class="sec-title">📅 Histórico de Investimento</div>
     ${invBarsHtml}
     <div style="text-align:right;font-size:11px;color:#64748B;margin-top:12px;padding-top:10px;border-top:1px solid #E2E8F0">
-      Total acumulado: <strong style="font-family:monospace;color:#6C63FF">${fmt(totalAcum)}</strong>
+      Total acumulado: <strong style="font-family:monospace;color:#475569">${fmt(totalAcum)}</strong>
     </div>
   </div>` : ''}
 
@@ -8936,7 +8986,7 @@ async function generateClientReport(clientId) {
   </div>
 
   <div class="footer">
-    Gerado por <strong style="color:#6C63FF">Elo Marketing</strong> &nbsp;·&nbsp; ${dataFmt} &nbsp;·&nbsp; ${c.name}
+    ${dataFmt} &nbsp;·&nbsp; ${c.name}
   </div>
 
 </div>
@@ -8974,7 +9024,7 @@ function openClientDetail(id) {
 
   document.getElementById('client-detail-panel').innerHTML = `
     <div class="client-detail-header">
-      <div class="client-detail-av" style="background:${c.color}">${c.avatar}</div>
+      ${_clAvatar(c, 64, '16px')}
       <div style="flex:1;min-width:0">
         <div class="client-detail-title">${c.name}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
@@ -9212,7 +9262,7 @@ function renderPacingAlerts(filtro) {
       <div style="padding:9px 0;border-top:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
           <div style="display:flex;align-items:center;gap:7px">
-            <div style="width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;background:${c.color||'var(--bg4)'};flex-shrink:0">${c.avatar}</div>
+            ${_clAvatar(c, 24, '6px')}
             <div>
               <div style="font-size:11px;font-weight:600;color:var(--text)">${c.name}</div>
               <div style="font-size:9px;color:var(--text3)">${payIcon} ${payLabel}</div>
@@ -9301,7 +9351,7 @@ function renderDashboardActionCards(clients) {
         const color  = s.cls === 'never' || s.cls === 'overdue' ? '#EF4444' : '#F59E0B';
         const label  = s.cls === 'never' ? 'Nunca' : s.cls === 'overdue' ? `${s.days}d atraso` : 'Hoje';
         return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
-          <div style="width:28px;height:28px;border-radius:7px;background:${c.color||'var(--accent)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${c.avatar||c.name.slice(0,2).toUpperCase()}</div>
+          ${_clAvatar(c, 28, '7px')}
           <span style="font-size:11px;color:var(--text1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
           <span style="font-size:9px;font-weight:700;color:${color};white-space:nowrap">${label}</span>
         </div>`;
@@ -9340,7 +9390,7 @@ function renderDashboardActionCards(clients) {
       spendList.innerHTML = overspend.slice(0, 4).map(c => {
         const investPct = Math.round((c.investment || 0) / c.budget * 100);
         return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
-          <div style="width:28px;height:28px;border-radius:7px;background:${c.color||'var(--accent)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${c.avatar||c.name.slice(0,2).toUpperCase()}</div>
+          ${_clAvatar(c, 28, '7px')}
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
             <div style="font-size:9px;color:var(--text3)">${fmtBRL(c.investment)} / ${fmtBRL(c.budget)}</div>
@@ -9436,7 +9486,7 @@ function renderDashboard() {
           <tr data-owner="${c.owner || ''}" style="cursor:pointer" onclick="openClientDetail('${c.id}')">
             <td>
               <div style="display:flex;align-items:center;gap:10px">
-                <div class="client-avatar" style="background:${c.color}">${c.avatar}</div>
+                ${_clAvatar(c, 34, '10px')}
                 <div>
                   <div style="font-size:12px;font-weight:500">${c.name}${ga4Badge}</div>
                   <span class="segment-badge" style="background:${seg.bg};color:${seg.color};font-size:9px">${seg.label}</span>
@@ -10083,7 +10133,7 @@ async function exportarRelatorioPDF() {
   /* — KPIs — */
   const inv  = snapshot?.inv  ?? client.investment ?? 0;
   const isDelivery = ['delivery','ecommerce'].includes(seg);
-  let kpi2Val = '—', kpi2Lbl = '—', kpi3Val = '—', kpi3Lbl = '—', kpi2Color = '#6C63FF', kpi3Color = '#64748B';
+  let kpi2Val = '—', kpi2Lbl = '—', kpi3Val = '—', kpi3Lbl = '—', kpi2Color = '#475569', kpi3Color = '#64748B';
 
   if (isDelivery) {
     const fat  = snapshot?.fat  ?? 0;
@@ -10100,7 +10150,7 @@ async function exportarRelatorioPDF() {
     kpi2Val = String(leads); kpi2Lbl = 'Leads gerados';
     kpi3Val = cpl;           kpi3Lbl = 'Custo por Lead';
     kpi2Color = leads > 0 ? '#10B981' : '#64748B';
-    kpi3Color = '#6C63FF';
+    kpi3Color = '#475569';
     /* 4º KPI extra — meta % */
     var kpi4Val = meta > 0 ? `${pct}%` : '—';
     var kpi4Lbl = `Meta (${leads}/${meta})`;
@@ -10120,6 +10170,14 @@ async function exportarRelatorioPDF() {
 
   _setLoading(false);
 
+  // — Avatar e logo do cliente para o PDF (white-label) —
+  const _relAvHtml = client.logoUrl
+    ? `<img src="${client.logoUrl}" alt="" style="width:50px;height:50px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+    : `<div class="cl-av">${client.avatar}</div>`;
+  const _relHdrLogoHtml = client.logoUrl
+    ? `<img src="${client.logoUrl}" alt="${client.name.replace(/"/g,'&quot;')}" style="height:36px;max-width:180px;object-fit:contain;display:block;margin-bottom:4px;">`
+    : '';
+
   /* — HTML do relatório — */
   const kpi4Block = !isDelivery && typeof kpi4Val !== 'undefined' ? `
     <div class="kpi">
@@ -10135,8 +10193,7 @@ async function exportarRelatorioPDF() {
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#111827;font-size:13px;line-height:1.5}
   .pg{max-width:740px;margin:0 auto;padding:36px 40px}
-  .rpt-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:18px;border-bottom:3px solid #6C63FF;margin-bottom:24px}
-  .agency{font-size:20px;font-weight:800;color:#6C63FF;letter-spacing:-0.5px}
+  .rpt-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:18px;border-bottom:3px solid #CBD5E1;margin-bottom:24px}
   .agency-sub{font-size:11px;color:#94A3B8;margin-top:2px}
   .rpt-period{text-align:right;font-size:12px;color:#64748B}
   .rpt-period strong{display:block;font-size:16px;font-weight:700;color:#111827}
@@ -10144,7 +10201,7 @@ async function exportarRelatorioPDF() {
   .cl-av{width:50px;height:50px;border-radius:50%;background:${client.color};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0}
   .cl-name{font-size:18px;font-weight:700;color:#111827;margin-bottom:4px}
   .cl-meta{font-size:11px;color:#64748B}
-  .seg-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;background:#EEF2FF;color:#6C63FF;margin-right:4px}
+  .seg-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;background:#F1F5F9;color:#475569;margin-right:4px}
   .kpi-row{display:grid;grid-template-columns:repeat(${isDelivery || !kpi4Block ? '3' : '4'},1fr);gap:10px;margin-bottom:20px}
   .kpi{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px}
   .kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#94A3B8;margin-bottom:6px;font-weight:600}
@@ -10160,7 +10217,7 @@ async function exportarRelatorioPDF() {
 
   <div class="rpt-hdr">
     <div>
-      <div class="agency">Elo Marketing</div>
+      ${_relHdrLogoHtml}
       <div class="agency-sub">Relatório de Performance</div>
     </div>
     <div class="rpt-period">
@@ -10170,7 +10227,7 @@ async function exportarRelatorioPDF() {
   </div>
 
   <div class="cl-block">
-    <div class="cl-av">${client.avatar}</div>
+    ${_relAvHtml}
     <div style="flex:1">
       <div class="cl-name">${client.name}</div>
       <div class="cl-meta">
@@ -10209,7 +10266,7 @@ async function exportarRelatorioPDF() {
   ${adsHtmlRel}
 
   <div class="footer">
-    Gerado por <strong style="color:#6C63FF">Elo Marketing</strong> &nbsp;·&nbsp; ${dataFmt} &nbsp;·&nbsp; ${client.name}
+    ${dataFmt} &nbsp;·&nbsp; ${client.name}
   </div>
 
 </div>
@@ -11223,7 +11280,7 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
   return `
     <div class="bal-client-block ${blockCls}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
-        <div class="client-card-av" style="background:${client.color};width:32px;height:32px;font-size:12px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff">${client.avatar}</div>
+        ${_clAvatar(client, 32, '8px')}
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:700;color:var(--text)">${client.name}</div>
           <span class="segment-badge" style="background:${seg.bg};color:${seg.color}">${seg.label}</span>
