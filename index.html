@@ -4628,6 +4628,12 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDetailsEmpty();
   renderCreatives();
   resetTaskForm();
+  // Ping antecipado: acorda o Render free tier antes de _autoSyncAndLoad precisar fazer uploads
+  // O cold-start demora 30-60s; ao pingar aqui, ele já vai estar acordando quando o login terminar
+  (function _wakeRender() {
+    const u = (typeof PROD_CONFIG !== 'undefined' && PROD_CONFIG.apiUrl) || 'https://elomarketing-api.onrender.com';
+    fetch(u + '/health', { method: 'GET' }).catch(() => {});
+  })();
   loadTasks();
   loadClients();
   renderClients();
@@ -5830,17 +5836,50 @@ async function saveTask() {
       console.log('[Tasks] tarefa salva no MongoDB:', taskId);
       showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
     } else {
-      // Servidor offline, cold-start ou retornou erro — task está segura localmente
-      console.warn('[Tasks] servidor indisponível — tarefa salva localmente, sync automático:', taskId, r);
-      showNotification('Tarefa salva! ☁️ Sincronizando com o servidor…', 'warn');
+      // Cold-start ou servidor offline — task segura no localStorage; agenda retries em background
+      console.warn('[Tasks] servidor indisponível — tarefa salva localmente, retry agendado:', taskId, r);
+      showNotification('Tarefa salva! ☁️ Servidor acordando — não feche a aba…', 'warn');
+      _scheduleTaskRetry(taskObj);
     }
   } catch(e) {
     console.warn('[Tasks] erro de rede ao salvar:', e.message);
     delete editIdInput.dataset.pendingId;
     closeModal();
     resetTaskForm();
-    showNotification('Tarefa salva! ☁️ Sincronizando com o servidor…', 'warn');
+    showNotification('Tarefa salva! ☁️ Servidor acordando — não feche a aba…', 'warn');
+    _scheduleTaskRetry(taskObj);
   }
+}
+
+/**
+ * Agenda até 4 retentativas de upload para um taskObj que falhou no cold-start.
+ * Intervalos: 15s, 30s, 50s, 75s — janela total ~75s (tempo suficiente para o Render acordar).
+ * Cada tentativa bem-sucedida cancela as seguintes.
+ */
+function _scheduleTaskRetry(taskObj) {
+  const delays = [15000, 30000, 50000, 75000];
+  let cancelled = false;
+  const attempt = (i) => {
+    if (cancelled || i >= delays.length) return;
+    setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        const r = await _apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(taskObj) });
+        if (r && !r._coldStart && !r.error && (r.ok || r.task)) {
+          cancelled = true;
+          console.log(`[Tasks] retry ${i+1} OK — tarefa sincronizada com Atlas:`, taskObj.id);
+          showNotification('✅ Tarefa sincronizada com o servidor!', 'ok');
+        } else {
+          console.warn(`[Tasks] retry ${i+1} ainda sem resposta:`, taskObj.id, r);
+          attempt(i + 1);
+        }
+      } catch(e) {
+        console.warn(`[Tasks] retry ${i+1} erro de rede:`, e.message);
+        attempt(i + 1);
+      }
+    }, delays[i]);
+  };
+  attempt(0);
 }
 
 /* ==========================================================================
