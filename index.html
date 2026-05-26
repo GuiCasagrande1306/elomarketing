@@ -14727,7 +14727,7 @@ function _buildTaskRow(task) {
 
   const client = (CLIENTS.list||[]).find(c => c.id === task.client);
   const clientHtml = client
-    ? `<span class="m-client" title="${client.name}">${client.avatar || client.name.substring(0,2)} ${client.name}</span>`
+    ? `<span class="m-client" title="${client.name}">${client.name}</span>`
     : '<span style="color:var(--text3);font-size:11px">—</span>';
 
   const user = USERS.find(u => u.id === task.assignedTo);
