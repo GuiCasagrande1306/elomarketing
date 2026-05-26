@@ -2216,6 +2216,14 @@
   .bal-sim-banner { background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:var(--amber);
     border-radius:8px;padding:8px 14px;font-size:11px;margin-bottom:12px;display:none;align-items:center;gap:8px; }
 
+  /* MULTI-SELECT RESPONSÁVEIS */
+  .task-owners-chips-wrap{display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;min-height:38px;align-items:center;}
+  .toc-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px 3px 4px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg2);cursor:pointer;font-size:11px;color:var(--text2);transition:var(--trans);}
+  .toc-btn.sel{border-color:var(--accent);background:rgba(108,99,255,.15);color:var(--text);}
+  .toc-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .toc-btn .toc-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;overflow:hidden;flex-shrink:0;}
+  .toc-btn .toc-av img{width:100%;height:100%;object-fit:cover;}
+
   /* TASK OWNER CHIP */
   .task-owner-chip {
     display:inline-flex;align-items:center;justify-content:center;
@@ -4048,14 +4056,9 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label" for="task-owner">Responsável</label>
-          <select id="task-owner" class="form-select">
-            <option value="guilherme">Guilherme</option>
-            <option value="henrique">Henrique</option>
-            <option value="amanda">Amanda</option>
-            <option value="jaqueline">Jaqueline</option>
-            <option value="bernardo">Bernardo</option>
-          </select>
+          <label class="form-label">Responsável(is)</label>
+          <div id="task-owners-chips" class="task-owners-chips-wrap"></div>
+          <input type="hidden" id="task-owner" value="">
         </div>
       </div>
       <!-- Linha: Status + Prioridade -->
@@ -5677,13 +5680,8 @@ function resetTaskForm() {
   document.getElementById('task-modal-title').textContent = 'Nova Tarefa';
   const _delWrap = document.getElementById('task-delete-btn-wrap');
   if (_delWrap) _delWrap.style.display = 'none';
-  const ownerSel = document.getElementById('task-owner');
-  if (ownerSel && currentUser) {
-    ownerSel.value = currentUser.id;
-    // Colaboradores não-admin só podem atribuir tarefas a si mesmos
-    ownerSel.disabled = !currentUser.isAdmin;
-    ownerSel.title = currentUser.isAdmin ? '' : 'Colaboradores só podem atribuir tarefas a si mesmos';
-  }
+  // Inicializa chips de responsáveis — admin pode atribuir a qualquer um, colaborador só a si
+  _renderOwnerChips(currentUser ? [currentUser.id] : []);
   // Popula clientes no select
   const clientSel = document.getElementById('task-client');
   if (clientSel) {
@@ -5716,7 +5714,9 @@ function openEditTaskModal(taskId) {
   document.getElementById('task-status').value      = normalizeTaskStatus(task.status);
   document.getElementById('task-priority').value    = normalizeTaskPriority(task);
   document.getElementById('task-duedate').value     = (task.dueDate || task.deadline || '').substring(0,10);
-  document.getElementById('task-owner').value       = task.assignedTo || task.owner || '';
+  // Popula multi-select de responsáveis (suporta assignedToList novo e assignedTo legado)
+  const _editOwners = (task.assignedToList?.length ? task.assignedToList : [task.assignedTo || task.owner]).filter(Boolean);
+  _renderOwnerChips(_editOwners);
   document.getElementById('task-client').value      = task.client || '';
   document.getElementById('task-group').value       = task.group || 'semana';
   document.getElementById('task-edit-id').value     = taskId;
@@ -5784,8 +5784,9 @@ async function saveTask() {
     priority:    document.getElementById('task-priority').value,
     dueDate:     document.getElementById('task-duedate').value || null,
     deadline:    document.getElementById('task-duedate').value || null,
-    assignedTo:  document.getElementById('task-owner').value,
-    owner:       document.getElementById('task-owner').value,
+    assignedTo:     _taskOwnerIds[0] || '',           // primeiro responsável (legado + filtro backend)
+    assignedToList: [..._taskOwnerIds],               // todos os responsáveis (novo)
+    owner:          _taskOwnerIds[0] || '',
     client:      document.getElementById('task-client').value,
     group,
     criticality: {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'}[document.getElementById('task-priority').value] || 'media',
@@ -6600,6 +6601,41 @@ function doLogout() {
 
 // ── PROFILE MODAL ─────────────────────────────────────────────────────────────
 let _profilePhotoData = null;
+
+// ── Multi-select de responsáveis na tarefa ────────────────────────────────────
+let _taskOwnerIds = []; // IDs selecionados no form de tarefa
+
+function _renderOwnerChips(selectedIds) {
+  _taskOwnerIds = [...(selectedIds || [])];
+  const wrap = document.getElementById('task-owners-chips');
+  if (!wrap) return;
+  const isAdmin = !!(currentUser?.isAdmin);
+  wrap.innerHTML = USERS.map(u => {
+    const sel  = _taskOwnerIds.includes(u.id);
+    const able = isAdmin || u.id === currentUser?.id;
+    const avHtml = u.photo
+      ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : u.initials;
+    return `<button type="button" class="toc-btn${sel?' sel':''}"
+      ${!able ? 'disabled' : ''}
+      onclick="_toggleOwnerChip('${u.id}')" title="${u.name}">
+      <span class="toc-av" style="background:${u.photo?'#333':u.color}">${avHtml}</span>
+      ${u.name.split(' ')[0]}
+    </button>`;
+  }).join('');
+  document.getElementById('task-owner').value = _taskOwnerIds[0] || '';
+}
+
+function _toggleOwnerChip(uid) {
+  if (!currentUser?.isAdmin && uid !== currentUser?.id) return;
+  const idx = _taskOwnerIds.indexOf(uid);
+  if (idx === -1) {
+    _taskOwnerIds.push(uid);
+  } else {
+    if (_taskOwnerIds.length > 1) _taskOwnerIds.splice(idx, 1);
+  }
+  _renderOwnerChips(_taskOwnerIds);
+}
 
 function openProfileModal() {
   if (!currentUser) return;
@@ -9159,7 +9195,7 @@ async function generateClientReport(clientId) {
       <div class="cl-name">${c.name}</div>
       <div class="cl-meta">
         <span class="seg-tag">${seg.label}</span>
-        ${CAT_LABELS[c.categoria] || c.categoria || ''} &nbsp;·&nbsp;
+        ${(c.categoria && c.categoria !== 'elo_marketing') ? ((CAT_LABELS[c.categoria] || c.categoria) + ' &nbsp;·&nbsp; ') : ''}
         Responsável: <strong>${owner?.name || '—'}</strong>
       </div>
     </div>
@@ -10472,7 +10508,7 @@ async function exportarRelatorioPDF() {
       <div class="cl-name">${client.name}</div>
       <div class="cl-meta">
         <span class="seg-tag">${segInfo.label}</span>
-        ${CAT_LABELS[client.categoria] || client.categoria || ''} &nbsp;·&nbsp;
+        ${(client.categoria && client.categoria !== 'elo_marketing') ? ((CAT_LABELS[client.categoria] || client.categoria) + ' &nbsp;·&nbsp; ') : ''}
         Responsável: <strong>${owner?.name || '—'}</strong>
       </div>
     </div>
@@ -14771,7 +14807,12 @@ function renderTasksGrid() {
 
   if (search)  tasks = tasks.filter(t => t.title.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search));
   // Filtra por colaborador: responsável OU criador da tarefa
-  if (ownerF)  tasks = tasks.filter(t => t.assignedTo === ownerF || t.created_by === ownerF || t.owner === ownerF);
+  if (ownerF)  tasks = tasks.filter(t =>
+    t.assignedTo === ownerF ||
+    t.created_by === ownerF ||
+    t.owner      === ownerF ||
+    (Array.isArray(t.assignedToList) && t.assignedToList.includes(ownerF))
+  );
   if (clientF) tasks = tasks.filter(t => t.client === clientF);
   if (statusF) tasks = tasks.filter(t => t.status === statusF);
 
@@ -14880,10 +14921,13 @@ function _buildTaskRow(task) {
     ? `<span class="m-client" title="${client.name}">${client.name}</span>`
     : '<span style="color:var(--text3);font-size:11px">—</span>';
 
-  const user = USERS.find(u => u.id === task.assignedTo);
-  const userHtml = user
-    ? `<span class="m-avatar" style="background:${user.color||'var(--accent)'}" title="${user.name}">${user.photo?`<img src="${user.photo}">`:`${user.initials}`}</span>`
-    : '<span style="color:var(--text3);font-size:11px">—</span>';
+  // Suporta assignedToList (múltiplos) e assignedTo legado (único)
+  const _ownerIds = (task.assignedToList?.length ? task.assignedToList : (task.assignedTo ? [task.assignedTo] : []));
+  const _ownerAvatars = _ownerIds.map(uid => {
+    const u = USERS.find(u => u.id === uid);
+    return u ? `<span class="m-avatar" style="background:${u.color||'var(--accent)'};margin-left:-3px" title="${u.name}">${u.photo?`<img src="${u.photo}">`:`${u.initials}`}</span>` : '';
+  }).filter(Boolean).join('');
+  const userHtml = _ownerAvatars || '<span style="color:var(--text3);font-size:11px">—</span>';
 
   const due = task.dueDate || task.deadline || '';
   let dueHtml = '<span style="color:var(--text3);font-size:11px">—</span>';
