@@ -977,11 +977,10 @@
   /* ── Esteira: cabeçalho sticky (stats + filtros) ───────────────── */
   .esteira-sticky-header {
     position: sticky;
-    top: -24px;          /* offset = padding-top de .content (24px) → cola na borda real */
+    top: 0;
     z-index: 30;
     background: var(--bg);
-    padding: 24px 0 12px;
-    margin: -24px 0 0;   /* sobe 24px p/ ficar rente à borda do container ao colapsar */
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 14px;
   }
@@ -1299,11 +1298,6 @@
   .esteira-filter-select:focus { border-color: var(--accent); }
 
   @media (max-width: 720px) {
-    .esteira-sticky-header {
-      top: -12px;        /* mobile: .content tem padding-top: 12px */
-      padding-top: 12px;
-      margin-top: -12px;
-    }
     .esteira-stats { grid-template-columns: 1fr 1fr; }
     .otim-drawer { width: 100vw; }
   }
