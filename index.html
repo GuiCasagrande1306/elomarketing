@@ -7645,19 +7645,19 @@ function onClLogoFileChange(ev) {
   }
   const reader = new FileReader();
   reader.onload = function(e) {
-    // Comprime antes de salvar: max 400×400 px, JPEG 85%
-    // Evita base64 gigantes no MongoDB (mesma lógica do avatar de perfil)
+    // Redimensiona e comprime antes de salvar: max 150px (lado maior), JPEG 70%
+    // Ideal para ícones de dashboard — base64 resultante fica entre 3–15 KB
     const img = new Image();
     img.onload = function() {
-      const MAX    = 400;
-      const scale  = Math.min(MAX / img.width, MAX / img.height, 1);
+      const MAX_W = 150;
+      const scale = Math.min(MAX_W / img.width, MAX_W / img.height, 1);
       const canvas = document.createElement('canvas');
       canvas.width  = Math.round(img.width  * scale);
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      const compressed = canvas.toDataURL('image/jpeg', 0.85);
+      const compressed = canvas.toDataURL('image/jpeg', 0.7);
       _clLogoSet(compressed);
-      console.log('[Logo] comprimida:', Math.round(compressed.length / 1024), 'KB base64');
+      console.log('[Logo] comprimida:', Math.round(compressed.length / 1024), 'KB base64 (' + canvas.width + '×' + canvas.height + 'px)');
     };
     img.src = e.target.result;
   };
@@ -7673,7 +7673,9 @@ function onClLogoRemove() {
  * Após comprimir, re-renderiza os cards e persiste no Atlas via bulk/sync.
  */
 async function _recompressLargeLogos() {
-  const THRESHOLD = 80 * 1024; // 80 KB em caracteres base64 (~60 KB de imagem)
+  // Threshold = 20 KB — logos dentro do padrão novo (150px JPEG 70%) ficam abaixo disso.
+  // Tudo acima é dado legado que precisa ser migrado.
+  const THRESHOLD = 20 * 1024;
   const toFix = CLIENTS.list.filter(c =>
     c.logoUrl &&
     c.logoUrl.startsWith('data:') &&
@@ -7681,24 +7683,29 @@ async function _recompressLargeLogos() {
   );
   if (toFix.length === 0) return;
 
-  console.log(`[Logo] ${toFix.length} logo(s) pesada(s) detectada(s) — recomprimindo para mobile...`);
+  console.log(`[Logo] ${toFix.length} logo(s) legada(s) detectada(s) — recomprimindo para 150px JPEG 70%...`);
   let fixed = 0;
 
   for (const c of toFix) {
     await new Promise(resolve => {
       const img = new Image();
       img.onload = function () {
-        const MAX    = 400;
-        const scale  = Math.min(MAX / img.width, MAX / img.height, 1);
+        const MAX_W  = 150;
+        const scale  = Math.min(MAX_W / img.width, MAX_W / img.height, 1);
         const canvas = document.createElement('canvas');
         canvas.width  = Math.round(img.width  * scale);
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        const compressed = canvas.toDataURL('image/jpeg', 0.7);
         const idx = CLIENTS.list.findIndex(x => x.id === c.id);
         if (idx >= 0) {
           const before = Math.round(c.logoUrl.length / 1024);
           const after  = Math.round(compressed.length / 1024);
+          // Invalida o blob URL antigo para este cliente (será recriado na próxima renderização)
+          if (_logoBlobCache.has(c.id)) {
+            URL.revokeObjectURL(_logoBlobCache.get(c.id).url);
+            _logoBlobCache.delete(c.id);
+          }
           CLIENTS.list[idx].logoUrl = compressed;
           fixed++;
           console.log(`[Logo] ${c.name}: ${before} KB → ${after} KB`);
