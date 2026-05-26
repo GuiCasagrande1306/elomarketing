@@ -5731,10 +5731,7 @@ function deleteFromModal() {
   if (!editId) return;
   if (!confirm('Excluir esta tarefa permanentemente?')) return;
   closeModal();
-  TASKS_DATA = TASKS_DATA.filter(t => t.id !== editId);
-  deleteTaskInDB(editId);
-  saveTasks(); renderTasksGrid(); updateNavBadges();
-  showNotification('Tarefa excluída.', 'ok');
+  _deleteTask(editId); // server-first com rollback automático
 }
 
 function selectCrit(btn) { } // legado - não usado
@@ -6042,7 +6039,8 @@ async function loadTasksFromDB() {
   // Normaliza tarefas vindas do servidor
   // Grupos válidos: 'semana' e 'concluidos'. Qualquer outro valor legado → 'semana'.
   const _srvValidGroups = new Set(TASK_GROUPS_CFG.map(g => g.key));
-  const fromServer = data.map(t => {
+  // Filtra tarefas com DELETE pendente — evita ressurreição antes do servidor confirmar
+  const fromServer = data.filter(t => !_pendingDeletions.has(t.id)).map(t => {
     const rawGrp = t.group === 'backlog' ? 'semana' : (t.group || 'semana');
     const srvStatus = normalizeTaskStatus(t.status);
     const group = srvStatus === 'Pronto' ? 'concluidos'
@@ -6198,12 +6196,58 @@ function updateTaskInDB(id, updates) {
   }
 }
 
-function deleteTaskInDB(id) {
-  if (!id) return;
-  _apiFetch(`/api/tasks/${id}`, { method: 'DELETE' })
-    .then(r => { if (!r?.ok) console.warn('[Tasks] falha ao deletar:', id); });
-  if (db) db.from('tarefas').delete().eq('id', id).catch(() => {});
+// IDs com DELETE em voo — bloqueia polling de ressuscitar a tarefa
+const _pendingDeletions = new Set();
+
+/**
+ * Deleta uma tarefa: optimista no UI + confirmação do servidor.
+ * Se o servidor recusar, faz rollback e mantém a tarefa na tela.
+ */
+async function _deleteTask(taskId) {
+  if (!taskId) return;
+
+  // Faz backup antes de remover (para rollback se servidor falhar)
+  const backup = TASKS_DATA.find(t => t.id === taskId);
+
+  // Optimista: remove do UI imediatamente
+  _pendingDeletions.add(taskId);
+  TASKS_DATA = TASKS_DATA.filter(t => t.id !== taskId);
+  saveTasks();
+  renderTasksGrid();
+  updateNavBadges();
+
+  try {
+    const r = await _apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    if (r && r.ok !== false) {
+      // ✅ Servidor confirmou — deleção permanente
+      console.log('[Tasks] ✅ deletado do Atlas:', taskId);
+      showNotification('Tarefa excluída.', 'ok');
+    } else {
+      throw new Error('Servidor retornou erro: ' + JSON.stringify(r));
+    }
+  } catch(e) {
+    // ❌ Falhou — rollback: restaura no UI e remove do set
+    console.error('[Tasks] ❌ falha ao deletar:', taskId, e.message);
+    _pendingDeletions.delete(taskId);
+    if (backup) {
+      TASKS_DATA.unshift(backup);
+      saveTasks();
+      renderTasksGrid();
+      updateNavBadges();
+    }
+    showNotification('❌ Falha ao excluir no servidor. Tarefa restaurada.', 'error');
+    return;
+  }
+
+  // Remove do pending após 30s (tempo de segurança contra polling atrasado)
+  setTimeout(() => _pendingDeletions.delete(taskId), 30000);
+
+  // Supabase (legado)
+  if (db) db.from('tarefas').delete().eq('id', taskId).catch(() => {});
 }
+
+// Mantido por compatibilidade — redireciona para o novo fluxo
+function deleteTaskInDB(id) { _deleteTask(id); }
 
 // ── INIT & REALTIME ───────────────────────────────────────────────────────────
 async function initSupabaseSync() {
@@ -7073,7 +7117,8 @@ async function _pollTasks() {
 
     // Detecta se há novidades: IDs novos OU mudança de status/titulo em existentes
     const _srvValidGroups = new Set(TASK_GROUPS_CFG.map(g => g.key));
-    const incoming = data.map(t => {
+    // Ignora tarefas com DELETE em voo — evita ressurreição antes do servidor confirmar
+    const incoming = data.filter(t => !_pendingDeletions.has(t.id)).map(t => {
       const rawGrp  = t.group === 'backlog' ? 'semana' : (t.group || 'semana');
       const srvStat = normalizeTaskStatus(t.status);
       return {
@@ -15060,9 +15105,7 @@ function toggleMondayTask(taskId) {
 
 function deleteTaskRow(taskId) {
   if (!confirm('Excluir esta tarefa permanentemente?')) return;
-  TASKS_DATA = TASKS_DATA.filter(t => t.id !== taskId);
-  deleteTaskInDB(taskId);
-  saveTasks(); renderTasksGrid(); updateNavBadges();
+  _deleteTask(taskId); // server-first com rollback automático
 }
 /* ── Timer de Produtividade ────────────────────────────────────────── */
 let _tasksTimerTick = null;
