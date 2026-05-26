@@ -5774,8 +5774,8 @@ async function saveTask() {
     ? 'concluidos'
     : (document.getElementById('task-group')?.value || 'semana');
 
-  // Gera o ID uma única vez — reutilizado no retry para evitar duplicatas
-  const taskId = isEdit ? editId : (editIdInput.dataset.pendingId || crypto.randomUUID());
+  // ID gerado uma única vez (reutilizado em re-envios para evitar duplicatas)
+  const taskId = isEdit ? editId : crypto.randomUUID();
   const taskObj = {
     id:          taskId,
     title,
@@ -5790,7 +5790,6 @@ async function saveTask() {
     group,
     criticality: {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'}[document.getElementById('task-priority').value] || 'media',
     created_at:  isEdit ? (existing?.created_at || new Date().toISOString()) : new Date().toISOString(),
-    // created_by e updated_by sempre gravados no localStorage (evita perda de dono no cold-start)
     created_by:  isEdit ? (existing?.created_by || currentUser?.id || '') : (currentUser?.id || ''),
     updated_by:  currentUser?.id || '',
     ...(newStatus === 'Pronto' && { completed_at: existing?.completed_at || new Date().toISOString() }),
@@ -5798,122 +5797,93 @@ async function saveTask() {
     timerStartedAt,
   };
 
-  // ── 1. Salva localmente de imediato (task não se perde mesmo se o servidor falhar) ──
-  if (isEdit) {
-    const idx = TASKS_DATA.findIndex(t => t.id === taskId);
-    if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
-    else TASKS_DATA.unshift(taskObj);
-  } else {
-    // Evita duplicata no retry: se já existe com esse ID, apenas atualiza
-    const exists = TASKS_DATA.findIndex(t => t.id === taskId);
-    if (exists !== -1) TASKS_DATA[exists] = { ...TASKS_DATA[exists], ...taskObj };
-    else TASKS_DATA.unshift(taskObj);
-    // Guarda o ID no data-attribute para que retry reutilize o mesmo UUID
-    editIdInput.dataset.pendingId = taskId;
-  }
-  saveTasks();
-  renderTasksGrid();
-  updateNavBadges();
-
-  // ── 2. Tenta salvar no servidor; mantém formulário aberto em caso de falha ──
-  const saveBtn = document.querySelector('#task-form button[type="submit"]');
+  // ── Cloud-first: aguarda confirmação do Atlas antes de atualizar a UI ────────
+  // Fonte de verdade = servidor. localStorage é apenas cache, gravado após confirmação.
+  const saveBtn  = document.querySelector('#task-form button[type="submit"]');
   const origLabel = saveBtn?.innerHTML || '<i class="ti ti-check"></i> Salvar Tarefa';
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando…'; }
+
+  // Limpa banner de erro anterior
+  const _eb = document.getElementById('task-save-error-banner');
+  if (_eb) _eb.style.display = 'none';
+
+  const _setBtnState = (label) => {
+    if (!saveBtn) return;
+    saveBtn.disabled = !!label;
+    saveBtn.innerHTML = label || origLabel;
+  };
+  _setBtnState('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando na nuvem…');
+
+  // Mensagens progressivas — cold-start do Render pode demorar até ~45s
+  const _t1 = setTimeout(() => _setBtnState('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Conectando ao servidor…'), 6000);
+  const _t2 = setTimeout(() => _setBtnState('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Servidor acordando, aguarde…'), 18000);
+
+  const _clearTimers = () => { clearTimeout(_t1); clearTimeout(_t2); };
+
+  const _showError = (msg) => {
+    _clearTimers();
+    _setBtnState(null); // restaura botão
+    let banner = document.getElementById('task-save-error-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'task-save-error-banner';
+      banner.style.cssText = 'margin:8px 0;padding:10px 14px;background:#ff4d4d22;border:1px solid #ff4d4d66;border-radius:8px;color:#ff4d4d;font-size:12px;';
+      const form = document.getElementById('task-form');
+      if (form) form.prepend(banner);
+    }
+    banner.textContent = msg;
+    banner.style.display = 'block';
+  };
 
   try {
-    // Timeout de 10s: se o Render demorar mais (cold start), fecha o modal
-    // e sincroniza automaticamente na próxima vez que o usuário abrir a aba.
-    const _ctrl = new AbortController();
-    const _tid  = setTimeout(() => _ctrl.abort(), 10000);
     const r = await _apiFetch('/api/tasks', {
       method: 'POST',
-      signal: _ctrl.signal,
-      body: JSON.stringify(taskObj),  // created_by e updated_by já estão em taskObj
-    }).finally(() => clearTimeout(_tid));
+      body: JSON.stringify(taskObj),
+    });
+    _clearTimers();
 
-    // Classifica a resposta em três casos:
-    //  serverOk    → Atlas confirmou gravação → fecha modal, notificação verde
-    //  coldStart   → Render dormindo / timeout → fecha modal, agenda retry em background
-    //  serverError → Servidor retornou 4xx/5xx real → mantém modal aberto, mostra erro
     const serverOk    = r && !r._coldStart && !r.error && (r.ok || r.task);
-    const coldStart   = !r || r._coldStart;
     const serverError = r && r.error && !r._coldStart;
 
     if (serverOk) {
-      delete editIdInput.dataset.pendingId;
+      // ✅ Atlas confirmou — agora atualiza estado local e cache
+      if (isEdit) {
+        const idx = TASKS_DATA.findIndex(t => t.id === taskId);
+        if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
+        else            TASKS_DATA.unshift(taskObj);
+      } else {
+        const exists = TASKS_DATA.findIndex(t => t.id === taskId);
+        if (exists !== -1) TASKS_DATA[exists] = { ...TASKS_DATA[exists], ...taskObj };
+        else               TASKS_DATA.unshift(taskObj);
+      }
+      saveTasks();          // cache local (lido no próximo F5 antes do servidor responder)
+      renderTasksGrid();
+      updateNavBadges();
       closeModal();
       resetTaskForm();
-      console.log('[Tasks] tarefa salva no MongoDB:', taskId);
+      console.log('[Tasks] ✅ salvo no Atlas:', taskId);
       showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
 
     } else if (serverError) {
-      // Erro real do servidor (ex: validação, Atlas rejeitou) — NÃO fecha o modal
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origLabel; }
-      const errMsg = r.error || 'Erro desconhecido no servidor.';
-      console.error('[Tasks] erro real do servidor ao salvar:', taskId, errMsg);
-      // Banner de erro inline no formulário
-      let errBanner = document.getElementById('task-save-error-banner');
-      if (!errBanner) {
-        errBanner = document.createElement('div');
-        errBanner.id = 'task-save-error-banner';
-        errBanner.style.cssText = 'margin:8px 0;padding:10px 14px;background:#ff4d4d22;border:1px solid #ff4d4d66;border-radius:8px;color:#ff4d4d;font-size:12px;';
-        const form = document.getElementById('task-form');
-        if (form) form.prepend(errBanner);
-      }
-      errBanner.textContent = '❌ Erro ao guardar no servidor: ' + errMsg + ' — verifique e tente novamente.';
-      errBanner.style.display = 'block';
+      // ❌ Erro real (4xx/5xx) — mantém modal aberto
+      const msg = r.error || 'Erro desconhecido no servidor.';
+      console.error('[Tasks] ❌ erro servidor:', taskId, msg);
+      _showError('❌ Erro ao guardar: ' + msg + ' — verifique e tente novamente.');
 
     } else {
-      // Cold-start / rede offline — task segura no localStorage, retry agendado
-      delete editIdInput.dataset.pendingId;
-      closeModal();
-      resetTaskForm();
-      console.warn('[Tasks] cold-start — tarefa no localStorage, retry agendado:', taskId);
-      showNotification('Tarefa salva! ☁️ Servidor acordando — não feche a aba…', 'warn');
-      _scheduleTaskRetry(taskObj);
+      // ⚠️ Cold-start / sem resposta JSON — servidor ainda acordando
+      console.warn('[Tasks] ⚠️ sem resposta do servidor:', taskId, r);
+      _showError('⚠️ Servidor sem resposta. Aguarde alguns segundos e tente novamente.');
     }
 
   } catch(e) {
-    // AbortError (timeout de 10s) ou falha de rede — trata como cold-start
-    delete editIdInput.dataset.pendingId;
-    closeModal();
-    resetTaskForm();
-    console.warn('[Tasks] timeout/rede ao salvar:', e.message);
-    showNotification('Tarefa salva! ☁️ Servidor acordando — não feche a aba…', 'warn');
-    _scheduleTaskRetry(taskObj);
+    // Erro de rede (sem conexão, etc.)
+    console.warn('[Tasks] ⚠️ erro de rede:', e.message);
+    _showError('⚠️ Sem conexão com o servidor. Verifique sua internet e tente novamente.');
   }
 }
 
-/**
- * Agenda até 4 retentativas de upload para um taskObj que falhou no cold-start.
- * Intervalos: 15s, 30s, 50s, 75s — janela total ~75s (tempo suficiente para o Render acordar).
- * Cada tentativa bem-sucedida cancela as seguintes.
- */
-function _scheduleTaskRetry(taskObj) {
-  const delays = [15000, 30000, 50000, 75000];
-  let cancelled = false;
-  const attempt = (i) => {
-    if (cancelled || i >= delays.length) return;
-    setTimeout(async () => {
-      if (cancelled) return;
-      try {
-        const r = await _apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(taskObj) });
-        if (r && !r._coldStart && !r.error && (r.ok || r.task)) {
-          cancelled = true;
-          console.log(`[Tasks] retry ${i+1} OK — tarefa sincronizada com Atlas:`, taskObj.id);
-          showNotification('✅ Tarefa sincronizada com o servidor!', 'ok');
-        } else {
-          console.warn(`[Tasks] retry ${i+1} ainda sem resposta:`, taskObj.id, r);
-          attempt(i + 1);
-        }
-      } catch(e) {
-        console.warn(`[Tasks] retry ${i+1} erro de rede:`, e.message);
-        attempt(i + 1);
-      }
-    }, delays[i]);
-  };
-  attempt(0);
-}
+// _scheduleTaskRetry removido: com cloud-first, o modal fica aberto até o servidor
+// confirmar. O usuário clica "Salvar" de novo se quiser tentar novamente.
 
 /* ==========================================================================
    PROD_CONFIG — preencha antes de cada deploy
