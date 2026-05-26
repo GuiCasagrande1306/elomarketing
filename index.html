@@ -15066,12 +15066,18 @@ function _apiBase() { return (PROD_CONFIG.apiUrl || '').replace(/\/$/, ''); }
  * em vez de engolir o erro silenciosamente.
  * Erros de rede retornam null (com log no console).
  */
-function _apiFetch(path, opts = {}) {
+function _apiFetch(path, opts = {}, timeoutMs = 35000) {
   const base = _apiBase();
   if (!base) return Promise.resolve(null);
-  const fetchOpts = { headers: { 'Content-Type': 'application/json' }, ...opts };
+
+  // AbortController para garantir que a requisição nunca fique pendurada para sempre
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  const fetchOpts = { headers: { 'Content-Type': 'application/json' }, ...opts, signal: ctrl.signal };
   return fetch(base + path, fetchOpts)
     .then(async r => {
+      clearTimeout(timer);
       const text = await r.text().catch(() => '');
       // Render dormindo devolve página HTML em vez de JSON
       if (text.trim().startsWith('<') || (r.status >= 500 && !text.trim().startsWith('{'))) {
@@ -15086,7 +15092,11 @@ function _apiFetch(path, opts = {}) {
       }
       return json;
     })
-    .catch(e => { console.warn('[API] rede:', path, e.message); return null; });
+    .catch(e => {
+      clearTimeout(timer);
+      console.warn('[API] rede/timeout:', path, e.message);
+      return null;
+    });
 }
 
 /**
