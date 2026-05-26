@@ -4364,8 +4364,9 @@ function navigate(page, el) {
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
   if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
   if (page === 'crm')           _crmInitAndRender();
-  // Ao abrir Tarefas, busca dados frescos do servidor (sincroniza entre usuários)
-  if (page === 'tarefas') { loadTasks(); _populateTaskFilters(); }
+  // Ao abrir Tarefas: dados frescos + inicia polling de 10s
+  if (page === 'tarefas') { loadTasks(); _populateTaskFilters(); _startTasksPolling(); }
+  else { _stopTasksPolling(); }  // ao sair de Tarefas, cancela o polling
   /* Auto-sync Meta Ads na primeira visita à página de clientes por sessão */
   if (page === 'clientes' && !navigate._clientsSynced) {
     navigate._clientsSynced = true;
@@ -6602,6 +6603,7 @@ function updateSidebarUser(user) {
 }
 
 function doLogout() {
+  _stopTasksPolling();   // garante que não disparam requests sem usuário
   currentUser = null;
   pendingLoginUser = null;
   localStorage.removeItem('tp_current_user');
@@ -7034,6 +7036,84 @@ const CLIENTS = {
 let clEditingId = null;
 let clImportanceVal = 0;
 let _clLogoData = '';   // base64 data-URL ou URL existente do logo do cliente em edição
+
+/* ── Polling de tarefas ─────────────────────────────────────────────────────
+ * Liga ao entrar na página Tarefas, desliga ao sair.
+ * Usa silent refresh: busca do Atlas sem mostrar spinner, só re-renderiza
+ * se houver mudanças (novo id ou título diferente) — evita piscar a UI.
+ * ─────────────────────────────────────────────────────────────────────── */
+let _tasksPollingInterval = null;
+const _TASKS_POLL_MS = 10000; // 10 segundos
+
+async function _pollTasks() {
+  // Não pollar se não há usuário logado ou se o servidor está offline
+  if (!currentUser) return;
+  try {
+    const uid    = currentUser.id || '';
+    const apiUrl = uid ? `/api/tasks?userId=${encodeURIComponent(uid)}` : '/api/tasks';
+    const data   = await _apiFetch(apiUrl);
+    if (!data || !Array.isArray(data)) return;   // silencia erros de rede / cold-start
+
+    // Detecta se há novidades: IDs novos OU mudança de status/titulo em existentes
+    const _srvValidGroups = new Set(TASK_GROUPS_CFG.map(g => g.key));
+    const incoming = data.map(t => {
+      const rawGrp  = t.group === 'backlog' ? 'semana' : (t.group || 'semana');
+      const srvStat = normalizeTaskStatus(t.status);
+      return {
+        ...t,
+        status:   srvStat,
+        priority: normalizeTaskPriority(t),
+        group:    srvStat === 'Pronto' ? 'concluidos' : (_srvValidGroups.has(rawGrp) ? rawGrp : 'semana'),
+        assignedTo: t.assignedTo || t.owner || '',
+        timeSpent:  t.timeSpent  || 0,
+        timerStartedAt: t.timerStartedAt || null,
+      };
+    });
+
+    // Compara com o estado atual — só re-renderiza se algo mudou
+    const localMap  = new Map(TASKS_DATA.map(t => [t.id, t]));
+    let   hasChange = incoming.length !== TASKS_DATA.length;
+    if (!hasChange) {
+      for (const srv of incoming) {
+        const loc = localMap.get(srv.id);
+        if (!loc || loc.status !== srv.status || loc.title !== srv.title
+                 || loc.assignedTo !== srv.assignedTo || loc.group !== srv.group) {
+          hasChange = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasChange) return;   // nada mudou — não repinta
+
+    // Merge seguro: preserva tarefas locais pendentes de upload
+    const serverIds = new Set(incoming.map(t => t.id).filter(Boolean));
+    const localOnly = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
+    TASKS_DATA = [...incoming, ...localOnly];
+    localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+    if (_hasRunningTimers()) _startTimerTick();
+    renderTasksGrid();
+    updateNavBadges();
+    if (currentUser) filterByCollaborator(_collabUid());
+    console.log(`[Polling] atualizado — ${incoming.length} tarefa(s) do servidor.`);
+  } catch(e) {
+    // Erros de polling são silenciosos — não interrompem o usuário
+    console.warn('[Polling] erro silencioso:', e.message);
+  }
+}
+
+function _startTasksPolling() {
+  if (_tasksPollingInterval) return;   // já rodando
+  _tasksPollingInterval = setInterval(_pollTasks, _TASKS_POLL_MS);
+  console.log('[Polling] iniciado — intervalo:', _TASKS_POLL_MS / 1000, 's');
+}
+
+function _stopTasksPolling() {
+  if (!_tasksPollingInterval) return;
+  clearInterval(_tasksPollingInterval);
+  _tasksPollingInterval = null;
+  console.log('[Polling] parado.');
+}
 
 /* ── helpers de logo do cliente ─────────────────────────────── */
 function _clLogoReset() {
