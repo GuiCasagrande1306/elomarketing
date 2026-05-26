@@ -975,17 +975,45 @@
   /* ══════════════════════════════════════════
      ESTEIRA DE OTIMIZAÇÃO
      ══════════════════════════════════════════ */
-  /* ── Esteira: cabeçalho fixo no topo (stats + filtros) ──────────── */
-  /* position:sticky dentro de .content (overflow-y:auto) funciona    */
-  /* em todos os browsers modernos sem nenhum hack de margin negativa  */
+  /* ── Esteira: layout com header fixo e days com scroll isolado ────────────
+     Quando body.esteira-active, o .content para de ser o scrollador e passa
+     o scroll para #esteira-days. O header fica estático no topo sem sticky.
+  ──────────────────────────────────────────────────────────────────────── */
   .esteira-sticky-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    flex-shrink: 0;
     background: var(--bg);
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 14px;
+    position: relative;
+    z-index: 10;
+  }
+
+  body.esteira-active .content {
+    overflow: hidden !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  body.esteira-active #page-esteira {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;          /* essencial: permite shrink no flexbox */
+    padding: 24px 24px 0;
+    overflow: hidden;
+  }
+
+  body.esteira-active #esteira-days {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;          /* essencial: permite que overflow-y funcione */
+    padding-bottom: 24px;
+  }
+
+  @media (max-width: 768px) {
+    body.esteira-active #page-esteira { padding: 12px 12px 0; }
   }
 
   .esteira-stats {
@@ -4833,6 +4861,8 @@ function navigate(page, el) {
   if (page === 'configuracoes') renderTeamPermissions();
   if (page === 'campanhas')     { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
+  // Toggle layout especial da esteira (header fixo + scroll interno)
+  document.body.classList.toggle('esteira-active', page === 'esteira');
   if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
   if (page === 'crm')           _crmInitAndRender();
   // Ao abrir Tarefas: dados frescos + inicia polling de 10s
