@@ -6628,7 +6628,7 @@ function saveProfile() {
   if (newPin) payload.pin = newPin; // backend faz o hash com bcrypt
 
   _apiFetch('/api/users/' + currentUser.id, {
-    method: 'PUT',
+    method: 'PATCH',
     body: JSON.stringify(payload)
   }).then(resp => {
     if (resp?.ok) {
