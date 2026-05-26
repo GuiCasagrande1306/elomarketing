@@ -43,6 +43,7 @@
     --font: 'Sora', sans-serif;
     --mono: 'JetBrains Mono', monospace;
     --nav-w: 220px;
+    --topnav-h: 56px;
     --radius: 12px;
     --radius-sm: 8px;
     --trans: all 0.2s ease;
@@ -136,7 +137,7 @@
     font-family: var(--font);
     background: var(--bg);
     color: var(--text);
-    display: flex;
+    display: block;
     min-height: 100vh;
     font-size: 14px;
     line-height: 1.5;
@@ -144,12 +145,96 @@
     height: 100vh;
   }
 
-  /* SIDEBAR */
+  /* ── TOP NAVBAR ──────────────────────────────────────────────────────── */
+  .topnav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1001;
+    height: var(--topnav-h);
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    gap: 12px;
+  }
+
+  .topnav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+
+  /* Nav links — centro */
+  .topnav-links {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .topnav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 11px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 12.5px;
+    font-weight: 400;
+    transition: var(--trans);
+    white-space: nowrap;
+    position: relative;
+    user-select: none;
+  }
+  .topnav-item:hover { background: var(--bg3); color: var(--text); }
+  .topnav-item.active {
+    background: rgba(108,99,255,0.15);
+    color: var(--accent2);
+    font-weight: 500;
+  }
+  .topnav-item i { font-size: 15px; }
+
+  /* Ações direita */
+  .topnav-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .topnav-user-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 2px; border-radius: 50%;
+    transition: opacity 0.15s;
+  }
+  .topnav-user-btn:hover { opacity: 0.8; }
+
+  /* Hamburger da topnav — visível só no mobile */
+  .topnav-hamburger {
+    display: none;
+    align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: none; border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); cursor: pointer;
+    color: var(--text2); font-size: 18px;
+    transition: var(--trans);
+  }
+  .topnav-hamburger:hover { background: var(--bg3); color: var(--text); }
+
+  /* SIDEBAR — apenas drawer mobile; escondida no desktop */
   .sidebar {
     width: var(--nav-w);
     background: var(--bg2);
     border-right: 1px solid var(--border);
-    display: flex;
+    display: none;          /* oculta no desktop */
     flex-direction: column;
     flex-shrink: 0;
     height: 100vh;
@@ -287,13 +372,14 @@
   .user-name { font-size: 12px; font-weight: 500; color: var(--text); }
   .user-role { font-size: 10px; color: var(--text3); }
 
-  /* MAIN */
+  /* MAIN — ocupa toda a largura abaixo da topnav */
   .main {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    margin-top: var(--topnav-h);
+    height: calc(100vh - var(--topnav-h));
     overflow: hidden;
+    width: 100%;
   }
 
   .topbar {
@@ -1883,7 +1969,7 @@
   }
 
   /* ===== LOGIN SCREEN — NETFLIX STYLE ===== */
-  .pre-auth .sidebar, .pre-auth .main { display: none !important; }
+  .pre-auth .topnav, .pre-auth .sidebar, .pre-auth .main { display: none !important; }
   #login-screen {
     position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;
     align-items:center;justify-content:center;
@@ -2522,21 +2608,21 @@
 
 @media (max-width: 768px) {
 
-  /* ── Layout raiz ─────────────────────────────────────────────── */
-  body {
-    flex-direction: column;
-    overflow: hidden;
-    height: 100dvh;
-  }
+  /* ── Topnav mobile: esconde links centrais, mostra hamburger ── */
+  .topnav-links    { display: none !important; }
+  .topnav-hamburger { display: flex !important; }
+  .topnav { padding: 0 14px; }
+  .topnav-user-btn .avatar { width: 30px; height: 30px; font-size: 11px; }
 
   /* ── Sidebar → gaveta lateral deslizante ────────────────────── */
   nav.sidebar {
+    display: flex !important;   /* visível no mobile (drawer) */
     position: fixed;
-    left: -280px;
+    left: -290px;
     top: 0;
-    width: 260px;
+    width: 270px;
     height: 100dvh;
-    z-index: 1001;
+    z-index: 1002;
     transition: left 0.28s cubic-bezier(.4,0,.2,1);
     box-shadow: 4px 0 24px rgba(0,0,0,.5);
   }
@@ -2548,54 +2634,39 @@
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.6);
-    z-index: 1000;
+    z-index: 1001;
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
   }
   .mob-sidebar-overlay.active { display: block; }
 
-  /* ── Main ocupa tela inteira ────────────────────────────────── */
+  /* ── Main: desconta topnav + bottom nav ─────────────────────── */
   main.main {
     width: 100%;
-    height: 100dvh;
+    height: calc(100dvh - var(--topnav-h));
+    margin-top: var(--topnav-h);
     min-width: 0;
   }
 
   /* ── Topbar mobile ──────────────────────────────────────────── */
   .topbar {
-    padding: 10px 12px;
+    padding: 8px 12px;
     gap: 8px;
     flex-wrap: nowrap;
-    min-height: 54px;
+    min-height: 48px;
   }
   .topbar-left {
     flex-direction: row;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex: 1;
     min-width: 0;
   }
-  .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .page-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .page-sub   { display: none; }
 
-  /* Hambúrguer: visível só no mobile */
-  .mobile-hamburger {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    background: transparent;
-    border: none;
-    color: var(--text2);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    font-size: 22px;
-    padding: 0;
-    flex-shrink: 0;
-  }
-  .mobile-hamburger:hover { background: var(--bg3); }
+  /* Hambúrguer legado na topbar: oculto (agora está na topnav) */
+  .mobile-hamburger { display: none !important; }
 
   /* Ocultar elementos do topbar-right que não cabem no mobile */
   .topbar-right #date-range         { display: none !important; }
@@ -2857,6 +2928,72 @@
 </div>
 
 <!-- SIDEBAR -->
+<!-- ══════════════════════════════════════════════════════════════════
+     TOP NAVBAR — fixo no topo, visível sempre após login
+     ══════════════════════════════════════════════════════════════════ -->
+<header class="topnav" id="topnav">
+
+  <!-- Esquerda: Logo -->
+  <div class="topnav-logo" onclick="navigate('dashboard', document.querySelector('[data-nav-page=dashboard]'))" title="Dashboard">
+    <svg viewBox="-4 -2 160 40" xmlns="http://www.w3.org/2000/svg" style="height:32px;width:auto;display:block;">
+      <rect x="1" y="5" width="11" height="24" rx="3.5" fill="#4EC3E8" transform="rotate(-11,6.5,17)"/>
+      <rect x="15" y="0" width="15" height="34" rx="4.5" fill="#ffffff" transform="rotate(-11,22.5,17)"/>
+      <text x="40" y="25" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="24" fill="#ffffff">elo</text>
+      <text x="41" y="34" font-family="system-ui,-apple-system,sans-serif" font-size="7.5" font-weight="500" fill="#4EC3E8" letter-spacing="2.2">marketing</text>
+    </svg>
+  </div>
+
+  <!-- Centro: links de navegação principais (desktop) -->
+  <nav class="topnav-links" id="topnav-links">
+    <div class="topnav-item active" data-nav-page="dashboard" onclick="navigate('dashboard', this)">
+      <i class="ti ti-layout-dashboard"></i> Dashboard
+    </div>
+    <div class="topnav-item" data-nav-page="clientes" onclick="navigate('clientes', this)">
+      <i class="ti ti-users"></i> Clientes
+    </div>
+    <div class="topnav-item" data-nav-page="esteira" onclick="navigate('esteira', this)">
+      <i class="ti ti-layout-kanban"></i> Esteira
+    </div>
+    <div class="topnav-item" data-nav-page="tarefas" onclick="navigate('tarefas', this)">
+      <i class="ti ti-checkbox"></i> Tarefas
+      <span class="nav-badge" id="topnav-badge-tarefas" style="display:none"></span>
+    </div>
+    <div class="topnav-item" data-nav-page="relatorios" onclick="navigate('relatorios', this)">
+      <i class="ti ti-file-analytics"></i> Relatórios
+    </div>
+    <div class="topnav-item" data-nav-page="calendar" onclick="navigate('calendar', this)">
+      <i class="ti ti-calendar-event"></i> Calendário
+    </div>
+    <div class="topnav-item" data-nav-page="contas" onclick="navigate('contas', this)">
+      <i class="ti ti-credit-card"></i> Contas
+    </div>
+  </nav>
+
+  <!-- Direita: ações globais + avatar -->
+  <div class="topnav-right">
+    <!-- Indicador de sync (mesma lógica do topbar) -->
+    <span id="topnav-sync" style="display:none;font-size:14px;color:var(--text3)" title="Sincronizando...">
+      <i class="ti ti-refresh" style="animation:spin 1s linear infinite"></i>
+    </span>
+    <!-- Tema claro/escuro (duplicado no topbar, mas aqui fica melhor acessível) -->
+    <button id="topnav-theme-btn" class="theme-toggle-btn" onclick="toggleTheme()" title="Alternar tema" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center">
+      <i class="ti ti-sun" style="font-size:17px;color:#F5A623"></i>
+    </button>
+    <!-- Avatar do usuário logado -->
+    <button class="topnav-user-btn" onclick="openProfileModal()" title="Meu Perfil" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);background:none;border:1px solid var(--border2);transition:var(--trans)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
+      <div class="avatar" id="topnav-user-initials" style="width:28px;height:28px;font-size:11px">—</div>
+      <span id="topnav-user-name" style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis">—</span>
+    </button>
+    <!-- Hamburger: menu completo (mobile + páginas secundárias) -->
+    <button class="topnav-hamburger" onclick="toggleMobileSidebar()" aria-label="Menu completo" title="Menu completo">
+      <i class="ti ti-menu-2"></i>
+    </button>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SIDEBAR — usado apenas como drawer (mobile e menu secundário)
+     ══════════════════════════════════════════════════════════════════ -->
 <nav class="sidebar">
   <div class="logo-area">
     <div class="logo">
@@ -2871,59 +3008,59 @@
 
   <div class="nav-section">
     <div class="nav-label">Principal</div>
-    <div class="nav-item active" onclick="navigate('dashboard', this)">
+    <div class="nav-item" data-nav-page="dashboard" onclick="navigate('dashboard', this)">
       <i class="ti ti-layout-dashboard"></i> Dashboard
     </div>
-    <div class="nav-item" onclick="navigate('clientes', this)">
+    <div class="nav-item" data-nav-page="clientes" onclick="navigate('clientes', this)">
       <i class="ti ti-users"></i> Clientes
       <span class="nav-badge green">8</span>
     </div>
-    <div class="nav-item" onclick="navigate('esteira', this)" style="font-size:12px">
+    <div class="nav-item" data-nav-page="esteira" onclick="navigate('esteira', this)" style="font-size:12px">
       <i class="ti ti-layout-kanban"></i> Esteira de Otimizações
     </div>
-    <div class="nav-item" onclick="navigate('contas', this)">
+    <div class="nav-item" data-nav-page="contas" onclick="navigate('contas', this)">
       <i class="ti ti-credit-card"></i> Contas de Anúncio
     </div>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Campanhas</div>
-    <div class="nav-item" onclick="navigate('campanhas', this)">
+    <div class="nav-item" data-nav-page="campanhas" onclick="navigate('campanhas', this)">
       <i class="ti ti-speakerphone"></i> Campanhas
       <span class="nav-badge amber">12</span>
     </div>
-    <div class="nav-item" onclick="navigate('creatives', this)">
+    <div class="nav-item" data-nav-page="creatives" onclick="navigate('creatives', this)">
       <i class="ti ti-video"></i> Criativos
     </div>
-    <div class="nav-item" onclick="navigate('calendar', this)">
+    <div class="nav-item" data-nav-page="calendar" onclick="navigate('calendar', this)">
       <i class="ti ti-calendar-event"></i> Calendário
     </div>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Leads</div>
-    <div class="nav-item" onclick="navigate('leads', this)">
+    <div class="nav-item" data-nav-page="leads" onclick="navigate('leads', this)">
       <i class="ti ti-brand-whatsapp"></i> Leads / WhatsApp
       <span class="nav-badge">23</span>
     </div>
-    <div class="nav-item" onclick="navigate('crm', this)">
+    <div class="nav-item" data-nav-page="crm" onclick="navigate('crm', this)">
       <i class="ti ti-layout-kanban"></i> CRM Comercial
     </div>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Análise</div>
-    <div class="nav-item" onclick="navigate('relatorios', this)">
+    <div class="nav-item" data-nav-page="relatorios" onclick="navigate('relatorios', this)">
       <i class="ti ti-file-analytics"></i> Relatórios
     </div>
-    <div class="nav-item" onclick="navigate('consolidado', this)">
+    <div class="nav-item" data-nav-page="consolidado" onclick="navigate('consolidado', this)">
       <i class="ti ti-chart-pie"></i> Consolidado
     </div>
-    <div class="nav-item" onclick="navigate('tarefas', this)">
+    <div class="nav-item" data-nav-page="tarefas" onclick="navigate('tarefas', this)">
       <i class="ti ti-checkbox"></i> Tarefas
       <span class="nav-badge" id="nav-badge-tarefas" style="display:none"></span>
     </div>
-    <div class="nav-item" onclick="navigate('alertas', this)">
+    <div class="nav-item" data-nav-page="alertas" onclick="navigate('alertas', this)">
       <i class="ti ti-bell"></i> Alertas
       <span class="nav-badge" id="nav-badge-alertas" style="display:none"></span>
     </div>
@@ -2931,13 +3068,13 @@
 
   <div class="nav-section">
     <div class="nav-label">Sistema</div>
-    <div class="nav-item" onclick="navigate('integracoes', this)">
+    <div class="nav-item" data-nav-page="integracoes" onclick="navigate('integracoes', this)">
       <i class="ti ti-plug"></i> Integrações
     </div>
-    <div class="nav-item" onclick="navigate('templates', this)">
+    <div class="nav-item" data-nav-page="templates" onclick="navigate('templates', this)">
       <i class="ti ti-template"></i> Templates
     </div>
-    <div class="nav-item" onclick="navigate('configuracoes', this)">
+    <div class="nav-item" data-nav-page="configuracoes" onclick="navigate('configuracoes', this)">
       <i class="ti ti-settings"></i> Configurações
     </div>
   </div>
@@ -4766,8 +4903,9 @@ function navigate(page, el) {
   // Fecha gaveta mobile ao navegar por qualquer rota
   closeMobileSidebar();
 
-  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  if (el && typeof el.classList?.add === 'function') el.classList.add('active');
+  // Marca active por data-nav-page — sincroniza topnav + sidebar
+  document.querySelectorAll('.nav-item, .topnav-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll(`[data-nav-page="${page}"]`).forEach(i => i.classList.add('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
@@ -5743,6 +5881,9 @@ function updateNavBadges() {
   }).length;
   const tb = document.getElementById('nav-badge-tarefas');
   if (tb) { tb.textContent = urgentCount; tb.className = 'nav-badge amber'; tb.style.display = urgentCount > 0 ? '' : 'none'; }
+  // Sincroniza badge da topnav
+  const tnBadge = document.getElementById('topnav-badge-tarefas');
+  if (tnBadge) { tnBadge.textContent = urgentCount; tnBadge.className = 'nav-badge amber'; tnBadge.style.display = urgentCount > 0 ? '' : 'none'; }
   // Sincroniza badge do bottom nav mobile
   const mbnBadge = document.getElementById('mbn-badge-tarefas');
   if (mbnBadge) { mbnBadge.textContent = urgentCount; mbnBadge.style.display = urgentCount > 0 ? 'flex' : 'none'; }
@@ -7031,6 +7172,7 @@ function loginUser(user) {
 }
 
 function updateSidebarUser(user) {
+  // ── Sidebar (drawer mobile) ──────────────────────────────────────────
   const initEl = document.getElementById('sb-user-initials');
   const nameEl = document.getElementById('sb-user-name');
   const roleEl = document.getElementById('sb-user-role');
@@ -7052,6 +7194,20 @@ function updateSidebarUser(user) {
     nameEl.innerHTML = `${user.name} ${badge}`;
   }
   if (roleEl) roleEl.textContent = user.role;
+
+  // ── Topnav: avatar + nome ─────────────────────────────────────────────
+  const tnInit = document.getElementById('topnav-user-initials');
+  const tnName = document.getElementById('topnav-user-name');
+  if (tnInit) {
+    if (user.photo) {
+      tnInit.style.background = '#333';
+      tnInit.innerHTML = `<img src="${user.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    } else {
+      tnInit.innerHTML = user.initials || '—';
+      tnInit.style.background = user.color || 'var(--accent)';
+    }
+  }
+  if (tnName) tnName.textContent = user.name || '—';
 }
 
 function doLogout() {
