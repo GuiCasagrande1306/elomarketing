@@ -6,6 +6,9 @@
 <meta name="description" content="EloMarketing — Plataforma de gestão de tráfego pago. Gerencie clientes, campanhas, metas, pacing de investimento e resultados em um único painel.">
 <title>EloMarketing — Gestor de Tráfego</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/tabler-icons.min.css">
+<!-- Quill rich text editor (para campo de otimizações) -->
+<link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1166,6 +1169,61 @@
     border-color: var(--red);
   }
   .otim-note-item.editing-active    { border-color: var(--accent); background: rgba(108,99,255,0.05); }
+
+  /* ── Quill editor — dark mode override ───────────────────────────────── */
+  .otim-quill-wrap .ql-toolbar.ql-snow {
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    border-radius: 10px 10px 0 0;
+    border-bottom: none;
+    padding: 6px 8px;
+  }
+  .otim-quill-wrap .ql-container.ql-snow {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 0 0 10px 10px;
+    min-height: 100px;
+    font-family: var(--font);
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .otim-quill-wrap .ql-editor {
+    padding: 10px 14px;
+    min-height: 100px;
+    color: var(--text);
+  }
+  .otim-quill-wrap .ql-editor.ql-blank::before {
+    color: var(--text3);
+    font-style: normal;
+    font-size: 13px;
+  }
+  /* toolbar icons */
+  .otim-quill-wrap .ql-snow .ql-stroke  { stroke:  var(--text2); }
+  .otim-quill-wrap .ql-snow .ql-fill    { fill:    var(--text2); }
+  .otim-quill-wrap .ql-snow .ql-picker   { color:   var(--text2); }
+  .otim-quill-wrap .ql-snow.ql-toolbar button:hover .ql-stroke,
+  .otim-quill-wrap .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: var(--accent2); }
+  .otim-quill-wrap .ql-snow.ql-toolbar button:hover .ql-fill,
+  .otim-quill-wrap .ql-snow.ql-toolbar button.ql-active .ql-fill   { fill:   var(--accent2); }
+  .otim-quill-wrap .ql-snow.ql-toolbar button:hover,
+  .otim-quill-wrap .ql-snow.ql-toolbar button.ql-active { background: rgba(108,99,255,0.12); border-radius: 4px; }
+  /* focus ring */
+  .otim-quill-wrap:focus-within .ql-container.ql-snow { border-color: var(--accent); }
+  .otim-quill-wrap:focus-within .ql-toolbar.ql-snow   { border-color: var(--accent); }
+
+  /* ── Rich text inside otimization history cards ─────────────────────── */
+  .otim-note-text p           { margin: 0 0 4px; }
+  .otim-note-text p:last-child { margin-bottom: 0; }
+  .otim-note-text strong, .otim-note-text b { font-weight: 700; color: var(--text); }
+  .otim-note-text em, .otim-note-text i     { font-style: italic; }
+  .otim-note-text u                          { text-decoration: underline; }
+  .otim-note-text ul, .otim-note-text ol    {
+    padding-left: 18px; margin: 4px 0;
+  }
+  .otim-note-text ul li { list-style: disc; }
+  .otim-note-text ol li { list-style: decimal; }
+  .otim-note-text li    { margin-bottom: 2px; }
 
   /* edit mode banner */
   .otim-edit-banner {
@@ -3980,8 +4038,9 @@
     </div>
     <div>
       <div class="otim-section-label" id="otim-section-label">O que foi otimizado?</div>
-      <textarea id="otim-textarea" class="otim-textarea"
-        placeholder="Ex: Pausadas campanhas de CPL alto, criados novos públicos lookalike 3%, ajustado orçamento para horário de pico..."></textarea>
+      <div class="otim-quill-wrap" id="otim-quill-wrap">
+        <div id="otim-quill-editor"></div>
+      </div>
     </div>
     <button class="otim-save-btn" id="otim-save-btn" onclick="saveOptimization()">
       <i class="ti ti-check" id="otim-save-icon"></i>
@@ -5013,6 +5072,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTemplatesPage(); // Popula página de templates (builtins + localStorage)
   // Sync async: atualiza fotos e nomes na tela de login sem bloquear o carregamento
   loadUserProfilesFromAPI();
+
+  // ── Quill rich text editor (campo "O que foi otimizado?") ──────────────
+  _initOtimQuill();
 });
 
 /* ========== CALENDÁRIO EDITORIAL ========== */
@@ -8925,6 +8987,53 @@ const DIAS_SEMANA = [
 ];
 let OTIM_CLIENT_ID  = null;
 let OTIM_EDIT_ID    = null;  /* id da entrada sendo editada; null = nova entrada */
+let OTIM_QUILL      = null;  /* instância do Quill — inicializada no DOMContentLoaded */
+
+/**
+ * Inicializa o editor Quill no campo de otimizações.
+ * Toolbar: negrito, itálico, sublinhado, lista ordenada, lista bullet, limpar.
+ */
+function _initOtimQuill() {
+  const el = document.getElementById('otim-quill-editor');
+  if (!el || typeof Quill === 'undefined') {
+    console.warn('[Quill] Editor não inicializado — elemento ou biblioteca ausente.');
+    return;
+  }
+  OTIM_QUILL = new Quill('#otim-quill-editor', {
+    theme: 'snow',
+    placeholder: 'Ex: Pausadas campanhas de CPL alto, criados novos públicos lookalike 3%, ajustado orçamento para horário de pico...',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['clean']
+      ]
+    }
+  });
+}
+
+/** Retorna o HTML do editor Quill (string vazia se não há conteúdo real). */
+function _otimGetContent() {
+  if (!OTIM_QUILL) return '';
+  const text = OTIM_QUILL.getText().trim();
+  if (!text) return '';
+  return OTIM_QUILL.root.innerHTML;
+}
+
+/** Define o conteúdo do editor Quill a partir de uma string HTML. */
+function _otimSetContent(html) {
+  if (!OTIM_QUILL) return;
+  if (!html) {
+    OTIM_QUILL.setContents([]);
+    return;
+  }
+  OTIM_QUILL.clipboard.dangerouslyPasteHTML(html);
+}
+
+/** Limpa o conteúdo do editor Quill. */
+function _otimClearContent() {
+  if (OTIM_QUILL) OTIM_QUILL.setContents([]);
+}
 let ESTEIRA_COLABORADOR = 'todos';
 let ESTEIRA_CATEGORIA   = 'todos';
 
@@ -9130,11 +9239,10 @@ function openOptimizationDrawer(clientId) {
       </div>`;
   }
 
-  /* reset edit state & clear textarea */
+  /* reset edit state & clear editor */
   OTIM_EDIT_ID = null;
   _otimSetEditMode(false);
-  const textarea = document.getElementById('otim-textarea');
-  if (textarea) textarea.value = '';
+  _otimClearContent();
 
   renderOtimHistory(c);
 
@@ -9177,8 +9285,7 @@ function saveOptimization() {
   const c = CLIENTS.list.find(x => x.id === OTIM_CLIENT_ID);
   if (!c) return;
 
-  const textarea = document.getElementById('otim-textarea');
-  const nota     = textarea ? textarea.value.trim() : '';
+  const nota = _otimGetContent();
 
   if (!Array.isArray(c.historico_otimizacoes)) c.historico_otimizacoes = [];
 
@@ -9208,7 +9315,7 @@ function saveOptimization() {
 
   _recalcUltimaOtimizacao(c);
   saveClients();
-  if (textarea) textarea.value = '';
+  _otimClearContent();
   renderOtimHistory(c);
   renderEsteira();
 }
@@ -9223,11 +9330,11 @@ function editOtimEntry(entryId) {
   OTIM_EDIT_ID = entryId;
   _otimSetEditMode(true);
 
-  const textarea = document.getElementById('otim-textarea');
-  if (textarea) {
-    textarea.value = entry.texto_nota || '';
-    textarea.focus();
-    textarea.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  _otimSetContent(entry.texto_nota || '');
+  if (OTIM_QUILL) {
+    OTIM_QUILL.focus();
+    const wrap = document.getElementById('otim-quill-wrap');
+    if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   /* highlight item being edited */
@@ -9248,8 +9355,7 @@ function deleteOtimEntry(entryId) {
   if (OTIM_EDIT_ID === entryId) {
     OTIM_EDIT_ID = null;
     _otimSetEditMode(false);
-    const textarea = document.getElementById('otim-textarea');
-    if (textarea) textarea.value = '';
+    _otimClearContent();
   }
 
   _recalcUltimaOtimizacao(c);
@@ -9263,8 +9369,7 @@ function cancelOtimEdit() {
   _otimSetEditMode(false);
   document.querySelectorAll('.otim-note-item.editing-active')
     .forEach(el => el.classList.remove('editing-active'));
-  const textarea = document.getElementById('otim-textarea');
-  if (textarea) textarea.value = '';
+  _otimClearContent();
 }
 
 function renderOtimHistory(c) {
@@ -9299,6 +9404,7 @@ function renderOtimHistory(c) {
           </div>
         </div>
         <div class="otim-note-text">${h.texto_nota || '<em style="color:var(--text3)">Sem anotação.</em>'}</div>
+        <!-- texto_nota é HTML do Quill — renderiza negrito, listas, sublinhado etc. -->
       </div>`;
   }).join('');
 }
