@@ -5661,6 +5661,9 @@ function tkEscape(s) {
 }
 
 function resetTaskForm() {
+  // Limpa banner de erro inline (exibido quando o servidor retorna 4xx/5xx)
+  const errBanner = document.getElementById('task-save-error-banner');
+  if (errBanner) errBanner.style.display = 'none';
   document.getElementById('task-title').value = '';
   document.getElementById('task-description').value = '';
   document.getElementById('task-status').value = 'Não Iniciada';
@@ -5824,28 +5827,54 @@ async function saveTask() {
       body: JSON.stringify(taskObj),  // created_by e updated_by já estão em taskObj
     }).finally(() => clearTimeout(_tid));
 
-    // A task já está salva no localStorage independente do resultado do servidor.
-    // Distingue apenas sucesso confirmado de situações onde o servidor não respondeu.
-    const serverOk = r && !r._coldStart && !r.error && (r.ok || r.task);
-
-    delete editIdInput.dataset.pendingId;
-    closeModal();
-    resetTaskForm();
+    // Classifica a resposta em três casos:
+    //  serverOk    → Atlas confirmou gravação → fecha modal, notificação verde
+    //  coldStart   → Render dormindo / timeout → fecha modal, agenda retry em background
+    //  serverError → Servidor retornou 4xx/5xx real → mantém modal aberto, mostra erro
+    const serverOk    = r && !r._coldStart && !r.error && (r.ok || r.task);
+    const coldStart   = !r || r._coldStart;
+    const serverError = r && r.error && !r._coldStart;
 
     if (serverOk) {
+      delete editIdInput.dataset.pendingId;
+      closeModal();
+      resetTaskForm();
       console.log('[Tasks] tarefa salva no MongoDB:', taskId);
       showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
+
+    } else if (serverError) {
+      // Erro real do servidor (ex: validação, Atlas rejeitou) — NÃO fecha o modal
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origLabel; }
+      const errMsg = r.error || 'Erro desconhecido no servidor.';
+      console.error('[Tasks] erro real do servidor ao salvar:', taskId, errMsg);
+      // Banner de erro inline no formulário
+      let errBanner = document.getElementById('task-save-error-banner');
+      if (!errBanner) {
+        errBanner = document.createElement('div');
+        errBanner.id = 'task-save-error-banner';
+        errBanner.style.cssText = 'margin:8px 0;padding:10px 14px;background:#ff4d4d22;border:1px solid #ff4d4d66;border-radius:8px;color:#ff4d4d;font-size:12px;';
+        const form = document.getElementById('task-form');
+        if (form) form.prepend(errBanner);
+      }
+      errBanner.textContent = '❌ Erro ao guardar no servidor: ' + errMsg + ' — verifique e tente novamente.';
+      errBanner.style.display = 'block';
+
     } else {
-      // Cold-start ou servidor offline — task segura no localStorage; agenda retries em background
-      console.warn('[Tasks] servidor indisponível — tarefa salva localmente, retry agendado:', taskId, r);
+      // Cold-start / rede offline — task segura no localStorage, retry agendado
+      delete editIdInput.dataset.pendingId;
+      closeModal();
+      resetTaskForm();
+      console.warn('[Tasks] cold-start — tarefa no localStorage, retry agendado:', taskId);
       showNotification('Tarefa salva! ☁️ Servidor acordando — não feche a aba…', 'warn');
       _scheduleTaskRetry(taskObj);
     }
+
   } catch(e) {
-    console.warn('[Tasks] erro de rede ao salvar:', e.message);
+    // AbortError (timeout de 10s) ou falha de rede — trata como cold-start
     delete editIdInput.dataset.pendingId;
     closeModal();
     resetTaskForm();
+    console.warn('[Tasks] timeout/rede ao salvar:', e.message);
     showNotification('Tarefa salva! ☁️ Servidor acordando — não feche a aba…', 'warn');
     _scheduleTaskRetry(taskObj);
   }
@@ -6144,16 +6173,25 @@ async function syncTasksToDB() {
   const restore = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando…'; }
 
+  // Para admins: reseta o filtro de owner para "todos" antes de buscar,
+  // garantindo visão completa de toda a agência após o sync.
+  if (currentUser.isAdmin) {
+    const ownerSel = document.getElementById('task-filter-owner');
+    if (ownerSel) ownerSel.value = '';
+  }
+
   const before = TASKS_DATA.length;
   await _autoSyncAndLoad();
   const after = TASKS_DATA.length;
 
   if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+
+  const diff = after - before;
   showNotification(
-    after > before
-      ? `✅ Sincronizado! ${after - before} tarefa${after - before !== 1 ? 's novas' : ' nova'} encontrada${after - before !== 1 ? 's' : ''}.`
-      : `✅ Tudo sincronizado com o servidor.`,
-    'success'
+    diff > 0
+      ? `✅ Sincronizado! ${diff} tarefa${diff !== 1 ? 's novas' : ' nova'} recebida${diff !== 1 ? 's' : ''} do servidor.`
+      : `✅ Tudo sincronizado — ${after} tarefa${after !== 1 ? 's' : ''} no servidor.`,
+    'ok'
   );
 }
 
