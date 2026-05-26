@@ -7463,6 +7463,53 @@ let clImportanceVal = 0;
 let _clLogoData = '';   // base64 data-URL ou URL existente do logo do cliente em edição
 
 /**
+ * Cache de Blob URLs para logos de clientes.
+ * Safari iOS rejeita data: URIs longos em innerHTML (<img src="data:...">),
+ * mas aceita blob: URLs sem restrição de tamanho. Convertemos UMA vez por sessão.
+ * Chave: clientId | Valor: { url: blobURL, b64key: string base64 original }
+ */
+const _logoBlobCache = new Map();
+
+/**
+ * Converte uma data: URI base64 em blob: URL (compatível com Safari iOS).
+ * Retorna o blob URL se possível, ou o data URI original como fallback.
+ * @param {string} id       – ID do cliente (chave do cache)
+ * @param {string} dataUri  – string "data:image/...;base64,..."
+ * @returns {string} blob URL ou dataUri original
+ */
+function _getBlobUrl(id, dataUri) {
+  if (!dataUri || !dataUri.startsWith('data:')) return dataUri || '';
+
+  // Retorna do cache se o base64 não mudou
+  const cached = _logoBlobCache.get(id);
+  if (cached && cached.b64key === dataUri) return cached.url;
+
+  // Revoga URL anterior para liberar memória
+  if (cached) URL.revokeObjectURL(cached.url);
+
+  try {
+    const comma  = dataUri.indexOf(',');
+    const header = dataUri.slice(0, comma);
+    const mime   = (header.match(/data:([^;]+)/) || [, 'image/jpeg'])[1];
+    const binStr = atob(dataUri.slice(comma + 1));
+    const arr    = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) arr[i] = binStr.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: mime }));
+    _logoBlobCache.set(id, { url, b64key: dataUri });
+    return url;
+  } catch (e) {
+    console.warn('[Logo] Blob URL falhou id=' + id + ':', e.message);
+    return dataUri; // fallback para data URI
+  }
+}
+
+// Libera Blob URLs ao sair/navegar para evitar memory leak
+window.addEventListener('pagehide', () => {
+  _logoBlobCache.forEach(({ url }) => URL.revokeObjectURL(url));
+  _logoBlobCache.clear();
+});
+
+/**
  * Valida se uma logoUrl pode ser exibida publicamente (GitHub Pages).
  * Aceita: strings que começam com "data:" (base64) ou "http" (URL absoluta).
  * Rejeita: paths relativos como "image_b367d8.jpg" que só funcionavam no localhost.
@@ -7659,7 +7706,9 @@ async function _recompressLargeLogos() {
         resolve();
       };
       img.onerror = resolve; // não trava se a imagem for inválida
-      img.src = c.logoUrl;
+      // Usa blob URL para carregar no Image() — evita limitação do Safari iOS
+      // com data URIs longos em atributos src
+      img.src = _getBlobUrl(c.id, c.logoUrl);
     });
   }
 
@@ -8046,8 +8095,11 @@ function _clAvatar(c, size, br) {
   const fs  = Math.round(sz * 0.35);
   const css = 'width:' + sz + 'px;height:' + sz + 'px;border-radius:' + brd + ';flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;';
   if (c.logoUrl) {
+    // _getBlobUrl() converte data: URI para blob: URL — resolve limitação do Safari iOS
+    // com data URIs longos em atributos src gerados via innerHTML
+    const logoSrc = _getBlobUrl(c.id, c.logoUrl);
     return '<div style="' + css + 'background:#F8FAFC;">'
-         + '<img src="' + (c.logoUrl||'').replace(/"/g,'&quot;') + '" alt="" '
+         + '<img src="' + logoSrc.replace(/"/g,'&quot;') + '" alt="" '
          + 'loading="lazy" decoding="async" '
          + 'style="width:100%;height:100%;object-fit:cover;" '
          + 'onerror="_clAvFallback(this,\'' + (c.color||'#6C63FF') + '\',\'' + (c.avatar||'') + '\',' + fs + ')">'
