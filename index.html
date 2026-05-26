@@ -349,6 +349,7 @@
     background: var(--bg);
   }
 
+
   /* CARDS */
   .card {
     background: var(--bg2);
@@ -974,11 +975,13 @@
   /* ══════════════════════════════════════════
      ESTEIRA DE OTIMIZAÇÃO
      ══════════════════════════════════════════ */
-  /* ── Esteira: cabeçalho sticky (stats + filtros) ───────────────── */
+  /* ── Esteira: cabeçalho fixo no topo (stats + filtros) ──────────── */
+  /* position:sticky dentro de .content (overflow-y:auto) funciona    */
+  /* em todos os browsers modernos sem nenhum hack de margin negativa  */
   .esteira-sticky-header {
     position: sticky;
     top: 0;
-    z-index: 30;
+    z-index: 10;
     background: var(--bg);
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
@@ -1050,13 +1053,14 @@
     color: var(--accent2);
   }
 
-  /* Chevron do accordion */
+  /* Chevron do accordion: aberto = ↓ (down), fechado = → (right) */
   .esteira-chevron {
     font-size: 15px; color: var(--text3);
     transition: transform 0.28s cubic-bezier(.4,0,.2,1);
     flex-shrink: 0;
+    transform: rotate(0deg);   /* aberto: aponta para baixo */
   }
-  .esteira-chevron.closed { transform: rotate(-90deg); }
+  .esteira-chevron.closed { transform: rotate(-90deg); } /* fechado: aponta para a direita */
 
   /* Accordion: grid-rows 0fr → 1fr anima altura sem JS de pixel */
   .esteira-day-body {
@@ -9180,13 +9184,9 @@ function renderEsteira() {
   const daysEl = document.getElementById('esteira-days');
   if (!daysEl) return;
 
-  // Hoje aparece sempre primeiro; dias restantes continuam em sequência
-  const todayIdx       = DIAS_SEMANA.findIndex(d => d.key === todayKey);
-  const diasOrdenados  = todayIdx >= 0
-    ? [...DIAS_SEMANA.slice(todayIdx), ...DIAS_SEMANA.slice(0, todayIdx)]
-    : DIAS_SEMANA;
-
-  daysEl.innerHTML = diasOrdenados.map(dia => {
+  // Ordem fixa: Segunda → Terça → Quarta → Quinta → Sexta
+  // Hoje recebe badge HOJE + bloco aberto por padrão
+  daysEl.innerHTML = DIAS_SEMANA.map(dia => {
     const isToday = dia.key === todayKey;
 
     const dayDate = new Date(today);
