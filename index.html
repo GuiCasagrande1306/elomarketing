@@ -2452,6 +2452,281 @@
 .m-dd-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .m-timer{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap;font-family:monospace;letter-spacing:.02em}
 .m-timer-running{color:#60A5FA;font-weight:700}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS  ≤ 768px
+   Desktop (> 768px) não é afetado por nenhuma regra abaixo.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Bottom Nav (oculta no desktop) ──────────────────────────────── */
+.mobile-bottom-nav { display:none; }
+.mobile-hamburger   { display:none; }
+
+@media (max-width: 768px) {
+
+  /* ── Layout raiz ─────────────────────────────────────────────── */
+  body {
+    flex-direction: column;
+    overflow: hidden;
+    height: 100dvh;
+  }
+
+  /* ── Sidebar → gaveta lateral deslizante ────────────────────── */
+  nav.sidebar {
+    position: fixed;
+    left: -280px;
+    top: 0;
+    width: 260px;
+    height: 100dvh;
+    z-index: 1001;
+    transition: left 0.28s cubic-bezier(.4,0,.2,1);
+    box-shadow: 4px 0 24px rgba(0,0,0,.5);
+  }
+  nav.sidebar.mob-open { left: 0; }
+
+  /* Overlay escuro atrás da gaveta */
+  .mob-sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .mob-sidebar-overlay.active { display: block; }
+
+  /* ── Main ocupa tela inteira ────────────────────────────────── */
+  main.main {
+    width: 100%;
+    height: 100dvh;
+    min-width: 0;
+  }
+
+  /* ── Topbar mobile ──────────────────────────────────────────── */
+  .topbar {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    min-height: 54px;
+  }
+  .topbar-left {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .page-sub   { display: none; }
+
+  /* Hambúrguer: visível só no mobile */
+  .mobile-hamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    background: transparent;
+    border: none;
+    color: var(--text2);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 22px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .mobile-hamburger:hover { background: var(--bg3); }
+
+  /* Ocultar elementos do topbar-right que não cabem no mobile */
+  .topbar-right #date-range         { display: none !important; }
+  .topbar-right .search-wrap        { display: none !important; }
+  .topbar-right #collab-filter-wrap { display: none !important; }
+  .topbar-right #topbar-export-btn  { display: none !important; }
+  /* page-title precisa de min-width:0 para não ser esmagado */
+  .page-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Área de conteúdo ───────────────────────────────────────── */
+  .content {
+    padding: 12px 12px 80px; /* 80px = espaço para bottom nav */
+  }
+
+  /* ── Grids → coluna única ───────────────────────────────────── */
+  .grid-4  { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+  .grid-3  { grid-template-columns: 1fr !important;     gap: 10px; }
+  .grid-2  { grid-template-columns: 1fr !important;     gap: 10px; }
+  .grid-12 { grid-template-columns: 1fr !important;     gap: 10px; }
+  .grid-21 { grid-template-columns: 1fr !important;     gap: 10px; }
+
+  /* grid-4 com 4 métricas cabe bem em 2 colunas */
+  /* grid-4 específico do dashboard: mantém 2 cols */
+
+  /* ── Grids inline (style="grid-template-columns:1fr 1fr") ─── */
+  .form-row-2 { grid-template-columns: 1fr !important; }
+
+  /* ── Tabelas: rolagem horizontal controlada ─────────────────── */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius);
+  }
+  table { min-width: 480px; }
+
+  /* ── Modais → bottom-sheet (sobe de baixo) ──────────────────── */
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 18px 18px 0 0 !important;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  /* ── Inputs & botões: área de toque mínima 44px ────────────── */
+  .btn        { min-height: 44px; }
+  .btn-sm     { min-height: 40px; font-size: 12px; }
+  .form-input,
+  .form-select { min-height: 44px; font-size: 16px; /* evita zoom no iOS */ }
+
+  /* ── Grids inline com 2 colunas → 1 coluna no mobile ────────── */
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:1fr 1fr"],
+  [style*="grid-template-columns: 1fr 2fr"],
+  [style*="grid-template-columns:1fr 2fr"],
+  [style*="grid-template-columns: 2fr 1fr"],
+  [style*="grid-template-columns:2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Grids específicos de seções ────────────────────────────── */
+  .esteira-stats         { grid-template-columns: 1fr 1fr !important; }
+  .torre-grid            { grid-template-columns: 1fr !important; }
+  .repcon-kpis           { grid-template-columns: 1fr 1fr !important; }
+  .cal-layout            { grid-template-columns: 1fr !important; }
+  #clients-grid          { grid-template-columns: 1fr !important; }
+  #templates-grid        { grid-template-columns: 1fr !important; }
+
+  /* ── Card paddings menores ──────────────────────────────────── */
+  .card    { padding: 14px 12px; }
+  .card-sm { padding: 10px 12px; }
+
+  /* ── Topbar-right: só ícones essenciais ─────────────────────── */
+  .topbar-right { gap: 6px; }
+  .topbar-right .btn-primary { padding: 8px 12px; font-size: 11px; }
+
+  /* ── Tela de perfil e outros modais fixos ───────────────────── */
+  #profile-modal > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+    max-height: 92dvh !important;
+    overflow-y: auto;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+  }
+  #profile-modal {
+    align-items: flex-end !important;
+  }
+
+  /* ── CRM modal ──────────────────────────────────────────────── */
+  #crm-modal .modal { width: 100% !important; max-width: 100% !important; }
+
+  /* ── Seção de tarefas (monday-style) ──────────────────────── */
+  .monday-table { font-size: 12px; }
+  .m-title      { max-width: 180px; }
+  /* Oculta colunas secundárias na tabela de tarefas (Responsável, Tempo, Prioridade) */
+  .monday-table th:nth-child(3),
+  .monday-table td:nth-child(3),
+  .monday-table th:nth-child(5),
+  .monday-table td:nth-child(5),
+  .monday-table th:nth-child(6),
+  .monday-table td:nth-child(6) { display: none; }
+  /* Colunas visíveis: Tarefa (1), Cliente (2), Status (4), Prazo (7), ações (8) */
+  .monday-table { min-width: unset; width: 100%; }
+
+  /* ── Bottom Navigation Bar ──────────────────────────────────── */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    z-index: 990;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mbn-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    padding: 6px 2px 4px;
+    background: transparent;
+    border: none;
+    font-family: var(--font);
+    transition: color .15s;
+    position: relative;
+    text-transform: uppercase;
+    min-height: 44px;
+  }
+  .mbn-item i { font-size: 22px; margin-bottom: 1px; }
+  .mbn-item.mbn-active { color: var(--accent2); }
+  .mbn-item.mbn-active i { color: var(--accent2); }
+
+  /* Badge no ícone do bottom nav */
+  .mbn-badge {
+    position: absolute;
+    top: 3px;
+    right: calc(50% - 18px);
+    background: var(--red);
+    color: #fff;
+    font-size: 8px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  /* ── Ocultar sidebar-bottom user-card no mobile (está no bottom nav) ── */
+  .sidebar-bottom { display: none; }
+
+  /* ── Esteira kanban: scroll horizontal no mobile ─────────────── */
+  .esteira-board { overflow-x: auto; flex-wrap: nowrap !important; }
+  .esteira-col   { min-width: 260px; flex-shrink: 0; }
+
+  /* ── Relatórios: ajustes ─────────────────────────────────────── */
+  .repcon-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .repcon-table      { min-width: 480px; }
+
+  /* ── Seção de tarefas: filtros em linha única ─────────────────── */
+  #tasks-filters { flex-wrap: wrap; gap: 6px; }
+  #tasks-filters .form-select { min-height: 38px; font-size: 13px; flex: 1; min-width: 120px; }
+
+  /* ── Login / pre-auth não afetado ───────────────────────────── */
+  .pre-auth body { overflow: auto; }
+}
 </style>
 </head>
 <body class="pre-auth">
@@ -2622,9 +2897,16 @@
 </nav>
 
 <!-- MAIN -->
+<!-- Overlay escuro atrás da gaveta mobile -->
+<div class="mob-sidebar-overlay" id="mob-sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
 <main class="main">
   <div class="topbar">
     <div class="topbar-left">
+      <!-- Hambúrguer: só aparece no mobile via CSS -->
+      <button class="mobile-hamburger" onclick="toggleMobileSidebar()" aria-label="Menu">
+        <i class="ti ti-menu-2"></i>
+      </button>
       <div class="page-title" id="topbar-title">Dashboard</div>
       <div class="page-sub" id="topbar-sub">Visão geral de todos os clientes • Maio 2025</div>
     </div>
@@ -3655,6 +3937,31 @@
   </div>
 </main>
 
+<!-- ── BOTTOM NAVIGATION BAR (mobile only, oculto no desktop via CSS) ── -->
+<nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Navegação principal mobile">
+  <button class="mbn-item mbn-active" id="mbn-dashboard" onclick="mbnNavigate('dashboard')">
+    <i class="ti ti-layout-dashboard"></i>
+    Início
+  </button>
+  <button class="mbn-item" id="mbn-clientes" onclick="mbnNavigate('clientes')">
+    <i class="ti ti-users"></i>
+    Clientes
+  </button>
+  <button class="mbn-item" id="mbn-tarefas" onclick="mbnNavigate('tarefas')">
+    <i class="ti ti-checkbox"></i>
+    Tarefas
+    <span class="mbn-badge" id="mbn-badge-tarefas" style="display:none"></span>
+  </button>
+  <button class="mbn-item" id="mbn-relatorios" onclick="mbnNavigate('relatorios')">
+    <i class="ti ti-file-analytics"></i>
+    Relatórios
+  </button>
+  <button class="mbn-item" id="mbn-menu" onclick="toggleMobileSidebar()">
+    <i class="ti ti-menu-2"></i>
+    Menu
+  </button>
+</nav>
+
 <!-- ESTEIRA: Optimization Drawer -->
 <div class="otim-overlay" id="otim-overlay" onclick="closeOptimizationDrawer()"></div>
 <aside class="otim-drawer" id="otim-drawer">
@@ -4325,6 +4632,56 @@ const pageConfig = {
   crm:            { title: 'CRM Comercial',         sub: 'Funil de vendas e gestão de oportunidades' },
 };
 
+/* ════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR DRAWER
+   ════════════════════════════════════════════════════════════ */
+function toggleMobileSidebar() {
+  const sidebar  = document.querySelector('nav.sidebar');
+  const overlay  = document.getElementById('mob-sidebar-overlay');
+  if (!sidebar || !overlay) return;
+  const isOpen = sidebar.classList.contains('mob-open');
+  if (isOpen) {
+    sidebar.classList.remove('mob-open');
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+  } else {
+    sidebar.classList.add('mob-open');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden'; // evita scroll do body enquanto gaveta está aberta
+  }
+}
+
+function closeMobileSidebar() {
+  const sidebar = document.querySelector('nav.sidebar');
+  const overlay = document.getElementById('mob-sidebar-overlay');
+  if (sidebar) sidebar.classList.remove('mob-open');
+  if (overlay) overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+/* Navega via bottom nav e fecha a gaveta se estiver aberta */
+function mbnNavigate(page) {
+  closeMobileSidebar();
+  const sideEl = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
+  if (sideEl) {
+    navigate(page, sideEl);
+  } else {
+    // fallback: chama navigate sem atualizar o nav-item do sidebar
+    navigate(page, { classList: { add: ()=>{}, remove: ()=>{} } });
+  }
+}
+
+/* Atualiza estado ativo dos botões do bottom nav */
+function _updateBottomNav(page) {
+  const MAP = { dashboard:'dashboard', clientes:'clientes', tarefas:'tarefas', relatorios:'relatorios' };
+  document.querySelectorAll('.mbn-item').forEach(btn => btn.classList.remove('mbn-active'));
+  const key = Object.keys(MAP).find(k => MAP[k] === page);
+  if (key) {
+    const btn = document.getElementById('mbn-' + key);
+    if (btn) btn.classList.add('mbn-active');
+  }
+}
+
 function navigate(page, el) {
   // ── Páginas exclusivas do Super Admin (CEO) ─────────────────────────────────
   const SUPER_ADMIN_PAGES = ['consolidado'];
@@ -4347,14 +4704,20 @@ function navigate(page, el) {
     }
   }
 
+  // Fecha gaveta mobile ao navegar por qualquer rota
+  closeMobileSidebar();
+
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  el.classList.add('active');
+  if (el && typeof el.classList?.add === 'function') el.classList.add('active');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   const cfg = pageConfig[page] || {};
   document.getElementById('topbar-title').textContent = cfg.title || page;
   document.getElementById('topbar-sub').textContent = cfg.sub || '';
+
+  // Atualiza bottom nav mobile
+  _updateBottomNav(page);
   if (page === 'dashboard')     renderDashboard();
   if (page === 'relatorios')    populateReportSelects();
   if (page === 'consolidado')   renderConsolidatedReport();
@@ -5318,6 +5681,9 @@ function updateNavBadges() {
   }).length;
   const tb = document.getElementById('nav-badge-tarefas');
   if (tb) { tb.textContent = urgentCount; tb.className = 'nav-badge amber'; tb.style.display = urgentCount > 0 ? '' : 'none'; }
+  // Sincroniza badge do bottom nav mobile
+  const mbnBadge = document.getElementById('mbn-badge-tarefas');
+  if (mbnBadge) { mbnBadge.textContent = urgentCount; mbnBadge.style.display = urgentCount > 0 ? 'flex' : 'none'; }
 }
 
 function saveTasks() {
