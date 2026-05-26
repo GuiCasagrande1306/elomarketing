@@ -3698,9 +3698,30 @@
         <input type="text" id="cl-form-name" class="form-input" placeholder="Ex: Instituto Lara" required autocomplete="off">
       </div>
       <div class="form-group">
-        <label class="form-label"><i class="ti ti-photo" style="margin-right:4px"></i>Logo do Cliente (URL)</label>
-        <input type="url" id="cl-form-logo-url" class="form-input" placeholder="https://exemplo.com/logo.png" autocomplete="off">
-        <div style="font-size:10px;color:var(--text3);margin-top:4px">URL do logotipo (PNG, JPG, SVG). Aparece nos relatórios PDF e nos avatares.</div>
+        <label class="form-label"><i class="ti ti-photo" style="margin-right:4px"></i>Logo do Cliente</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+          <!-- preview -->
+          <div id="cl-logo-preview-wrap" style="width:52px;height:52px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+            <img id="cl-logo-preview-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;">
+            <i id="cl-logo-preview-icon" class="ti ti-building" style="font-size:22px;color:var(--text3);"></i>
+          </div>
+          <!-- actions -->
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="cl-form-logo-file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" style="display:none" onchange="onClLogoFileChange(event)">
+              <button type="button" onclick="document.getElementById('cl-form-logo-file').click()"
+                style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text1);font-size:12px;cursor:pointer;white-space:nowrap;">
+                <i class="ti ti-upload" style="font-size:13px;"></i> Escolher arquivo
+              </button>
+              <button type="button" id="cl-logo-remove-btn" onclick="onClLogoRemove()"
+                style="display:none;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;border:1px solid #ff4d4d44;background:transparent;color:#ff4d4d;font-size:12px;cursor:pointer;">
+                <i class="ti ti-trash" style="font-size:13px;"></i> Remover
+              </button>
+            </div>
+            <div id="cl-logo-filename" style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">Nenhum arquivo selecionado</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">PNG, JPG ou SVG até 2 MB. Aparece nos relatórios PDF e nos avatares.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Segmento</label>
@@ -6927,6 +6948,49 @@ const CLIENTS = {
 
 let clEditingId = null;
 let clImportanceVal = 0;
+let _clLogoData = '';   // base64 data-URL ou URL existente do logo do cliente em edição
+
+/* ── helpers de logo do cliente ─────────────────────────────── */
+function _clLogoReset() {
+  _clLogoData = '';
+  const fileEl  = document.getElementById('cl-form-logo-file');
+  if (fileEl) fileEl.value = '';
+  const img     = document.getElementById('cl-logo-preview-img');
+  const icon    = document.getElementById('cl-logo-preview-icon');
+  const label   = document.getElementById('cl-logo-filename');
+  const removeB = document.getElementById('cl-logo-remove-btn');
+  if (img)     { img.src = ''; img.style.display = 'none'; }
+  if (icon)    icon.style.display = '';
+  if (label)   label.textContent = 'Nenhum arquivo selecionado';
+  if (removeB) removeB.style.display = 'none';
+}
+function _clLogoSet(url) {
+  _clLogoData = url || '';
+  const img     = document.getElementById('cl-logo-preview-img');
+  const icon    = document.getElementById('cl-logo-preview-icon');
+  const label   = document.getElementById('cl-logo-filename');
+  const removeB = document.getElementById('cl-logo-remove-btn');
+  if (!url) { _clLogoReset(); return; }
+  if (img)  { img.src = url; img.style.display = 'block'; }
+  if (icon) icon.style.display = 'none';
+  if (label) label.textContent = url.startsWith('data:') ? 'Logo carregada' : url.split('/').pop().slice(0,40) || 'Logo existente';
+  if (removeB) removeB.style.display = 'inline-flex';
+}
+function onClLogoFileChange(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Arquivo muito grande — máx. 2 MB', 'error');
+    ev.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) { _clLogoSet(e.target.result); };
+  reader.readAsDataURL(file);
+}
+function onClLogoRemove() {
+  _clLogoReset();
+}
 
 function fmtBRL(n) {
   return 'R$ ' + (n||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0});
@@ -7733,7 +7797,7 @@ function openNewClientModal(id) {
   const delBtn = document.getElementById('cl-modal-delete-btn');
   if (delBtn) delBtn.style.display = (id && currentUser?.isAdmin) ? 'inline-flex' : 'none';
   document.getElementById('cl-form-name').value      = '';
-  document.getElementById('cl-form-logo-url').value  = '';
+  _clLogoReset();
   document.getElementById('cl-form-segment').value   = '';
   document.getElementById('cl-form-objective').value = '';
   document.getElementById('cl-form-owner').value     = currentUser?.id || 'guilherme';
@@ -7778,7 +7842,7 @@ function openNewClientModal(id) {
     const c = CLIENTS.list.find(x => x.id === id);
     if (c) {
       document.getElementById('cl-form-name').value      = c.name;
-      document.getElementById('cl-form-logo-url').value  = c.logoUrl || '';
+      _clLogoSet(c.logoUrl || '');
       document.getElementById('cl-form-segment').value   = c.segment;
       document.getElementById('cl-form-objective').value = c.objective || '';
       document.getElementById('cl-form-owner').value     = c.owner;
@@ -8550,7 +8614,7 @@ function saveNewClient() {
   const tiktok_access_token   = (document.getElementById('sc-tt-token')?.value       || '').trim();
   const socialFields = { fb_page_id, fb_page_access_token, instagram_business_id, ig_username, linkedin_access_token, tiktok_access_token };
 
-  const logoUrl  = (document.getElementById('cl-form-logo-url')?.value || '').trim();
+  const logoUrl  = _clLogoData || '';
   const initials = name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase() || 'XX';
 
   if (clEditingId) {
