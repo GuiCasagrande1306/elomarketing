@@ -5671,6 +5671,9 @@ function resetTaskForm() {
   // Limpa banner de erro inline (exibido quando o servidor retorna 4xx/5xx)
   const errBanner = document.getElementById('task-save-error-banner');
   if (errBanner) errBanner.style.display = 'none';
+  // Restaura botão de salvar (pode ter ficado disabled se o modal foi fechado durante um save)
+  const _saveBtn = document.querySelector('#task-form button[type="submit"]');
+  if (_saveBtn) { _saveBtn.disabled = false; _saveBtn.innerHTML = '<i class="ti ti-check"></i> Salvar Tarefa'; }
   document.getElementById('task-title').value = '';
   document.getElementById('task-description').value = '';
   document.getElementById('task-status').value = 'Não Iniciada';
