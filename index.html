@@ -8017,15 +8017,13 @@ function renderClients() {
   const segFilter  = document.getElementById('cl-filter-segment')?.value  || '';
   const impFilter  = document.getElementById('cl-filter-importance')?.value || '';
   const catFilter  = document.getElementById('cl-filter-categoria')?.value || '';
-  // Usa _collabUid(): admins leem o dropdown; colaboradores ficam travados no próprio ID
-  const uid = _collabUid();
 
   const filtered = CLIENTS.list.filter(c => {
     if (search && !c.name.toLowerCase().includes(search)) return false;
     if (segFilter  && c.segment    !== segFilter)              return false;
     if (impFilter  && c.importance !== parseInt(impFilter))    return false;
     if (catFilter  && c.categoria  !== catFilter)              return false;
-    if (uid !== 'all' && c.owner   !== uid)                    return false;
+    // Sem filtro por dono/colaborador: todos os usuários veem 100% dos clientes
     return true;
   });
 
