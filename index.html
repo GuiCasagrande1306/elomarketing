@@ -5862,6 +5862,9 @@ async function saveTask() {
       resetTaskForm();
       console.log('[Tasks] ✅ salvo no Atlas:', taskId);
       showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
+      // 🔄 Recarrega do servidor para refletir os filtros reais de cada usuário
+      // (garante que Jaqueline veja no computador dela a tarefa criada para ela)
+      loadTasksFromDB().catch(() => {});
 
     } else if (serverError) {
       // ❌ Erro real (4xx/5xx) — mantém modal aberto
