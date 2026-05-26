@@ -5336,6 +5336,9 @@ function loadTasks() {
   updateNavBadges();
   // 2. Em background: sobe tarefas locais para o BD e depois busca todas do servidor
   _autoSyncAndLoad().catch(() => {});
+  // 3. Garante que o polling está rodando independente de como chegamos aqui
+  //    (F5, carregamento inicial ou clique no menu — todos passam por loadTasks)
+  _startTasksPolling();
 }
 
 function migrateDefaultDoneTasks() {
@@ -7046,8 +7049,13 @@ let _tasksPollingInterval = null;
 const _TASKS_POLL_MS = 10000; // 10 segundos
 
 async function _pollTasks() {
-  // Não pollar se não há usuário logado ou se o servidor está offline
+  // Não pollar se não há usuário logado
   if (!currentUser) return;
+  // Auto-desliga se a página Tarefas não estiver mais visível (navegação sem navigate())
+  if (!document.getElementById('page-tarefas')?.classList.contains('active')) {
+    _stopTasksPolling();
+    return;
+  }
   try {
     const uid    = currentUser.id || '';
     const apiUrl = uid ? `/api/tasks?userId=${encodeURIComponent(uid)}` : '/api/tasks';
