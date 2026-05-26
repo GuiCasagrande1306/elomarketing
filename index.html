@@ -6062,15 +6062,23 @@ async function loadTasksFromDB() {
   if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
 
   // Normaliza tarefas vindas do servidor
-  const fromServer = data.map(t => ({
-    ...t,
-    status:         normalizeTaskStatus(t.status),
-    priority:       normalizeTaskPriority(t),
-    group:          t.group || 'semana',
-    assignedTo:     t.assignedTo || t.owner || '',
-    timeSpent:      t.timeSpent      || 0,
-    timerStartedAt: t.timerStartedAt || null,
-  }));
+  // Grupos válidos: 'semana' e 'concluidos'. Qualquer outro valor legado → 'semana'.
+  const _srvValidGroups = new Set(TASK_GROUPS_CFG.map(g => g.key));
+  const fromServer = data.map(t => {
+    const rawGrp = t.group === 'backlog' ? 'semana' : (t.group || 'semana');
+    const srvStatus = normalizeTaskStatus(t.status);
+    const group = srvStatus === 'Pronto' ? 'concluidos'
+                : (_srvValidGroups.has(rawGrp) ? rawGrp : 'semana');
+    return {
+      ...t,
+      status:         srvStatus,
+      priority:       normalizeTaskPriority(t),
+      group,
+      assignedTo:     t.assignedTo || t.owner || '',
+      timeSpent:      t.timeSpent      || 0,
+      timerStartedAt: t.timerStartedAt || null,
+    };
+  });
 
   // ── Merge seguro: preserva tarefas locais não confirmadas pelo servidor ─────
   // Motivo: se o Render estava em cold-start durante o upload, os POSTs retornam
@@ -14682,11 +14690,15 @@ function renderTasksGrid() {
   const clientF = document.getElementById('task-filter-client')?.value || '';
   const statusF = document.getElementById('task-filter-status')?.value || '';
 
+  // Conjunto de grupos válidos — qualquer valor fora deste set vai para 'semana'
+  const _validGroups = new Set(TASK_GROUPS_CFG.map(g => g.key));
+
   let tasks = TASKS_DATA.map(t => {
     const s = normalizeTaskStatus(t.status);
-    // Group automation: Pronto → concluidos; migrate old 'backlog' → semana
+    // Pronto → sempre concluidos; qualquer grupo inválido/legado → semana
+    const rawGrp = t.group === 'backlog' ? 'semana' : (t.group || 'semana');
     const grp = s === 'Pronto' ? 'concluidos'
-              : (t.group === 'backlog' ? 'semana' : (t.group || 'semana'));
+              : (_validGroups.has(rawGrp) ? rawGrp : 'semana');
     return {
       ...t,
       status:   s,
