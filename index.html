@@ -5756,6 +5756,9 @@ async function saveTask() {
     group,
     criticality: {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'}[document.getElementById('task-priority').value] || 'media',
     created_at:  isEdit ? (existing?.created_at || new Date().toISOString()) : new Date().toISOString(),
+    // created_by e updated_by sempre gravados no localStorage (evita perda de dono no cold-start)
+    created_by:  isEdit ? (existing?.created_by || currentUser?.id || '') : (currentUser?.id || ''),
+    updated_by:  currentUser?.id || '',
     ...(newStatus === 'Pronto' && { completed_at: existing?.completed_at || new Date().toISOString() }),
     timeSpent,
     timerStartedAt,
@@ -5791,11 +5794,7 @@ async function saveTask() {
     const r = await _apiFetch('/api/tasks', {
       method: 'POST',
       signal: _ctrl.signal,
-      body: JSON.stringify({
-        ...taskObj,
-        created_by: taskObj.created_by || currentUser?.id,
-        updated_by: currentUser?.id,
-      })
+      body: JSON.stringify(taskObj),  // created_by e updated_by já estão em taskObj
     }).finally(() => clearTimeout(_tid));
 
     // A task já está salva no localStorage independente do resultado do servidor.
@@ -5972,7 +5971,9 @@ async function loadTasksFromDB() {
   const apiUrl = uid ? `/api/tasks?userId=${encodeURIComponent(uid)}` : '/api/tasks';
   const data = await _apiFetch(apiUrl);
   if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
-  TASKS_DATA = data.map(t => ({
+
+  // Normaliza tarefas vindas do servidor
+  const fromServer = data.map(t => ({
     ...t,
     status:         normalizeTaskStatus(t.status),
     priority:       normalizeTaskPriority(t),
@@ -5981,6 +5982,24 @@ async function loadTasksFromDB() {
     timeSpent:      t.timeSpent      || 0,
     timerStartedAt: t.timerStartedAt || null,
   }));
+
+  // ── Merge seguro: preserva tarefas locais não confirmadas pelo servidor ─────
+  // Motivo: se o Render estava em cold-start durante o upload, os POSTs retornam
+  // null/{ _coldStart } e a tarefa não chega ao banco. Quando o GET subsequente
+  // retorna [] ou dados parciais, um replace total apagaria essas tarefas do
+  // localStorage para sempre. O merge as mantém até o próximo _autoSyncAndLoad
+  // conseguir fazer o upload com o servidor acordado.
+  const serverIds  = new Set(fromServer.map(t => t.id).filter(Boolean));
+  const localOnly  = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
+
+  if (localOnly.length > 0) {
+    console.warn(
+      `[Tasks] loadTasksFromDB: ${localOnly.length} tarefa(s) ainda não confirmada(s) pelo servidor — preservando localmente:`,
+      localOnly.map(t => `"${t.title}" (id=${t.id})`).join(', ')
+    );
+  }
+
+  TASKS_DATA = [...fromServer, ...localOnly];
   localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
   if (_hasRunningTimers()) _startTimerTick();
   renderTasksGrid();
@@ -6027,8 +6046,8 @@ async function _autoSyncAndLoad() {
   });
   if (claimed) { saveTasks(); renderTasksGrid(); updateNavBadges(); }
 
-  // Dispara todos os upserts em paralelo (sem bloquear UI)
-  await Promise.allSettled(
+  // Dispara todos os upserts em paralelo e rastreia resultados
+  const _uploadResults = await Promise.allSettled(
     TASKS_DATA.map(task =>
       _apiFetch('/api/tasks', {
         method: 'POST',
@@ -6041,7 +6060,18 @@ async function _autoSyncAndLoad() {
       }).catch(() => null)
     )
   );
-  // Após salvar, busca todas as tarefas do servidor (inclui as de outros usuários)
+
+  // Detecta se algum upload teve cold-start (servidor dormindo)
+  const _coldStarts = _uploadResults.filter(r => {
+    const v = r.status === 'fulfilled' ? r.value : null;
+    return !v || v._coldStart || v.error;
+  }).length;
+  if (_coldStarts > 0) {
+    console.warn(`[Tasks] _autoSyncAndLoad: ${_coldStarts}/${TASKS_DATA.length} upload(s) não confirmado(s) (cold-start?)`);
+  }
+
+  // Busca do servidor — loadTasksFromDB usa merge seguro: tarefas locais não confirmadas
+  // pelo servidor são preservadas no localStorage até o próximo sync bem-sucedido.
   await loadTasksFromDB();
 }
 
