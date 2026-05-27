@@ -551,6 +551,8 @@
     transition: var(--trans);
   }
   .form-input:focus { border-color: var(--accent); background: var(--bg4); }
+  /* iOS Safari reduz opacity de inputs desabilitados — mantém legível */
+  .form-input:disabled { opacity: 1; -webkit-text-fill-color: var(--text3); cursor: default; }
   .form-select {
     width: 100%;
     background: var(--bg3);
@@ -2882,6 +2884,21 @@
   /* ── Seção de tarefas: filtros em linha única ─────────────────── */
   #tasks-filters { flex-wrap: wrap; gap: 6px; }
   #tasks-filters .form-select { min-height: 38px; font-size: 13px; flex: 1; min-width: 120px; }
+
+  /* ── Permissões de Equipe: chips com área de toque maior ─────── */
+  .perm-page-chip { padding: 7px 12px; font-size: 12px; gap: 6px; }
+
+  /* ── Permissões: header de membro — nome + botão Salvar ──────── */
+  .perm-member-name { font-size: 12px; }
+  #perm-section .btn-sm { min-height: 36px; padding: 4px 10px; font-size: 11px; }
+
+  /* ── Google Ads / Meta dropdown: itens mais altos para touch ─── */
+  .gads-dd-item, .meta-dd-item { padding: 13px 14px; }
+  .gads-dd-name, .meta-dd-name { font-size: 13px; }
+  .gads-dd-id,   .meta-dd-id   { font-size: 11px; }
+
+  /* ── Google Ads dropdown: lista com mais espaço no mobile ───── */
+  .gads-dd-list, .meta-dd-list { max-height: 220px; }
 
   /* ── Login / pre-auth não afetado ───────────────────────────── */
   .pre-auth body { overflow: auto; }
