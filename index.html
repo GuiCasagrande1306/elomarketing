@@ -1032,6 +1032,19 @@
     .content:has(#page-esteira.active) #page-esteira { padding: 12px 12px 0; }
   }
 
+  /* ── CRM: mesmo padrão da Esteira — .content remove padding e vira flex-col ── */
+  .content:has(#page-crm.active) {
+    overflow: hidden !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column;
+  }
+  .content:has(#page-crm.active) #page-crm {
+    flex: 1 !important;
+    min-height: 0;
+    height: auto !important; /* cancela o calc(100vh - 57px) fixo */
+  }
+
   .esteira-stats {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1443,8 +1456,8 @@
   .cal-details {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 16px;
-    position: sticky; top: 0;
-    max-height: calc(100vh - 110px);
+    position: sticky; top: 0; /* sticky relativo ao scroll do .content */
+    max-height: calc(100vh - 105px); /* 57px topbar + 24px padding .content + 24px inferior */
     overflow-y: auto;
     display: flex; flex-direction: column; gap: 14px;
   }
