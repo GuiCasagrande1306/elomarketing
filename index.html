@@ -16316,7 +16316,7 @@ function saveTeamPermissions(userId) {
 
   // Persiste no servidor — feedback async
   _apiFetch('/api/users/' + userId, {
-    method: 'PUT',
+    method: 'PATCH',
     body: JSON.stringify({ allowedPages })
   }).then(resp => {
     showNotification(
