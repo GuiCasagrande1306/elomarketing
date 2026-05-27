@@ -14993,8 +14993,13 @@ async function _loadWaGroups() {
       </div>`;
   };
 
-  // ── Passo 1: validar estado da instância WhatsApp ─────────────────────────
+  // ── Passo 1: ping de wake-up + validação de estado ───────────────────────
+  // O ping ao /health é fire-and-forget: acorda o Render o mais cedo possível.
+  // A validação de estado só bloqueia se o backend já estiver acordado.
   showSpinner('Verificando conexão WhatsApp…');
+  const _kaBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
+  if (_kaBase) fetch(_kaBase + '/health').catch(() => {}); // wake-up ping (ignora erros)
+
   const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
 
   // Só bloqueia se o backend respondeu e a instância não está conectada
@@ -15009,30 +15014,26 @@ async function _loadWaGroups() {
     }
   }
   // Se stateData for null/_coldStart/_timeout → backend acordando: prossegue
-  // (a busca de grupos também vai detectar e vai entrar no ciclo de retry)
 
-  // ── Passo 2: buscar grupos com auto-retry (até 3 tentativas) ─────────────
-  // Cada tentativa tem 25s de timeout individual.
-  // Em cold-start (_coldStart ou _timeout) aguarda 15s com countdown antes do retry.
-  const MAX_ATTEMPTS  = 3;
-  const RETRY_WAIT_S  = 15;
+  // ── Passo 2: buscar grupos com auto-retry (até 4 tentativas, backoff progressivo)
+  // Delays: 10s → 20s → 30s  (cobre cold-start de até ~65s no Render Free)
+  const RETRY_DELAYS = [10, 20, 30]; // segundos de espera entre tentativas 1→2, 2→3, 3→4
+  const MAX_ATTEMPTS = RETRY_DELAYS.length + 1; // 4 tentativas no total
   let data = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (attempt === 1) {
       showSpinner('Buscando grupos na Evolution API…');
-      // Avisa sobre servidor dormindo se demorar mais de 7s
+      // Avisa sobre servidor dormindo se demorar mais de 6s na 1ª tentativa
       setTimeout(() => {
         const el = document.getElementById('wa-loading-text');
-        if (el && attempt === 1) {
-          el.innerHTML = 'Aguardando o servidor acordar…<br>' +
-            '<span style="font-size:10px;opacity:0.7">(pode levar até 60s no plano gratuito do Render)</span>';
-        }
-      }, 7000);
+        if (el) el.innerHTML = 'Aguardando o servidor acordar…<br>' +
+          '<span style="font-size:10px;opacity:0.7">(pode levar até 60s no plano gratuito do Render)</span>';
+      }, 6000);
     }
 
     const ctrl      = new AbortController();
-    const abortTimer = setTimeout(() => ctrl.abort(), 25000); // 25s por tentativa
+    const abortTimer = setTimeout(() => ctrl.abort(), 20000); // 20s por tentativa
     data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
     clearTimeout(abortTimer);
 
@@ -15042,10 +15043,10 @@ async function _loadWaGroups() {
 
     // Falha transitória — auto-retry se ainda há tentativas
     if (attempt < MAX_ATTEMPTS) {
-      // Countdown visível antes do próximo retry
-      let secsLeft = RETRY_WAIT_S;
+      const waitSecs = RETRY_DELAYS[attempt - 1];
+      let secsLeft   = waitSecs;
       showSpinner(
-        `Backend acordando… <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b><br>` +
+        `Servidor acordando… <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b><br>` +
         `<span id="wa-retry-countdown" style="font-size:10px;opacity:0.7">nova tentativa em ${secsLeft}s…</span>`
       );
       const cdInterval = setInterval(() => {
@@ -15054,7 +15055,7 @@ async function _loadWaGroups() {
         if (cdEl) cdEl.textContent = `nova tentativa em ${secsLeft}s…`;
         if (secsLeft <= 0) clearInterval(cdInterval);
       }, 1000);
-      await new Promise(r => setTimeout(r, RETRY_WAIT_S * 1000));
+      await new Promise(r => setTimeout(r, waitSecs * 1000));
       clearInterval(cdInterval);
     }
   }
@@ -15062,13 +15063,13 @@ async function _loadWaGroups() {
   // ── Passo 3: tratar resultado final ──────────────────────────────────────
   if (data?._timeout) {
     showErr('⏱️', 'Servidor não respondeu a tempo',
-      'O backend demorou demais nas 3 tentativas.<br>Clique em "Tentar novamente" após alguns instantes.');
+      'O backend demorou demais nas 4 tentativas.<br>Clique em "Tentar novamente" após alguns instantes.');
     return;
   }
 
   if (!data || data._coldStart) {
     showErr('⏳', 'Backend ainda acordando',
-      'O servidor não ficou disponível após 3 tentativas (≈45s).<br>Aguarde mais um momento e tente novamente.');
+      'O servidor não ficou disponível após 4 tentativas (≈65s).<br>Clique em "Tentar novamente" — o servidor já deve estar pronto.');
     return;
   }
 
