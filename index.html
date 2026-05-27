@@ -4402,18 +4402,19 @@
         </div>
         <div style="position:relative" id="gads-account-wrap">
           <input type="text" id="cl-form-gads-account-search" class="form-input"
-            placeholder="Digite para buscar a conta..."
+            placeholder="Clique para ver as contas do MCC..."
             autocomplete="off"
+            style="padding-right:28px"
             oninput="gadsDdFilter(this.value)"
             onfocus="gadsDdOpen()"
             onblur="gadsDdBlur()"
             onkeydown="gadsDdKey(event)">
+          <i class="ti ti-chevron-down" id="gads-chevron-icon"
+             style="position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);pointer-events:none;transition:transform 0.2s"></i>
           <input type="hidden" id="cl-form-gads-customer-id">
           <div id="gads-dd-list" class="gads-dd-list"></div>
         </div>
-        <div id="cl-gads-account-hint" style="font-size:10px;color:var(--text3);margin-top:4px">
-          Selecione a conta do MCC ou aguarde a aprovação do developer token
-        </div>
+        <div id="cl-gads-account-hint" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
       </div>
 
       <!-- ── Conexão de Mídias Sociais ─────────────────────────────── -->
@@ -13696,7 +13697,8 @@ let GADS_ACCOUNTS   = [];
 let _gadsDdHoverIdx = -1;
 
 function gadsDdRender(query) {
-  const list = document.getElementById('gads-dd-list');
+  const list    = document.getElementById('gads-dd-list');
+  const chevron = document.getElementById('gads-chevron-icon');
   if (!list) return;
   _gadsDdHoverIdx = -1;
   const q = (query || '').toLowerCase().trim();
@@ -13718,11 +13720,13 @@ function gadsDdRender(query) {
     }).join('');
   }
   list.style.display = 'block';
+  if (chevron) chevron.style.transform = 'translateY(-50%) rotate(180deg)';
 }
 
 function gadsDdOpen() {
-  if (GADS_ACCOUNTS.length === 0) { carregarContasGads(); return; }
   const search = document.getElementById('cl-form-gads-account-search');
+  if (search?.disabled) return; // Carregando ou não configurado
+  if (GADS_ACCOUNTS.length === 0) { carregarContasGads(); return; }
   gadsDdRender(search?.value || '');
 }
 
@@ -13734,8 +13738,10 @@ function gadsDdFilter(val) {
 
 function gadsDdBlur() {
   setTimeout(() => {
-    const list   = document.getElementById('gads-dd-list');
-    if (list) list.style.display = 'none';
+    const list    = document.getElementById('gads-dd-list');
+    const chevron = document.getElementById('gads-chevron-icon');
+    if (list)    list.style.display = 'none';
+    if (chevron) chevron.style.transform = 'translateY(-50%) rotate(0deg)';
     const hidden = document.getElementById('cl-form-gads-customer-id');
     const search = document.getElementById('cl-form-gads-account-search');
     if (!hidden || !search) return;
@@ -13769,19 +13775,24 @@ function gadsDdKey(e) {
     if (item) gadsDdSelect(item.dataset.id, item.dataset.name);
     return;
   } else if (e.key === 'Escape') {
-    list.style.display = 'none'; return;
+    list.style.display = 'none';
+    const chevron = document.getElementById('gads-chevron-icon');
+    if (chevron) chevron.style.transform = 'translateY(-50%) rotate(0deg)';
+    return;
   }
   items.forEach((el, i) => el.classList.toggle('hovered', i === _gadsDdHoverIdx));
   items[_gadsDdHoverIdx]?.scrollIntoView({ block: 'nearest' });
 }
 
 function gadsDdSelect(id, name) {
-  const search = document.getElementById('cl-form-gads-account-search');
-  const hidden = document.getElementById('cl-form-gads-customer-id');
-  const list   = document.getElementById('gads-dd-list');
+  const search  = document.getElementById('cl-form-gads-account-search');
+  const hidden  = document.getElementById('cl-form-gads-customer-id');
+  const list    = document.getElementById('gads-dd-list');
+  const chevron = document.getElementById('gads-chevron-icon');
   if (search) search.value = name;
   if (hidden) hidden.value = id;
   if (list)   list.style.display = 'none';
+  if (chevron) chevron.style.transform = 'translateY(-50%) rotate(0deg)';
   onGadsCustomerIdInput(id); // atualiza badge
 }
 
@@ -13810,42 +13821,91 @@ function gadsDdSetValue(id) {
 }
 
 async function carregarContasGads(forceReload = false) {
-  const search = document.getElementById('cl-form-gads-account-search');
-  const hint   = document.getElementById('cl-gads-account-hint');
-  const icon   = document.getElementById('gads-reload-icon');
+  const search  = document.getElementById('cl-form-gads-account-search');
+  const hint    = document.getElementById('cl-gads-account-hint');
+  const icon    = document.getElementById('gads-reload-icon');
+  const chevron = document.getElementById('gads-chevron-icon');
 
   if (!forceReload && GADS_ACCOUNTS.length > 0) {
-    if (hint) hint.textContent = `${GADS_ACCOUNTS.length} conta(s) disponível(is) — clique para selecionar.`;
+    if (hint) hint.textContent = `${GADS_ACCOUNTS.length} conta(s) disponível(is).`;
     return;
   }
 
-  if (hint)  hint.textContent = 'Carregando contas do MCC...';
-  if (icon)  icon.style.animation = 'spin 1s linear infinite';
-  if (search) search.placeholder = 'Carregando...';
+  // ── Estado: carregando ─────────────────────────────────────────────────────
+  if (hint)    hint.textContent = 'Carregando contas do MCC...';
+  if (icon)    icon.style.animation = 'spin 1s linear infinite';
+  if (chevron) { chevron.className = 'ti ti-loader-2'; chevron.style.animation = 'spin 1s linear infinite'; chevron.style.transform = 'translateY(-50%)'; }
+  if (search)  { search.disabled = true; search.placeholder = 'Carregando...'; }
+
+  const _resetIcon = () => {
+    if (icon)    icon.style.animation = '';
+    if (chevron) { chevron.className = 'ti ti-chevron-down'; chevron.style.animation = ''; chevron.style.transform = 'translateY(-50%) rotate(0deg)'; }
+  };
 
   try {
     const data = await _renderFetch('/api/google-ads/accounts');
-    if (data.error) throw new Error(data.error);
 
+    // ── Backend acordando (cold start) — retry automático em 4 s ──────────────
+    if (data?._coldStart) {
+      if (hint)   hint.innerHTML = '<span style="color:var(--text3)">⏳ Servidor acordando — tentando novamente em 4 s...</span>';
+      if (search) { search.disabled = false; search.placeholder = 'Aguardando servidor...'; }
+      _resetIcon();
+      setTimeout(() => carregarContasGads(true), 4000);
+      return;
+    }
+
+    // ── Token revogado / reautenticação necessária ─────────────────────────────
+    if (data?.needsAuth) {
+      if (hint)   hint.innerHTML = '<span style="color:var(--amber)">⚠️ Token expirado — acesse <b>Integrações → Google Ads</b> para reconectar</span>';
+      if (search) { search.disabled = true; search.placeholder = 'Reautenticação necessária'; }
+      _resetIcon();
+      return;
+    }
+
+    // ── Erro explícito retornado pelo backend ──────────────────────────────────
+    if (data?.error) {
+      const notCfg = data.error.includes('MANAGER_ID') || data.error.toLowerCase().includes('não configurado');
+      if (notCfg) {
+        if (hint)   hint.innerHTML = '<span style="color:var(--text3)">Configure as variáveis GADS_* no painel do Render para ativar o MCC</span>';
+        if (search) { search.disabled = true; search.placeholder = 'Integração não configurada'; }
+      } else {
+        if (hint)   hint.innerHTML = `<span style="color:var(--amber)">⚠️ Erro: ${data.error.slice(0, 80)} — ou digite o ID manualmente</span>`;
+        if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
+      }
+      _resetIcon();
+      return;
+    }
+
+    // ── Sem resposta (null / timeout / erro de rede) ───────────────────────────
+    if (!data) {
+      if (hint)   hint.innerHTML = '<span style="color:var(--amber)">⚠️ Sem resposta do servidor — verifique conexão ou digite o ID</span>';
+      if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
+      _resetIcon();
+      return;
+    }
+
+    // ── Sucesso: popula lista de contas ────────────────────────────────────────
     GADS_ACCOUNTS = (data.accounts || []).map(a => ({
       id:   String(a.id).replace(/-/g,''),
       name: a.name || String(a.id)
     }));
 
-    if (hint) hint.textContent = GADS_ACCOUNTS.length
-      ? `${GADS_ACCOUNTS.length} conta(s) disponível(is) — clique para selecionar.`
+    if (hint)   hint.textContent = GADS_ACCOUNTS.length
+      ? `${GADS_ACCOUNTS.length} conta(s) encontrada(s).`
       : 'Nenhuma conta encontrada sob o MCC.';
-    if (search) search.placeholder = 'Digite para buscar a conta...';
+    if (search) { search.disabled = false; search.placeholder = 'Digite para buscar a conta...'; }
+    _resetIcon();
+
+    // Abre dropdown automaticamente se o campo tiver foco
+    if (GADS_ACCOUNTS.length > 0 && document.activeElement?.id === 'cl-form-gads-account-search') {
+      gadsDdRender(search?.value || '');
+    }
 
   } catch (err) {
     console.warn('[carregarContasGads]', err.message);
-    // Fallback: permite digitação manual do Customer ID
-    if (hint) hint.innerHTML = `<span style="color:var(--amber)">⚠️ Não foi possível carregar as contas — digite o ID manualmente (formato: XXX-XXX-XXXX)</span>`;
-    if (search) {
-      search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)';
-    }
-  } finally {
-    if (icon) icon.style.animation = '';
+    if (hint)   hint.innerHTML = '<span style="color:var(--amber)">⚠️ Erro ao carregar contas — digite o ID manualmente (XXX-XXX-XXXX)</span>';
+    if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
+    _resetIcon();
   }
 }
 
