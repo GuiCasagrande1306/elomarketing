@@ -15033,7 +15033,7 @@ async function _loadWaGroups() {
     }
 
     const ctrl      = new AbortController();
-    const abortTimer = setTimeout(() => ctrl.abort(), 40000); // 40s por tentativa (Evolution API tem 30s internamente)
+    const abortTimer = setTimeout(() => ctrl.abort(), 55000); // 55s por tentativa (Evolution API tem 45s internamente + margem de rede)
     data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
     clearTimeout(abortTimer);
 
@@ -15041,7 +15041,7 @@ async function _loadWaGroups() {
     // Erros transitórios: cold-start do Render, timeout de rede, ou timeout da
     // Evolution API (Railway também pode estar dormindo — erro 504 retornado).
     const isEvoTimeout = data?.error && (
-      data.error.includes('30s') || data.error.includes('15s') ||
+      data.error.includes('45s') || data.error.includes('30s') || data.error.includes('15s') ||
       data.error.includes('timeout') || data.error.includes('Railway')
     );
     const isTransient = !data || data._coldStart || data._timeout || isEvoTimeout;
@@ -15081,7 +15081,7 @@ async function _loadWaGroups() {
 
   if (data.error) {
     const err = data.error;
-    const isTimeout = err.includes('15s') || err.includes('timeout') || err.includes('50s');
+    const isTimeout = err.includes('45s') || err.includes('30s') || err.includes('15s') || err.includes('timeout') || err.includes('50s');
     const isKey     = err.includes('inválida') || err.includes('API Key');
     const isNoInst  = err.includes('não encontrada') || err.includes('instância');
     const isRoute   = err.includes('Rota não encontrada') || err.includes('rota') || err.includes('404');
@@ -15092,7 +15092,7 @@ async function _loadWaGroups() {
     const sub = isKey
       ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.'
       : isTimeout
-        ? 'A Evolution API não respondeu a tempo.<br>Verifique se a instância está ativa no Railway.'
+        ? 'A Evolution API está demorando para responder — é normal na primeira tentativa enquanto o servidor do Railway liga.<br><br>Aguarde alguns segundos e clique em <b>Tentar novamente</b>.'
         : isNoInst
           ? 'Conecte o WhatsApp primeiro em <b>Integrações → WhatsApp → Conectar</b>.'
           : isRoute
