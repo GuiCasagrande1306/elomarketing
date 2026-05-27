@@ -7613,13 +7613,23 @@ const _logoBlobCache = new Map();
 
 /**
  * Converte uma data: URI base64 em blob: URL (compatível com Safari iOS).
- * Retorna o blob URL se possível, ou o data URI original como fallback.
+ * Paths relativos (formato antigo) são resolvidos para a URL da API de produção.
  * @param {string} id       – ID do cliente (chave do cache)
- * @param {string} dataUri  – string "data:image/...;base64,..."
- * @returns {string} blob URL ou dataUri original
+ * @param {string} dataUri  – string "data:image/...;base64,..." ou path relativo ou URL absoluta
+ * @returns {string} blob URL, URL absoluta ou dataUri original
  */
 function _getBlobUrl(id, dataUri) {
-  if (!dataUri || !dataUri.startsWith('data:')) return dataUri || '';
+  if (!dataUri) return '';
+  const s = dataUri.trim();
+  // URL absoluta → usa direto
+  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('blob:')) return s;
+  // Path relativo (formato antigo, ex: "image_b367d8.jpg") → resolve para API de produção
+  if (!s.startsWith('data:')) {
+    const base = (typeof PROD_CONFIG !== 'undefined' && PROD_CONFIG.apiUrl)
+                 || 'https://elomarketing-api.onrender.com';
+    return base + (s.startsWith('/') ? s : '/' + s);
+  }
+  // data: URI → converte para blob: URL (resolve limitação do Safari iOS)
 
   // Retorna do cache se o base64 não mudou
   const cached = _logoBlobCache.get(id);
@@ -7651,18 +7661,22 @@ window.addEventListener('pagehide', () => {
 });
 
 /**
- * Valida se uma logoUrl pode ser exibida publicamente (GitHub Pages).
- * Aceita: strings que começam com "data:" (base64) ou "http" (URL absoluta).
- * Rejeita: paths relativos como "image_b367d8.jpg" que só funcionavam no localhost.
- * @returns {string} url original se válida, '' se inválida/vazia
+ * Valida/normaliza uma logoUrl para uso no frontend (GitHub Pages).
+ * - data: URI → retorna como está (base64)
+ * - URL absoluta (http/https/blob) → retorna como está
+ * - Path relativo (ex: "image_b367d8.jpg", clientes antigos) → resolve para a API de produção
+ * @returns {string} url válida ou '' se vazia
  */
 function _sanitizeLogo(url) {
   if (!url) return '';
   const s = url.trim();
-  if (s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) return s;
-  // path relativo ou qualquer coisa não reconhecida → descarta
-  console.warn('[Logo] URL inválida descartada (path relativo ou formato desconhecido):', s.slice(0,60));
-  return '';
+  if (s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('blob:')) return s;
+  // Path relativo (formato antigo) → resolve para URL absoluta da API
+  const base = (typeof PROD_CONFIG !== 'undefined' && PROD_CONFIG.apiUrl)
+               || 'https://elomarketing-api.onrender.com';
+  const resolved = base + (s.startsWith('/') ? s : '/' + s);
+  console.info('[Logo] Path relativo resolvido para:', resolved);
+  return resolved;
 }
 
 /* ── Polling de tarefas ─────────────────────────────────────────────────────
@@ -7764,7 +7778,7 @@ function _clLogoReset() {
   if (removeB) removeB.style.display = 'none';
 }
 function _clLogoSet(url) {
-  const safe = _sanitizeLogo(url);   // descarta paths relativos quebrados
+  const safe = _sanitizeLogo(url);   // resolve paths relativos para URL absoluta da API
   _clLogoData = safe;
   const img     = document.getElementById('cl-logo-preview-img');
   const icon    = document.getElementById('cl-logo-preview-icon');
@@ -9538,7 +9552,7 @@ function saveNewClient() {
   const tiktok_access_token   = (document.getElementById('sc-tt-token')?.value       || '').trim();
   const socialFields = { fb_page_id, fb_page_access_token, instagram_business_id, ig_username, linkedin_access_token, tiktok_access_token };
 
-  const logoUrl  = _sanitizeLogo(_clLogoData || '');  // garante que nunca salvamos paths relativos
+  const logoUrl  = _sanitizeLogo(_clLogoData || '');  // normaliza (data: mantém; path relativo → URL absoluta)
   const initials = name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase() || 'XX';
 
   if (clEditingId) {
