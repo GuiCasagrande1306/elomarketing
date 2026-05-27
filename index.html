@@ -12213,7 +12213,10 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
       const balance        = gadsData?.balance   || 0;
       const spend7dVal     = gadsData?.spend7d   || 0;
       const taxaDiaria     = spend7dVal > 0 ? spend7dVal / 7 : (gadsData?.dailySpend || 0);
-      const diasRestantes  = taxaDiaria > 0 ? Math.floor(balance / taxaDiaria) : 0;
+      // Guard: taxaDiaria=0 ou balance/0=Infinity → exibe "—" sem travar a UI
+      const diasRestantes  = (taxaDiaria > 0 && balance > 0)
+        ? Math.min(Math.floor(balance / taxaDiaria), 999)
+        : 0;
       const dataFim        = diasRestantes > 0 ? dateAddDays(diasRestantes) : null;
       const badgeTxt       = isCritical ? '🔴 Saldo Crítico' : isModerate ? '⚠️ Saldo Baixo' : '✅ Saldo Saudável';
 
@@ -12941,6 +12944,10 @@ function evalGadsStatus(gadsData, client) {
   if (!gadsData) {
     return { level: 'pending', msg: 'Google Ads sem dados', detail: null };
   }
+  // Token revogado ou expirado — reautenticação necessária
+  if (gadsData.needsAuth) {
+    return { level: 'critical', msg: '🔑 Reautenticação Necessária', detail: 'O token do Google Ads expirou ou foi revogado — acesse Integrações para reconectar' };
+  }
   const { budgetPct, status, payType, balance, spend7d } = gadsData;
 
   if (status === 'SUSPENDED' || status === 'REMOVED') {
@@ -12993,25 +13000,35 @@ async function fetchGadsAccountStatus(client) {
     const cleanId = client.google_ads_customer_id.replace(/-/g, '');
     const raw     = await _renderFetch(`/api/google-ads/account/${cleanId}`);
 
+    // Token revogado / reautenticação necessária (HTTP 401 com needsAuth:true)
+    if (raw?.needsAuth) {
+      console.warn(`[Google Ads] ${client.name}: token inválido — reautenticação necessária`);
+      showNotification('⚠️ Google Ads: token expirado ou revogado. Acesse Integrações para reautenticar.', 'warning');
+      // Retorna objeto especial — evalGadsStatus() exibirá badge dedicado
+      const sentinel = { ..._gadsProxyData(client), needsAuth: true };
+      _gadsCache[client.id] = { data: sentinel, fetchedAt: Date.now() };
+      return sentinel;
+    }
+
     if (!raw || raw.error) {
       console.warn(`[Google Ads] ${client.name}:`, raw?.error || 'sem resposta — usando proxy');
       return _gadsProxyData(client);
     }
 
-    const budget   = client.budget || 0;
+    const budget    = client.budget || 0;
     const budgetPct = budget > 0 ? (raw.amountSpent / budget) * 100 : 0;
 
     const data = {
-      amountSpent: raw.amountSpent,
+      amountSpent: raw.amountSpent  ?? 0,
       budget,
-      spend7d:     raw.spend7d,
-      dailySpend:  raw.dailySpend,
+      spend7d:     raw.spend7d      ?? 0,
+      dailySpend:  raw.dailySpend   ?? 0,
       budgetPct,
-      balance:     raw.balance     || 0,
-      budgetTotal: raw.budgetTotal || 0,
-      payType:     raw.payType     || 'postpaid',
-      status:      raw.status      || 'ENABLED',
-      campaigns:   raw.campaigns   || [],
+      balance:     raw.balance      || 0,
+      budgetTotal: raw.budgetTotal  || 0,
+      payType:     raw.payType      || 'postpaid',
+      status:      raw.status       || 'ENABLED',
+      campaigns:   raw.campaigns    || [],
     };
 
     _gadsCache[client.id] = { data, fetchedAt: Date.now() };
