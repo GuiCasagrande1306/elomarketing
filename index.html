@@ -14963,29 +14963,12 @@ async function _loadWaGroups() {
   const count = document.getElementById('wa-group-count');
   if (!list) return;
 
+  const userId = currentUser?.id;
+
   _waAllGroups = []; // garante estado limpo a cada chamada
   if (count) count.textContent = '';
-  list.innerHTML = `
-    <div id="wa-loading-msg" style="display:flex;flex-direction:column;align-items:center;gap:10px;
-                padding:32px 16px;color:var(--text3)">
-      <i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite;color:#25D366"></i>
-      <span id="wa-loading-text" style="font-size:12px">Buscando grupos na Evolution API...</span>
-    </div>`;
 
-  // Após 7s sem resposta, avisa que o servidor pode estar acordando
-  const hintTimer = setTimeout(() => {
-    const el = document.getElementById('wa-loading-text');
-    if (el) el.innerHTML = 'Aguardando o servidor acordar…<br><span style="font-size:10px;opacity:0.7">(pode levar até 60s no plano gratuito do Render)</span>';
-  }, 7000);
-
-  const userId = currentUser?.id;
-  const ctrl   = new AbortController();
-  const abortTimer = setTimeout(() => ctrl.abort(), 50000); // 50s timeout total
-  const data   = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
-  clearTimeout(hintTimer);
-  clearTimeout(abortTimer);
-
-  // Helper: mostra erro com botão de retry (usa _retryLoadWaGroups para reset limpo)
+  // ── Helper: mostra erro com botão de retry manual ──────────────────────────
   const showErr = (icon, title, sub) => {
     list.innerHTML = `
       <div style="padding:24px 16px;text-align:center">
@@ -15000,14 +14983,92 @@ async function _loadWaGroups() {
       </div>`;
   };
 
+  // ── Helper: spinner com texto atualizável ─────────────────────────────────
+  const showSpinner = (text) => {
+    list.innerHTML = `
+      <div id="wa-loading-msg" style="display:flex;flex-direction:column;align-items:center;gap:10px;
+                  padding:32px 16px;color:var(--text3)">
+        <i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite;color:#25D366"></i>
+        <span id="wa-loading-text" style="font-size:12px;text-align:center;line-height:1.6">${text}</span>
+      </div>`;
+  };
+
+  // ── Passo 1: validar estado da instância WhatsApp ─────────────────────────
+  showSpinner('Verificando conexão WhatsApp…');
+  const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
+
+  // Só bloqueia se o backend respondeu e a instância não está conectada
+  if (stateData && !stateData._coldStart && !stateData._timeout && !stateData.error) {
+    const instanceState = stateData.state || 'disconnected';
+    if (instanceState !== 'open') {
+      showErr('📵', 'WhatsApp desconectado',
+        'A sessão do QR Code caiu ou nunca foi iniciada.<br>' +
+        'Reconecte em <b>Integrações → WhatsApp → Conectar</b><br>' +
+        'e aguarde o status ficar verde antes de buscar grupos.');
+      return;
+    }
+  }
+  // Se stateData for null/_coldStart/_timeout → backend acordando: prossegue
+  // (a busca de grupos também vai detectar e vai entrar no ciclo de retry)
+
+  // ── Passo 2: buscar grupos com auto-retry (até 3 tentativas) ─────────────
+  // Cada tentativa tem 25s de timeout individual.
+  // Em cold-start (_coldStart ou _timeout) aguarda 15s com countdown antes do retry.
+  const MAX_ATTEMPTS  = 3;
+  const RETRY_WAIT_S  = 15;
+  let data = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt === 1) {
+      showSpinner('Buscando grupos na Evolution API…');
+      // Avisa sobre servidor dormindo se demorar mais de 7s
+      setTimeout(() => {
+        const el = document.getElementById('wa-loading-text');
+        if (el && attempt === 1) {
+          el.innerHTML = 'Aguardando o servidor acordar…<br>' +
+            '<span style="font-size:10px;opacity:0.7">(pode levar até 60s no plano gratuito do Render)</span>';
+        }
+      }, 7000);
+    }
+
+    const ctrl      = new AbortController();
+    const abortTimer = setTimeout(() => ctrl.abort(), 25000); // 25s por tentativa
+    data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
+    clearTimeout(abortTimer);
+
+    // Resposta válida (sucesso ou erro definitivo de negócio) → sai do loop
+    const isTransient = !data || data._coldStart || data._timeout;
+    if (!isTransient) break;
+
+    // Falha transitória — auto-retry se ainda há tentativas
+    if (attempt < MAX_ATTEMPTS) {
+      // Countdown visível antes do próximo retry
+      let secsLeft = RETRY_WAIT_S;
+      showSpinner(
+        `Backend acordando… <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b><br>` +
+        `<span id="wa-retry-countdown" style="font-size:10px;opacity:0.7">nova tentativa em ${secsLeft}s…</span>`
+      );
+      const cdInterval = setInterval(() => {
+        secsLeft--;
+        const cdEl = document.getElementById('wa-retry-countdown');
+        if (cdEl) cdEl.textContent = `nova tentativa em ${secsLeft}s…`;
+        if (secsLeft <= 0) clearInterval(cdInterval);
+      }, 1000);
+      await new Promise(r => setTimeout(r, RETRY_WAIT_S * 1000));
+      clearInterval(cdInterval);
+    }
+  }
+
+  // ── Passo 3: tratar resultado final ──────────────────────────────────────
   if (data?._timeout) {
     showErr('⏱️', 'Servidor não respondeu a tempo',
-      'O backend demorou mais de 50s para responder.<br>Clique em "Tentar novamente" após alguns instantes.');
+      'O backend demorou demais nas 3 tentativas.<br>Clique em "Tentar novamente" após alguns instantes.');
     return;
   }
 
   if (!data || data._coldStart) {
-    showErr('⏳', 'Backend acordando', 'O servidor está iniciando (30–60s).<br>Aguarde e tente novamente.');
+    showErr('⏳', 'Backend ainda acordando',
+      'O servidor não ficou disponível após 3 tentativas (≈45s).<br>Aguarde mais um momento e tente novamente.');
     return;
   }
 
