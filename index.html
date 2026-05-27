@@ -378,11 +378,20 @@
   .card-title i { font-size: 16px; color: var(--accent); }
 
   /* GRIDS */
-  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .grid-4  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .grid-3  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-2  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
   .grid-12 { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
   .grid-21 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+
+  /* Grids de cards de página (clientes, templates, criativos) ficam colados ao
+     topo mesmo quando há poucas linhas — evita que align-content:stretch as
+     espalhe verticalmente para preencher o .content (flex: 1, altura fixa). */
+  #clients-grid,
+  #templates-grid,
+  .cr-grid {
+    align-content: start;
+  }
 
   /* METRIC CARDS */
   .metric-card {
