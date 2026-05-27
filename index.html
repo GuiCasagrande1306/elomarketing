@@ -15033,12 +15033,18 @@ async function _loadWaGroups() {
     }
 
     const ctrl      = new AbortController();
-    const abortTimer = setTimeout(() => ctrl.abort(), 20000); // 20s por tentativa
+    const abortTimer = setTimeout(() => ctrl.abort(), 40000); // 40s por tentativa (Evolution API tem 30s internamente)
     data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
     clearTimeout(abortTimer);
 
-    // Resposta válida (sucesso ou erro definitivo de negócio) → sai do loop
-    const isTransient = !data || data._coldStart || data._timeout;
+    // Resposta válida (sucesso ou erro definitivo de negócio) → sai do loop.
+    // Erros transitórios: cold-start do Render, timeout de rede, ou timeout da
+    // Evolution API (Railway também pode estar dormindo — erro 504 retornado).
+    const isEvoTimeout = data?.error && (
+      data.error.includes('30s') || data.error.includes('15s') ||
+      data.error.includes('timeout') || data.error.includes('Railway')
+    );
+    const isTransient = !data || data._coldStart || data._timeout || isEvoTimeout;
     if (!isTransient) break;
 
     // Falha transitória — auto-retry se ainda há tentativas
