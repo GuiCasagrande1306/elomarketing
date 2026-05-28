@@ -6623,7 +6623,32 @@ async function loadTasksFromDB() {
     );
   }
 
-  TASKS_DATA = [...fromServer, ...localOnly];
+  // ── Merge com preferência local quando há atualização pendente ─────────────
+  // Se _localUpdatedAt > updatedAt do servidor + 3s, significa que o PUT não
+  // chegou ao banco (cold-start). Usamos a versão local e re-enviamos ao servidor.
+  const mergedFromServer = fromServer.map(srvTask => {
+    const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
+    if (localTask?._localUpdatedAt) {
+      const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
+      const localTime = localTask._localUpdatedAt;
+      if (localTime > srvTime + 3000) {
+        // Local é mais recente que o servidor — re-envia em background e usa local
+        console.warn(`[Tasks] merge: versão local mais nova para "${srvTask.title}" — re-enviando ao servidor`);
+        updateTaskInDB(srvTask.id, {
+          status:         localTask.status,
+          group:          localTask.group,
+          priority:       localTask.priority,
+          completed_at:   localTask.completed_at  || null,
+          timerStartedAt: localTask.timerStartedAt || null,
+          timeSpent:      localTask.timeSpent      || 0,
+        });
+        return localTask;
+      }
+    }
+    return srvTask;
+  });
+
+  TASKS_DATA = [...mergedFromServer, ...localOnly];
   localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
   if (_hasRunningTimers()) _startTimerTick();
   renderTasksGrid();
@@ -6730,16 +6755,31 @@ async function syncTasksToDB() {
   );
 }
 
-function updateTaskInDB(id, updates) {
+function updateTaskInDB(id, updates, _attempt = 1) {
   if (!currentUser) return;
   _apiFetch(`/api/tasks/${id}`, {
     method: 'PUT',
     body:   JSON.stringify({ ...updates, updated_by: currentUser.id })
   }).then(r => {
-    if (!r)             console.error('[Tasks] PUT falhou (rede):', id);
-    else if (r._coldStart) console.warn('[Tasks] PUT cold start — será sincronizado:', id);
-    else if (!r.ok)     console.error('[Tasks] PUT erro servidor:', id, r);
-    else                console.log('[Tasks] tarefa atualizada no MongoDB:', id);
+    if (!r) {
+      console.error('[Tasks] PUT falhou (rede):', id);
+    } else if (r._coldStart) {
+      // Render ainda acordando — re-tenta com back-off (máx. 4 tentativas)
+      if (_attempt < 4) {
+        const delay = _attempt * 7000; // 7s → 14s → 21s
+        console.warn(`[Tasks] PUT cold start — tentativa ${_attempt}/4, retry em ${delay/1000}s:`, id);
+        setTimeout(() => updateTaskInDB(id, updates, _attempt + 1), delay);
+      } else {
+        console.error('[Tasks] PUT desistiu após 4 tentativas (cold start persistente):', id);
+      }
+    } else if (!r.ok) {
+      console.error('[Tasks] PUT erro servidor:', id, r);
+    } else {
+      // ✅ Confirmado — limpa marcador de atualização local pendente
+      const t = TASKS_DATA.find(x => x.id === id);
+      if (t && t._localUpdatedAt) { delete t._localUpdatedAt; saveTasks(); }
+      console.log('[Tasks] tarefa atualizada no MongoDB:', id);
+    }
   });
   // Supabase (legado — mantido se configurado)
   if (db && currentUser) {
@@ -6769,7 +6809,25 @@ async function _deleteTask(taskId) {
 
   try {
     const r = await _apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-    if (r && r.ok !== false) {
+    if (r?._coldStart) {
+      // Render acordando — tarefa já sumiu do UI; re-tenta o DELETE em background
+      // _pendingDeletions fica ativo e bloqueia loadTasksFromDB de ressuscitar
+      console.warn('[Tasks] DELETE cold start — re-tentando em 8s:', taskId);
+      showNotification('Tarefa excluída.', 'ok');
+      setTimeout(async () => {
+        try {
+          const r2 = await _apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+          if (r2 && !r2._coldStart && r2.ok !== false) {
+            console.log('[Tasks] ✅ deletado do Atlas (retry):', taskId);
+          } else {
+            console.error('[Tasks] ❌ retry DELETE falhou:', taskId, r2);
+          }
+        } catch(e2) { console.error('[Tasks] ❌ retry DELETE erro:', taskId, e2.message); }
+        // Estende proteção: remove do pending após mais 30s após o retry
+        setTimeout(() => _pendingDeletions.delete(taskId), 30000);
+      }, 8000);
+      return; // sai sem reset de pendingDeletions (bloco do finally faria isso)
+    } else if (r && r.ok !== false) {
       // ✅ Servidor confirmou — deleção permanente
       console.log('[Tasks] ✅ deletado do Atlas:', taskId);
       showNotification('Tarefa excluída.', 'ok');
@@ -16035,6 +16093,7 @@ function setMondayStatus(taskId, status) {
     patch.timerStartedAt = null;
   }
 
+  t._localUpdatedAt = Date.now(); // marca atualização local pendente
   updateTaskInDB(taskId, patch);
   saveTasks(); renderTasksGrid(); updateNavBadges();
   showNotification(`Status → ${status}`, 'ok');
@@ -16043,6 +16102,7 @@ function setMondayStatus(taskId, status) {
 function setMondayPriority(taskId, priority) {
   const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
   t.priority = priority;
+  t._localUpdatedAt = Date.now();
   const critMap = {Baixa:'baixa',Média:'media',Alta:'alta',Crítica:'urgente'};
   updateTaskInDB(taskId, { priority, criticality: critMap[priority] || 'media' });
   saveTasks(); renderTasksGrid();
