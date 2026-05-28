@@ -3193,8 +3193,7 @@
           <div id="dash-tasks-list" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
             <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
           </div>
-          <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;cursor:pointer"
-            onclick="mbnNavigate('tarefas')">
+          <button id="dash-btn-tarefas" class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;cursor:pointer">
             Ver todas as tarefas <i class="ti ti-arrow-right" style="font-size:10px"></i>
           </button>
         </div>
@@ -3208,8 +3207,7 @@
           <div id="dash-otim-list" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
             <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
           </div>
-          <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(245,158,11,0.3);color:#F59E0B;cursor:pointer"
-            onclick="mbnNavigate('esteira')">
+          <button id="dash-btn-esteira" class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(245,158,11,0.3);color:#F59E0B;cursor:pointer">
             Ver Esteira <i class="ti ti-arrow-right" style="font-size:10px"></i>
           </button>
         </div>
@@ -3223,8 +3221,7 @@
           <div id="dash-spend-list" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
             <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
           </div>
-          <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(239,68,68,0.3);color:var(--red);cursor:pointer"
-            onclick="mbnNavigate('clientes')">
+          <button id="dash-btn-clientes" class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(239,68,68,0.3);color:var(--red);cursor:pointer">
             Ver Clientes <i class="ti ti-arrow-right" style="font-size:10px"></i>
           </button>
         </div>
@@ -10548,6 +10545,25 @@ function renderDashboardActionCards(clients) {
       }
     }
   }
+
+  // ── Conecta os botões de navegação dos cards de ação ──────────────────────
+  // Usando addEventListener (não inline onclick) para evitar problemas de
+  // escape de aspas no HTML e garantir funcionamento em desktop e mobile.
+  const _navBtn = (id, page) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    // Remove listeners anteriores clonando o nó
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener('click', () => {
+      // Navega diretamente: encontra o nav-item do sidebar e chama navigate()
+      const navEl = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
+      navigate(page, navEl || { classList: { add: ()=>{}, remove: ()=>{} } });
+    });
+  };
+  _navBtn('dash-btn-tarefas', 'tarefas');
+  _navBtn('dash-btn-esteira',  'esteira');
+  _navBtn('dash-btn-clientes', 'clientes');
 }
 
 function renderDashboard() {
