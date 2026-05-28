@@ -9843,7 +9843,18 @@ function saveNewClient() {
       ...socialFields
     });
   }
+  // Captura o ID do cliente APÓS o push (para novo) ou usa clEditingId (para edição)
+  const _waClientId = clEditingId || (CLIENTS.list[CLIENTS.list.length - 1] && CLIENTS.list[CLIENTS.list.length - 1].id);
+
   saveClients();
+
+  // ── Persistência do vínculo WhatsApp no Atlas ─────────────────────────────────
+  // O bulk/sync acima é fire-and-forget; este PATCH específico garante que o JID
+  // chegue ao MongoDB mesmo em cold start do Render (até 3 retentativas).
+  if (whatsapp_group_jid && _waClientId) {
+    setTimeout(function(){ _saveWaGroupToAtlas(_waClientId, whatsapp_group_jid, whatsapp_group_name); }, 400);
+  }
+
   renderClients();
   closeNewClientModal();
 }
@@ -15608,6 +15619,48 @@ function clearGroupSelection() {
   if (jidEl)   jidEl.value   = '';
   if (nameEl)  nameEl.value  = '';
   if (clearEl) clearEl.style.display = 'none';
+}
+
+// ── Salva vínculo do grupo WhatsApp no Atlas com retry automático ──────────────
+// Garante que o JID chegue ao MongoDB mesmo se o Render estiver em cold start.
+// Chamado após saveNewClient() — independente do bulk/sync fire-and-forget.
+function _saveWaGroupToAtlas(clientId, jid, name, _attempt) {
+  if (_attempt === undefined) _attempt = 1;
+  _apiFetch('/api/clients/' + clientId + '/whatsapp-group', {
+    method: 'PATCH',
+    body: JSON.stringify({ whatsapp_group_jid: jid, whatsapp_group_name: name })
+  }).then(function(r) {
+    if (!r) {
+      // Falha total de rede
+      if (_attempt < 4) {
+        var delay = _attempt * 7000;
+        console.warn('[WA Group] PATCH falhou (rede) — retry ' + _attempt + '/3 em ' + (delay/1000) + 's');
+        setTimeout(function(){ _saveWaGroupToAtlas(clientId, jid, name, _attempt + 1); }, delay);
+      } else {
+        showNotification('⚠️ Grupo salvo localmente. Abra o cliente e salve novamente para sincronizar.', 'warn');
+      }
+    } else if (r._coldStart) {
+      // Render acordando — espera mais
+      if (_attempt < 4) {
+        var delay2 = _attempt * 9000;
+        console.warn('[WA Group] cold start — retry ' + _attempt + '/3 em ' + (delay2/1000) + 's');
+        setTimeout(function(){ _saveWaGroupToAtlas(clientId, jid, name, _attempt + 1); }, delay2);
+      } else {
+        showNotification('⚠️ Servidor ocupado. Abra o cliente e salve novamente para sincronizar o grupo.', 'warn');
+      }
+    } else if (r.ok) {
+      console.log('[WA Group] ✅ grupo vinculado no Atlas: clientId="' + clientId + '" jid="' + jid + '"');
+      showNotification('✅ Grupo "' + name + '" vinculado no servidor.', 'ok');
+    } else {
+      console.error('[WA Group] PATCH erro servidor:', r);
+      showNotification('⚠️ Falha ao salvar grupo no servidor. Tente novamente.', 'warn');
+    }
+  }).catch(function(e) {
+    console.error('[WA Group] PATCH exceção:', e.message);
+    if (_attempt < 4) {
+      setTimeout(function(){ _saveWaGroupToAtlas(clientId, jid, name, _attempt + 1); }, _attempt * 8000);
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
