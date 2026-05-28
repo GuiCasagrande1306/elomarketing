@@ -5854,7 +5854,8 @@ function updateCompletedCount() {
 function updateNavBadges() {
   const today = new Date(); today.setHours(23,59,59,999);
   const urgentCount = TASKS_DATA.filter(t => {
-    if (t.status === 'Pronto') return false;
+    // normalizeTaskStatus cobre valores legados ('done', 'active') e garante consistência
+    if (normalizeTaskStatus(t.status) === 'Pronto') return false;
     const dl = t.dueDate || t.deadline;
     // Parse como data local (evita UTC shift que adianta/atrasa 1 dia no Brasil)
     if (!dl) return false;
@@ -7836,7 +7837,20 @@ async function _pollTasks() {
     // Merge seguro: preserva tarefas locais pendentes de upload
     const serverIds = new Set(incoming.map(t => t.id).filter(Boolean));
     const localOnly = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
-    TASKS_DATA = [...incoming, ...localOnly];
+
+    // Respeita _localUpdatedAt: se o PUT ainda não confirmou, a versão local é
+    // mais nova que o servidor — não sobrescrever (mesmo critério de loadTasksFromDB)
+    const mergedIncoming = incoming.map(srvTask => {
+      const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
+      if (localTask?._localUpdatedAt) {
+        const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
+        const localTime = localTask._localUpdatedAt;
+        if (localTime > srvTime + 3000) return localTask; // mantém versão local mais nova
+      }
+      return srvTask;
+    });
+
+    TASKS_DATA = [...mergedIncoming, ...localOnly];
     localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
     if (_hasRunningTimers()) _startTimerTick();
     renderTasksGrid();
@@ -16029,12 +16043,28 @@ function _buildTaskRow(task) {
 
 /* ── Dropdown inline ─────────────────────────────────────────────── */
 let _openDD = null;
-function _closeDD() { if (_openDD) { _openDD.remove(); _openDD = null; } }
+let _ddClickListener = null; // referência necessária para removeEventListener correto
+
+function _closeDD() {
+  if (_openDD) { _openDD.remove(); _openDD = null; }
+  // Remove explicitamente o listener — evita "listener órfão" que fecha
+  // imediatamente o próximo dropdown (gerado quando item clica com stopPropagation)
+  if (_ddClickListener) {
+    document.removeEventListener('click', _ddClickListener);
+    _ddClickListener = null;
+  }
+}
 
 function _posDD(dd, anchor) {
   const r = anchor.getBoundingClientRect();
-  dd.style.top  = (r.bottom + window.scrollY + 4) + 'px';
-  dd.style.left = r.left + 'px';
+  // position:fixed → coordenadas do viewport, NÃO somar window.scrollY
+  const top  = r.bottom + 4;
+  const left = r.left;
+  // Impede que o dropdown saia pela direita ou parte inferior da tela
+  const maxLeft = window.innerWidth  - 170;
+  const maxTop  = window.innerHeight - 180;
+  dd.style.top  = Math.max(4, Math.min(top,  maxTop))  + 'px';
+  dd.style.left = Math.max(4, Math.min(left, maxLeft)) + 'px';
 }
 
 function openStatusDD(taskId, el) {
@@ -16047,7 +16077,10 @@ function openStatusDD(taskId, el) {
     dd.appendChild(item);
   });
   _posDD(dd, el); document.body.appendChild(dd); _openDD = dd;
-  setTimeout(() => document.addEventListener('click', _closeDD, { once:true }), 10);
+  setTimeout(() => {
+    _ddClickListener = () => _closeDD();
+    document.addEventListener('click', _ddClickListener);
+  }, 10);
 }
 
 function openPriorityDD(taskId, el) {
@@ -16060,7 +16093,10 @@ function openPriorityDD(taskId, el) {
     dd.appendChild(item);
   });
   _posDD(dd, el); document.body.appendChild(dd); _openDD = dd;
-  setTimeout(() => document.addEventListener('click', _closeDD, { once:true }), 10);
+  setTimeout(() => {
+    _ddClickListener = () => _closeDD();
+    document.addEventListener('click', _ddClickListener);
+  }, 10);
 }
 
 function setMondayStatus(taskId, status) {
