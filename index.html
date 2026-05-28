@@ -15401,56 +15401,96 @@ async function _loadWaGroups() {
   const _kaBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
   if (_kaBase) fetch(_kaBase + '/health').catch(() => {}); // acorda Render sem bloquear
 
-  // ── Passo 2: pre-flight ping na Evolution API — 5 s hard limit ────────────
-  // Fail-fast: se Railway não responder em 5s, mostra erro imediatamente
-  // e NÃO dispara a rota pesada /groups (que esperaria até 45s).
+  // ── Passo 2: pre-flight ping na Evolution API — até 3 tentativas automáticas ──
+  // Railway free tier hiberna e pode levar 20–60s para acordar.
+  // Fazemos 3 pings (0s / 10s / 15s de espera entre eles, 10s timeout cada)
+  // antes de desistir e mostrar o botão "Tentar novamente".
   {
-    const pingCtrl  = new AbortController();
-    const pingTimer = setTimeout(() => pingCtrl.abort(), 5000);
-    let pingResult  = null;
-    try {
-      pingResult = await _renderFetch('/api/whatsapp/ping', { signal: pingCtrl.signal });
-    } catch (e) {
-      console.warn('[_loadWaGroups] ping exceção:', e?.message);
-    } finally {
-      clearTimeout(pingTimer);
-    }
+    const PING_MAX      = 3;
+    const PING_TIMEOUTS = [10000, 12000, 12000]; // timeout por tentativa
+    const PING_WAITS    = [0, 10, 15];           // espera (s) antes de cada tentativa
+    let pingResult = null;
+    let pingOk     = false;
 
-    // Log detalhado para diagnóstico (visível no DevTools → Console)
-    console.log('[_loadWaGroups] pre-flight ping →', {
-      ok:         pingResult?.ok,
-      latencyMs:  pingResult?.latencyMs,
-      error:      pingResult?.error,
-      _timeout:   pingResult?._timeout,
-      _coldStart: pingResult?._coldStart,
-      status:     pingResult?.status,
-    });
+    for (let pa = 1; pa <= PING_MAX; pa++) {
+      // ── Delay entre tentativas (com countdown) ─────────────────────────────
+      if (pa > 1) {
+        const waitSecs = PING_WAITS[pa - 1];
+        let secsLeft   = waitSecs;
+        showSpinner(
+          `Aguardando servidor Railway iniciar…<br>` +
+          `<span id="wa-ping-cd" style="font-size:10px;opacity:0.7">` +
+          `tentativa ${pa}/${PING_MAX} em ${secsLeft}s</span>`
+        );
+        const cdId = setInterval(() => {
+          secsLeft--;
+          const el = document.getElementById('wa-ping-cd');
+          if (el) el.textContent = `tentativa ${pa}/${PING_MAX} em ${secsLeft}s`;
+          if (secsLeft <= 0) clearInterval(cdId);
+        }, 1000);
+        await new Promise(r => setTimeout(r, waitSecs * 1000));
+        clearInterval(cdId);
+      }
 
-    if (!pingResult?.ok) {
-      const isAuth    = pingResult?.error?.toLowerCase().includes('key') || pingResult?.error?.toLowerCase().includes('inválida');
-      const isTimeout = !pingResult || pingResult._timeout || pingResult._coldStart;
+      showSpinner(
+        pa === 1
+          ? 'Verificando servidor Railway…'
+          : `Verificando servidor Railway… <b>(${pa}/${PING_MAX})</b>`
+      );
 
-      console.warn('[_loadWaGroups] ping FALHOU:', {
-        reason: isAuth ? 'auth' : isTimeout ? 'timeout/offline' : 'error',
-        error:  pingResult?.error,
-        latencyMs: pingResult?.latencyMs,
+      const pingCtrl  = new AbortController();
+      const pingTimer = setTimeout(() => pingCtrl.abort(), PING_TIMEOUTS[pa - 1]);
+      try {
+        pingResult = await _renderFetch('/api/whatsapp/ping', { signal: pingCtrl.signal });
+      } catch (e) {
+        console.warn(`[_loadWaGroups] ping ${pa} exceção:`, e?.message);
+        pingResult = null;
+      } finally {
+        clearTimeout(pingTimer);
+      }
+
+      console.log(`[_loadWaGroups] ping ${pa}/${PING_MAX} →`, {
+        ok: pingResult?.ok, latencyMs: pingResult?.latencyMs,
+        error: pingResult?.error, _timeout: pingResult?._timeout,
       });
 
-      showErr(
-        isAuth ? '🔑' : '🚫',
-        isAuth ? 'API Key inválida' : 'Não foi possível conectar à Evolution API',
-        isAuth
-          ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.'
-          : isTimeout
-            ? 'O servidor no Railway não respondeu em 5s — pode estar iniciando ou sem créditos.<br><br>Aguarde alguns instantes e clique em <b>Tentar novamente</b>.'
-            : `${pingResult?.error || 'Erro de rede'} — servidor indisponível.<br>Tente novamente em instantes ou avise o administrador.`
+      // ── Erro de autenticação — não adianta repetir ─────────────────────────
+      const isAuthErr = pingResult?.error && (
+        pingResult.error.toLowerCase().includes('key') ||
+        pingResult.error.toLowerCase().includes('inválida')
       );
-      return; // ← sai imediatamente, sem esperar 45 s
+      if (isAuthErr) {
+        showErr('🔑', 'API Key inválida',
+          'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.');
+        return;
+      }
+
+      // ── Ping bem-sucedido ──────────────────────────────────────────────────
+      if (pingResult?.ok) {
+        pingOk = true;
+        const latencyMs = pingResult.latencyMs ?? 0;
+        console.log(`[_loadWaGroups] ping OK em ${pa} tentativa(s) — ${latencyMs}ms`);
+        showSpinner(`Evolution API online (${latencyMs}ms) — verificando conexão WhatsApp…`);
+        break;
+      }
     }
 
-    const latencyMs = pingResult.latencyMs ?? 0;
-    console.log(`[_loadWaGroups] ping OK — ${latencyMs}ms`);
-    showSpinner(`Evolution API online (${latencyMs}ms) — verificando conexão WhatsApp…`);
+    // ── Todas as tentativas esgotadas sem sucesso ──────────────────────────────
+    if (!pingOk) {
+      const isTimeout = !pingResult || pingResult._timeout || pingResult._coldStart;
+      console.warn('[_loadWaGroups] ping FALHOU após', PING_MAX, 'tentativas:', pingResult?.error);
+      showErr(
+        '🚫',
+        'Não foi possível conectar à Evolution API',
+        isTimeout
+          ? 'O servidor Railway não respondeu após várias tentativas.<br>' +
+            'Verifique se a instância está ativa e se há créditos no Railway.<br><br>' +
+            'Clique em <b>Tentar novamente</b> para uma nova rodada.'
+          : `${pingResult?.error || 'Erro de rede'} — servidor indisponível.<br>` +
+            'Tente novamente em instantes ou verifique as configurações em Integrações.'
+      );
+      return;
+    }
   }
 
   // ── Passo 3: estado da instância WhatsApp ────────────────────────────────
