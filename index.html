@@ -15110,16 +15110,66 @@ async function _loadWaGroups() {
       </div>`;
   };
 
-  // ── Passo 1: ping de wake-up + validação de estado ───────────────────────
-  // O ping ao /health é fire-and-forget: acorda o Render o mais cedo possível.
-  // A validação de estado só bloqueia se o backend já estiver acordado.
-  showSpinner('Verificando conexão WhatsApp…');
+  // ── Passo 1: wake-up ping Render (fire-and-forget) ───────────────────────
+  showSpinner('Verificando servidor Railway…');
   const _kaBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
-  if (_kaBase) fetch(_kaBase + '/health').catch(() => {}); // wake-up ping (ignora erros)
+  if (_kaBase) fetch(_kaBase + '/health').catch(() => {}); // acorda Render sem bloquear
 
+  // ── Passo 2: pre-flight ping na Evolution API — 5 s hard limit ────────────
+  // Fail-fast: se Railway não responder em 5s, mostra erro imediatamente
+  // e NÃO dispara a rota pesada /groups (que esperaria até 45s).
+  {
+    const pingCtrl  = new AbortController();
+    const pingTimer = setTimeout(() => pingCtrl.abort(), 5000);
+    let pingResult  = null;
+    try {
+      pingResult = await _renderFetch('/api/whatsapp/ping', { signal: pingCtrl.signal });
+    } catch (e) {
+      console.warn('[_loadWaGroups] ping exceção:', e?.message);
+    } finally {
+      clearTimeout(pingTimer);
+    }
+
+    // Log detalhado para diagnóstico (visível no DevTools → Console)
+    console.log('[_loadWaGroups] pre-flight ping →', {
+      ok:         pingResult?.ok,
+      latencyMs:  pingResult?.latencyMs,
+      error:      pingResult?.error,
+      _timeout:   pingResult?._timeout,
+      _coldStart: pingResult?._coldStart,
+      status:     pingResult?.status,
+    });
+
+    if (!pingResult?.ok) {
+      const isAuth    = pingResult?.error?.toLowerCase().includes('key') || pingResult?.error?.toLowerCase().includes('inválida');
+      const isTimeout = !pingResult || pingResult._timeout || pingResult._coldStart;
+
+      console.warn('[_loadWaGroups] ping FALHOU:', {
+        reason: isAuth ? 'auth' : isTimeout ? 'timeout/offline' : 'error',
+        error:  pingResult?.error,
+        latencyMs: pingResult?.latencyMs,
+      });
+
+      showErr(
+        isAuth ? '🔑' : '🚫',
+        isAuth ? 'API Key inválida' : 'Não foi possível conectar à Evolution API',
+        isAuth
+          ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.'
+          : isTimeout
+            ? 'O servidor no Railway não respondeu em 5s — pode estar iniciando ou sem créditos.<br><br>Aguarde alguns instantes e clique em <b>Tentar novamente</b>.'
+            : `${pingResult?.error || 'Erro de rede'} — servidor indisponível.<br>Tente novamente em instantes ou avise o administrador.`
+      );
+      return; // ← sai imediatamente, sem esperar 45 s
+    }
+
+    const latencyMs = pingResult.latencyMs ?? 0;
+    console.log(`[_loadWaGroups] ping OK — ${latencyMs}ms`);
+    showSpinner(`Evolution API online (${latencyMs}ms) — verificando conexão WhatsApp…`);
+  }
+
+  // ── Passo 3: estado da instância WhatsApp ────────────────────────────────
   const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
 
-  // Só bloqueia se o backend respondeu e a instância não está conectada
   if (stateData && !stateData._coldStart && !stateData._timeout && !stateData.error) {
     const instanceState = stateData.state || 'disconnected';
     if (instanceState !== 'open') {
@@ -15130,46 +15180,47 @@ async function _loadWaGroups() {
       return;
     }
   }
-  // Se stateData for null/_coldStart/_timeout → backend acordando: prossegue
 
-  // ── Passo 2: buscar grupos com auto-retry (até 4 tentativas, backoff progressivo)
-  // Delays: 10s → 20s → 30s  (cobre cold-start de até ~65s no Render Free)
-  const RETRY_DELAYS = [10, 20, 30]; // segundos de espera entre tentativas 1→2, 2→3, 3→4
-  const MAX_ATTEMPTS = RETRY_DELAYS.length + 1; // 4 tentativas no total
+  // ── Passo 4: buscar grupos — Railway confirmado ativo → 2 tentativas max ──
+  // Com o ping OK, Railway está de pé. Mantemos 1 retry para absorver
+  // eventuais gargalos momentâneos de rede após o wake-up.
+  const RETRY_DELAYS = [8]; // 1 retry após 8 s (Railway já acordou pelo ping)
+  const MAX_ATTEMPTS = RETRY_DELAYS.length + 1; // 2 tentativas
   let data = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (attempt === 1) {
-      showSpinner('Buscando grupos na Evolution API…');
-      // Avisa sobre servidor dormindo se demorar mais de 6s na 1ª tentativa
-      setTimeout(() => {
-        const el = document.getElementById('wa-loading-text');
-        if (el) el.innerHTML = 'Aguardando o servidor acordar…<br>' +
-          '<span style="font-size:10px;opacity:0.7">(pode levar até 60s no plano gratuito do Render)</span>';
-      }, 6000);
-    }
+    showSpinner(
+      attempt === 1
+        ? 'Buscando grupos na Evolution API…'
+        : `Buscando grupos… <b>tentativa ${attempt}/${MAX_ATTEMPTS}</b>`
+    );
 
-    const ctrl      = new AbortController();
-    const abortTimer = setTimeout(() => ctrl.abort(), 55000); // 55s por tentativa (Evolution API tem 45s internamente + margem de rede)
+    const ctrl       = new AbortController();
+    const abortTimer = setTimeout(() => ctrl.abort(), 50000); // 50s (backend tem 45s internamente)
     data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
     clearTimeout(abortTimer);
 
-    // Resposta válida (sucesso ou erro definitivo de negócio) → sai do loop.
-    // Erros transitórios: cold-start do Render, timeout de rede, ou timeout da
-    // Evolution API (Railway também pode estar dormindo — erro 504 retornado).
+    // Log detalhado para cada tentativa
+    console.log(`[_loadWaGroups] grupos tentativa ${attempt}/${MAX_ATTEMPTS}:`, {
+      ok:         !!data?.groups,
+      total:      data?.groups?.length,
+      error:      data?.error,
+      _coldStart: data?._coldStart,
+      _timeout:   data?._timeout,
+      debug:      data?._debug,
+    });
+
     const isEvoTimeout = data?.error && (
-      data.error.includes('45s') || data.error.includes('30s') || data.error.includes('15s') ||
-      data.error.includes('timeout') || data.error.includes('Railway')
+      data.error.includes('45s') || data.error.includes('timeout') || data.error.includes('Railway')
     );
     const isTransient = !data || data._coldStart || data._timeout || isEvoTimeout;
     if (!isTransient) break;
 
-    // Falha transitória — auto-retry se ainda há tentativas
     if (attempt < MAX_ATTEMPTS) {
       const waitSecs = RETRY_DELAYS[attempt - 1];
       let secsLeft   = waitSecs;
       showSpinner(
-        `Servidor acordando… <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b><br>` +
+        `Aguardando resposta… <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b><br>` +
         `<span id="wa-retry-countdown" style="font-size:10px;opacity:0.7">nova tentativa em ${secsLeft}s…</span>`
       );
       const cdInterval = setInterval(() => {
@@ -15183,25 +15234,29 @@ async function _loadWaGroups() {
     }
   }
 
-  // ── Passo 3: tratar resultado final ──────────────────────────────────────
+  // ── Passo 5: tratar resultado final ──────────────────────────────────────
   if (data?._timeout) {
-    showErr('⏱️', 'Servidor não respondeu a tempo',
-      'O backend demorou demais nas 4 tentativas.<br>Clique em "Tentar novamente" após alguns instantes.');
+    console.error('[_loadWaGroups] timeout final após', MAX_ATTEMPTS, 'tentativa(s)');
+    showErr('⏱️', 'Evolution API não respondeu a tempo',
+      'A API demorou demais mesmo com o servidor ativo.<br>Clique em "Tentar novamente" — a conexão já deve estar estável.');
     return;
   }
 
   if (!data || data._coldStart) {
-    showErr('⏳', 'Backend ainda acordando',
-      'O servidor não ficou disponível após 4 tentativas (≈65s).<br>Clique em "Tentar novamente" — o servidor já deve estar pronto.');
+    console.error('[_loadWaGroups] sem resposta válida após', MAX_ATTEMPTS, 'tentativa(s)');
+    showErr('⏳', 'Backend sem resposta',
+      'O servidor não retornou dados válidos.<br>Clique em "Tentar novamente".');
     return;
   }
 
   if (data.error) {
     const err = data.error;
-    const isTimeout = err.includes('45s') || err.includes('30s') || err.includes('15s') || err.includes('timeout') || err.includes('50s');
+    console.error('[_loadWaGroups] erro da API:', { error: err, detail: data.detail });
+
+    const isTimeout = err.includes('45s') || err.includes('timeout');
     const isKey     = err.includes('inválida') || err.includes('API Key');
     const isNoInst  = err.includes('não encontrada') || err.includes('instância');
-    const isRoute   = err.includes('Rota não encontrada') || err.includes('rota') || err.includes('404');
+    const isRoute   = err.includes('Rota não encontrada') || err.includes('404');
     const isReject  = err.includes('400') || err.includes('rejeitou');
 
     const icon = isKey ? '🔑' : isTimeout ? '⏱️' : isNoInst ? '📵' : isRoute ? '🔌' : '❌';
@@ -15209,14 +15264,14 @@ async function _loadWaGroups() {
     const sub = isKey
       ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.'
       : isTimeout
-        ? 'A Evolution API está demorando para responder — é normal na primeira tentativa enquanto o servidor do Railway liga.<br><br>Aguarde alguns segundos e clique em <b>Tentar novamente</b>.'
+        ? 'A Evolution API demorou para responder. Clique em <b>Tentar novamente</b>.'
         : isNoInst
           ? 'Conecte o WhatsApp primeiro em <b>Integrações → WhatsApp → Conectar</b>.'
           : isRoute
-            ? 'O endpoint da Evolution API não foi encontrado.<br>Verifique a URL da Evolution API em <b>Integrações → Evolution API</b>.<br>'
+            ? 'Endpoint não encontrado. Verifique a URL em <b>Integrações → Evolution API</b>.<br>'
               + (data.detail ? `<code style="font-size:9px;opacity:0.7">${String(data.detail).substring(0,120)}</code>` : '')
             : isReject
-              ? 'Verifique se a instância WhatsApp está ativa e conectada no Railway.<br>'
+              ? 'Verifique se a instância WhatsApp está ativa no Railway.<br>'
                 + (data.detail ? `<code style="font-size:9px;opacity:0.7">${String(data.detail).substring(0,100)}</code>` : '')
               : `${err}${data.detail ? '<br><code style="font-size:9px;opacity:0.7">' + String(data.detail).substring(0,120) + '</code>' : ''}`;
 
