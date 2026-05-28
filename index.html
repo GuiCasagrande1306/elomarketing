@@ -9,6 +9,7 @@
 <!-- Quill rich text editor (para campo de otimizações) -->
 <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2608,6 +2609,15 @@
 .monday-add-row{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:12px;color:var(--text3);cursor:pointer;border-top:1px solid var(--border);transition:background .1s,color .1s}
 .monday-add-row:hover{background:var(--bg3);color:var(--text)}
 .m-dropdown{position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9999;min-width:155px;overflow:hidden;animation:fadeIn .1s ease}
+
+/* ── Financeiro ───────────────────────────────────────────────── */
+.fin-period-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.fin-period-btn:hover{background:var(--bg3);color:var(--text1)}
+.fin-period-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.fin-badge-receita{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(52,211,153,.15);color:#34D399;border:1px solid rgba(52,211,153,.3)}
+.fin-badge-despesa{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(248,113,113,.15);color:#F87171;border:1px solid rgba(248,113,113,.3)}
+.fin-import-progress{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px}
+.fin-import-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
 .m-dd-item{display:flex;align-items:center;gap:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);transition:background .1s}
 .m-dd-item:hover{background:var(--bg3)}
 .m-dd-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
@@ -3036,6 +3046,9 @@
     </div>
     <div class="nav-item" onclick="navigate('consolidado', this)">
       <i class="ti ti-chart-pie"></i> Consolidado
+    </div>
+    <div class="nav-item" onclick="navigate('financeiro', this)">
+      <i class="ti ti-cash"></i> Financeiro
     </div>
     <div class="nav-item" onclick="navigate('tarefas', this)">
       <i class="ti ti-checkbox"></i> Tarefas
@@ -4085,6 +4098,153 @@
       </div>
     </div>
 
+  <!-- ===== FINANCEIRO ===== -->
+  <div class="page" id="page-financeiro">
+
+    <!-- ── Toolbar: filtros de período + importação ── -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">PERÍODO</span>
+        <button class="fin-period-btn active" data-period="month"  onclick="finSetPeriod('month',this)">Este Mês</button>
+        <button class="fin-period-btn"        data-period="30d"    onclick="finSetPeriod('30d',this)">Últimos 30 dias</button>
+        <button class="fin-period-btn"        data-period="year"   onclick="finSetPeriod('year',this)">Este Ano</button>
+        <button class="fin-period-btn"        data-period="custom" onclick="finSetPeriod('custom',this)">Personalizado</button>
+        <div id="fin-custom-range" style="display:none;align-items:center;gap:6px">
+          <input type="date" id="fin-date-start" class="form-input" style="padding:5px 8px;font-size:11px;width:130px" onchange="finLoad()">
+          <span style="color:var(--text3);font-size:11px">→</span>
+          <input type="date" id="fin-date-end"   class="form-input" style="padding:5px 8px;font-size:11px;width:130px" onchange="finLoad()">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openFinAddModal()">
+          <i class="ti ti-plus"></i> Nova Transação
+        </button>
+        <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0">
+          <i class="ti ti-file-spreadsheet"></i> Importar .csv/.xlsx
+          <input type="file" id="fin-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="finImportFile(this)">
+        </label>
+      </div>
+    </div>
+
+    <!-- ── KPI Cards ── -->
+    <div class="grid-3" style="margin-bottom:18px">
+      <div class="metric-card" style="--accent-color:#34D399">
+        <div class="metric-label"><i class="ti ti-trending-up"></i> Total de Entradas</div>
+        <div class="metric-value" id="fin-kpi-receitas" style="color:#34D399">R$ 0,00</div>
+        <div class="metric-sub" id="fin-kpi-receitas-sub">0 transações</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#F87171">
+        <div class="metric-label"><i class="ti ti-trending-down"></i> Total de Saídas</div>
+        <div class="metric-value" id="fin-kpi-despesas" style="color:#F87171">R$ 0,00</div>
+        <div class="metric-sub" id="fin-kpi-despesas-sub">0 transações</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#6C63FF">
+        <div class="metric-label"><i class="ti ti-scale"></i> Saldo / Lucro Líquido</div>
+        <div class="metric-value" id="fin-kpi-saldo">R$ 0,00</div>
+        <div class="metric-sub" id="fin-kpi-saldo-sub">receitas − despesas</div>
+      </div>
+    </div>
+
+    <!-- ── Gráfico de fluxo de caixa ── -->
+    <div class="card" style="margin-bottom:18px;padding:20px 24px">
+      <div class="card-header" style="margin-bottom:16px">
+        <div class="card-title"><i class="ti ti-chart-area-line" style="color:var(--accent)"></i> Fluxo de Caixa</div>
+        <div id="fin-chart-legend" style="display:flex;gap:14px;font-size:10px;color:var(--text3)">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#34D399;border-radius:2px;margin-right:4px"></span>Entradas</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#F87171;border-radius:2px;margin-right:4px"></span>Saídas</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#6C63FF;border-radius:2px;margin-right:4px"></span>Saldo</span>
+        </div>
+      </div>
+      <div id="fin-chart-wrap" style="width:100%;overflow-x:auto">
+        <svg id="fin-chart-svg" width="100%" height="220" style="display:block"></svg>
+      </div>
+    </div>
+
+    <!-- ── Extrato detalhado ── -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <div class="card-title"><i class="ti ti-list-details" style="color:var(--accent)"></i> Extrato Detalhado</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="text" id="fin-search" class="form-input" placeholder="🔍 Buscar..." style="padding:5px 10px;font-size:11px;width:180px" oninput="finRenderTable()">
+          <select id="fin-filter-tipo" class="form-select" style="padding:5px 8px;font-size:11px;width:110px" onchange="finRenderTable()">
+            <option value="">Todos</option>
+            <option value="receita">Receitas</option>
+            <option value="despesa">Despesas</option>
+          </select>
+          <select id="fin-filter-cat" class="form-select" style="padding:5px 8px;font-size:11px;width:130px" onchange="finRenderTable()">
+            <option value="">Todas as categorias</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="monday-table" id="fin-table">
+          <thead>
+            <tr style="background:var(--bg3)">
+              <th class="monday-th" style="width:100px">Data</th>
+              <th class="monday-th">Descrição</th>
+              <th class="monday-th" style="width:130px">Categoria</th>
+              <th class="monday-th" style="width:90px;text-align:center">Tipo</th>
+              <th class="monday-th" style="width:120px;text-align:right">Valor</th>
+              <th class="monday-th" style="width:48px"></th>
+            </tr>
+          </thead>
+          <tbody id="fin-tbody">
+            <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um período e clique em sincronizar</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="fin-table-footer" style="padding:10px 20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);display:none"></div>
+    </div>
+
+  </div><!-- /page-financeiro -->
+
+  <!-- ── Modal: Nova Transação ── -->
+  <div id="fin-add-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeFinAddModal()">
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ti ti-cash"></i> Nova Transação</h3>
+        <button class="modal-close" onclick="closeFinAddModal()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding:20px">
+        <div>
+          <label class="form-label">Data *</label>
+          <input type="date" id="fin-new-data" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Descrição *</label>
+          <input type="text" id="fin-new-desc" class="form-input" placeholder="Ex: Pagamento de software">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="form-label">Tipo *</label>
+            <select id="fin-new-tipo" class="form-select">
+              <option value="receita">Receita</option>
+              <option value="despesa">Despesa</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Categoria</label>
+            <select id="fin-new-cat" class="form-select">
+              <option>Fee Mensal</option><option>Softwares</option><option>Impostos</option>
+              <option>Infra</option><option>Marketing</option><option>Salários</option><option>Outros</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Valor (R$) *</label>
+          <input type="number" id="fin-new-valor" class="form-input" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div id="fin-add-error" style="display:none;color:#F87171;font-size:11px;padding:8px 12px;background:rgba(248,113,113,.1);border-radius:6px;border:1px solid rgba(248,113,113,.3)"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="closeFinAddModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="finSaveTransaction()" id="fin-add-save-btn">
+            <i class="ti ti-check"></i> Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== CRM COMERCIAL ===== -->
   <div class="page" id="page-crm">
     <!-- Summary metrics -->
@@ -4797,6 +4957,7 @@ const pageConfig = {
   leads:          { title: 'Leads / WhatsApp',     sub: 'Pipeline de conversas e qualificação' },
   relatorios:     { title: 'Relatórios',           sub: 'Geração de relatórios por cliente' },
   consolidado:    { title: 'Consolidado',          sub: 'Visão Super Admin — desempenho por agência parceira' },
+  financeiro:     { title: 'Financeiro',            sub: 'Fluxo de caixa, custos e entradas da agência' },
   tarefas:        { title: 'Tarefas',              sub: 'Pendências e recomendações automáticas' },
   alertas:        { title: 'Alertas',              sub: 'Notificações de performance' },
   integracoes:    { title: 'Integrações',          sub: 'APIs e conexões externas' },
@@ -4906,6 +5067,7 @@ function navigate(page, el) {
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
   if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
   if (page === 'crm')           _crmInitAndRender();
+  if (page === 'financeiro')    renderFinanceiro();
   // Ao abrir Tarefas: dados frescos + inicia polling de 10s
   if (page === 'tarefas') { loadTasks(); _populateTaskFilters(); _startTasksPolling(); }
   else { _stopTasksPolling(); }  // ao sair de Tarefas, cancela o polling
@@ -6992,7 +7154,7 @@ function setSyncStatus(status) {
 // Gestor de Tráfego: acesso completo às ferramentas de mídia, sem visão macro admin
 const _TRAFFIC_COLLAB_PAGES = [
   'dashboard','clientes','esteira','contas','campanhas','creatives',
-  'calendar','tarefas','alertas','integracoes'
+  'calendar','tarefas','alertas','integracoes','financeiro'
 ];
 // Designer: tarefas + integracoes (para conectar o próprio WhatsApp)
 const _DESIGNER_COLLAB_PAGES = ['tarefas','integracoes'];
@@ -7023,6 +7185,7 @@ const ALL_PAGES = [
   { key:'crm',           label:'CRM Comercial',          icon:'ti-layout-kanban'     },
   { key:'relatorios',    label:'Relatórios',             icon:'ti-file-analytics'    },
   { key:'consolidado',  label:'Consolidado',            icon:'ti-chart-pie'          },
+  { key:'financeiro',    label:'Financeiro',             icon:'ti-cash'              },
   { key:'tarefas',       label:'Tarefas',                icon:'ti-checkbox'          },
   { key:'alertas',       label:'Alertas',               icon:'ti-bell'              },
   { key:'integracoes',   label:'Integrações',            icon:'ti-plug'              },
@@ -17251,6 +17414,435 @@ document.addEventListener('change', function(e) {
   if (e.target && e.target.id === 'crm-f-coluna') {
     const resultGrp = document.getElementById('crm-f-resultado-group');
     if (resultGrp) resultGrp.style.display = e.target.value === 'fechado' ? '' : 'none';
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════
+   MÓDULO FINANCEIRO
+   ════════════════════════════════════════════════════════════════ */
+
+let _FIN_DATA       = [];   // transações carregadas no período atual
+let _FIN_PERIOD     = 'month'; // período ativo
+
+/* ── Utilitários de data ───────────────────────────────────────── */
+function _finDateRange() {
+  const now    = new Date();
+  const y      = now.getFullYear();
+  const m      = now.getMonth();
+
+  if (_FIN_PERIOD === 'month') {
+    return {
+      start: new Date(y, m, 1).toISOString().slice(0,10),
+      end:   new Date(y, m+1, 0).toISOString().slice(0,10),
+    };
+  }
+  if (_FIN_PERIOD === '30d') {
+    const s = new Date(); s.setDate(s.getDate() - 30);
+    return { start: s.toISOString().slice(0,10), end: now.toISOString().slice(0,10) };
+  }
+  if (_FIN_PERIOD === 'year') {
+    return { start: `${y}-01-01`, end: `${y}-12-31` };
+  }
+  if (_FIN_PERIOD === 'custom') {
+    return {
+      start: document.getElementById('fin-date-start')?.value || '',
+      end:   document.getElementById('fin-date-end')?.value   || '',
+    };
+  }
+  return { start: '', end: '' };
+}
+
+function _finFmt(v) {
+  return 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function _finFmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + (iso.length === 10 ? 'T00:00:00' : ''));
+  return d.toLocaleDateString('pt-BR');
+}
+
+/* ── Período buttons ───────────────────────────────────────────── */
+function finSetPeriod(period, btn) {
+  _FIN_PERIOD = period;
+  document.querySelectorAll('.fin-period-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const cr = document.getElementById('fin-custom-range');
+  if (cr) cr.style.display = period === 'custom' ? 'flex' : 'none';
+  if (period !== 'custom') finLoad();
+}
+
+/* ── Carrega transações do servidor ────────────────────────────── */
+async function finLoad() {
+  const { start, end } = _finDateRange();
+  if (!start || !end) return;
+
+  const tbody = document.getElementById('fin-tbody');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;font-size:16px"></i><br>Carregando...</td></tr>`;
+
+  const r = await _apiFetch(`/api/finance/transactions?startDate=${start}&endDate=${end}`);
+  if (!r || r._coldStart || !Array.isArray(r)) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">⚠️ Erro ao carregar — servidor iniciando. Tente novamente em instantes.</td></tr>`;
+    return;
+  }
+
+  _FIN_DATA = r;
+  finRenderKPIs();
+  finRenderChart();
+  finRenderTable();
+  finPopulateCatFilter();
+}
+
+/* ── KPI cards ─────────────────────────────────────────────────── */
+function finRenderKPIs() {
+  const receitas  = _FIN_DATA.filter(t => t.tipo === 'receita');
+  const despesas  = _FIN_DATA.filter(t => t.tipo === 'despesa');
+  const totRec    = receitas.reduce((s, t) => s + (t.valor||0), 0);
+  const totDesp   = despesas.reduce((s, t) => s + (t.valor||0), 0);
+  const saldo     = totRec - totDesp;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('fin-kpi-receitas',     _finFmt(totRec));
+  set('fin-kpi-receitas-sub', `${receitas.length} transaç${receitas.length!==1?'ões':'ão'}`);
+  set('fin-kpi-despesas',     _finFmt(totDesp));
+  set('fin-kpi-despesas-sub', `${despesas.length} transaç${despesas.length!==1?'ões':'ão'}`);
+  set('fin-kpi-saldo',        (saldo < 0 ? '− ' : '') + _finFmt(saldo));
+
+  const saldoEl = document.getElementById('fin-kpi-saldo');
+  if (saldoEl) saldoEl.style.color = saldo >= 0 ? '#34D399' : '#F87171';
+}
+
+/* ── Gráfico SVG de área ───────────────────────────────────────── */
+function finRenderChart() {
+  const svg = document.getElementById('fin-chart-svg');
+  if (!svg) return;
+
+  // Agrupa por mês (YYYY-MM)
+  const byMonth = {};
+  _FIN_DATA.forEach(t => {
+    const key = (t.data||'').slice(0,7);
+    if (!key) return;
+    if (!byMonth[key]) byMonth[key] = { rec:0, desp:0 };
+    if (t.tipo === 'receita') byMonth[key].rec  += t.valor||0;
+    else                      byMonth[key].desp += t.valor||0;
+  });
+
+  const labels  = Object.keys(byMonth).sort();
+  if (!labels.length) {
+    svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text3)" font-size="12">Sem dados no período</text>`;
+    return;
+  }
+
+  const W = svg.parentElement?.clientWidth || 700;
+  const H = 220;
+  const PL=48, PR=16, PT=16, PB=36;
+  const cW = W - PL - PR;
+  const cH = H - PT - PB;
+
+  const allVals = labels.flatMap(k => [byMonth[k].rec, byMonth[k].desp, byMonth[k].rec - byMonth[k].desp]);
+  const maxV = Math.max(...allVals, 1);
+
+  const xs = labels.map((_, i) => PL + (i / Math.max(labels.length-1, 1)) * cW);
+  const yRec  = labels.map(k => PT + cH - (byMonth[k].rec  / maxV) * cH);
+  const yDesp = labels.map(k => PT + cH - (byMonth[k].desp / maxV) * cH);
+  const ySald = labels.map(k => PT + cH - (Math.max(byMonth[k].rec - byMonth[k].desp, 0) / maxV) * cH);
+
+  const polyLine = (xs, ys, color, fill=false) => {
+    const pts = xs.map((x,i) => `${x},${ys[i]}`).join(' ');
+    if (fill) {
+      const last = xs.length-1;
+      const fillPts = pts + ` ${xs[last]},${PT+cH} ${xs[0]},${PT+cH}`;
+      return `<polygon points="${fillPts}" fill="${color}" opacity="0.12"/>
+              <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+    }
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+  };
+
+  // Linhas de grade
+  const gridLines = [0,.25,.5,.75,1].map(p => {
+    const y = PT + cH - p * cH;
+    const v = (maxV * p).toLocaleString('pt-BR', {maximumFractionDigits:0});
+    return `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
+            <text x="${PL-4}" y="${y+4}" text-anchor="end" fill="var(--text3)" font-size="9">${v}</text>`;
+  }).join('');
+
+  // Labels do eixo X
+  const xLabels = labels.map((lbl, i) => {
+    const parts  = lbl.split('-');
+    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const txt    = `${months[parseInt(parts[1])-1]}/${parts[0].slice(2)}`;
+    return `<text x="${xs[i]}" y="${H-6}" text-anchor="middle" fill="var(--text3)" font-size="10">${txt}</text>`;
+  }).join('');
+
+  // Círculos nos pontos
+  const dots = (xs, ys, color) => xs.map((x,i) =>
+    `<circle cx="${x}" cy="${ys[i]}" r="3" fill="${color}"/>`
+  ).join('');
+
+  svg.setAttribute('width', W);
+  svg.innerHTML = gridLines
+    + polyLine(xs, ySald, '#6C63FF', true)
+    + polyLine(xs, yRec,  '#34D399', true)
+    + polyLine(xs, yDesp, '#F87171', true)
+    + dots(xs, yRec,  '#34D399')
+    + dots(xs, yDesp, '#F87171')
+    + dots(xs, ySald, '#6C63FF')
+    + xLabels;
+}
+
+/* ── Tabela de extrato ─────────────────────────────────────────── */
+function finPopulateCatFilter() {
+  const sel = document.getElementById('fin-filter-cat'); if (!sel) return;
+  const prev = sel.value;
+  const cats = [...new Set(_FIN_DATA.map(t => t.categoria).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Todas as categorias</option>'
+    + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  if (prev) sel.value = prev;
+}
+
+function finRenderTable() {
+  const tbody  = document.getElementById('fin-tbody'); if (!tbody) return;
+  const footer = document.getElementById('fin-table-footer');
+  const search = (document.getElementById('fin-search')?.value || '').toLowerCase();
+  const tipo   = document.getElementById('fin-filter-tipo')?.value || '';
+  const cat    = document.getElementById('fin-filter-cat')?.value || '';
+
+  let rows = _FIN_DATA
+    .filter(t => (!tipo || t.tipo === tipo) && (!cat || t.categoria === cat))
+    .filter(t => !search || t.descricao?.toLowerCase().includes(search) || t.categoria?.toLowerCase().includes(search));
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhuma transação encontrada</td></tr>`;
+    if (footer) footer.style.display = 'none';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(t => {
+    const tipoCls  = t.tipo === 'receita' ? 'fin-badge-receita' : 'fin-badge-despesa';
+    const tipoLabel = t.tipo === 'receita' ? '↑ Receita' : '↓ Despesa';
+    const valColor  = t.tipo === 'receita' ? '#34D399' : '#F87171';
+    const valSign   = t.tipo === 'receita' ? '+' : '−';
+    const id = t._id || '';
+    return `<tr class="monday-tr">
+      <td class="monday-td" style="font-size:11px;white-space:nowrap">${_finFmtDate(t.data)}</td>
+      <td class="monday-td" style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.descricao||''}">${t.descricao||'—'}</td>
+      <td class="monday-td"><span style="font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:4px">${t.categoria||'—'}</span></td>
+      <td class="monday-td" style="text-align:center"><span class="${tipoCls}">${tipoLabel}</span></td>
+      <td class="monday-td" style="text-align:right;font-size:12px;font-weight:700;color:${valColor};white-space:nowrap">${valSign} ${_finFmt(t.valor)}</td>
+      <td class="monday-td" style="text-align:center">
+        <button onclick="finDeleteTx('${id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px" title="Excluir"><i class="ti ti-trash" style="font-size:11px"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  if (footer) {
+    footer.style.display = '';
+    footer.textContent = `${rows.length} transaç${rows.length!==1?'ões':'ão'} encontrada${rows.length!==1?'s':''}`;
+  }
+}
+
+/* ── Delete transação ──────────────────────────────────────────── */
+async function finDeleteTx(id) {
+  if (!id || !confirm('Excluir esta transação?')) return;
+  const r = await _apiFetch(`/api/finance/transactions/${id}`, { method: 'DELETE' });
+  if (r && r.ok) {
+    _FIN_DATA = _FIN_DATA.filter(t => t._id !== id);
+    finRenderKPIs(); finRenderChart(); finRenderTable();
+    showNotification('Transação excluída.', 'ok');
+  } else {
+    showNotification('Erro ao excluir transação.', 'error');
+  }
+}
+
+/* ── Modal nova transação ──────────────────────────────────────── */
+function openFinAddModal() {
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('fin-new-data').value  = today;
+  document.getElementById('fin-new-desc').value  = '';
+  document.getElementById('fin-new-tipo').value  = 'receita';
+  document.getElementById('fin-new-cat').value   = 'Fee Mensal';
+  document.getElementById('fin-new-valor').value = '';
+  const err = document.getElementById('fin-add-error');
+  if (err) err.style.display = 'none';
+  document.getElementById('fin-add-modal').style.display = 'flex';
+}
+function closeFinAddModal() {
+  document.getElementById('fin-add-modal').style.display = 'none';
+}
+
+async function finSaveTransaction() {
+  const data   = document.getElementById('fin-new-data')?.value;
+  const desc   = document.getElementById('fin-new-desc')?.value?.trim();
+  const tipo   = document.getElementById('fin-new-tipo')?.value;
+  const cat    = document.getElementById('fin-new-cat')?.value;
+  const valor  = parseFloat(document.getElementById('fin-new-valor')?.value);
+  const errEl  = document.getElementById('fin-add-error');
+  const saveBtn = document.getElementById('fin-add-save-btn');
+
+  if (!data || !desc || !tipo || isNaN(valor) || valor <= 0) {
+    if (errEl) { errEl.textContent = 'Preencha todos os campos obrigatórios com valores válidos.'; errEl.style.display = ''; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando...'; }
+
+  const r = await _apiFetch('/api/finance/transactions', {
+    method: 'POST',
+    body: JSON.stringify({ data, descricao: desc, categoria: cat, tipo, valor }),
+  });
+
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="ti ti-check"></i> Salvar'; }
+
+  if (r && !r._coldStart && r.ok) {
+    closeFinAddModal();
+    showNotification('Transação salva!', 'ok');
+    finLoad(); // recarrega
+  } else {
+    if (errEl) { errEl.textContent = r?.error || 'Erro ao salvar. Tente novamente.'; errEl.style.display = ''; }
+  }
+}
+
+/* ── Importação CSV / XLSX ─────────────────────────────────────── */
+async function finImportFile(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  input.value = ''; // reset para permitir re-import do mesmo arquivo
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  showNotification(`📂 Lendo ${file.name}…`, 'ok');
+
+  try {
+    let rows = [];
+    if (ext === 'csv') {
+      rows = await _finParseCSV(file);
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      rows = await _finParseXLSX(file);
+    } else {
+      showNotification('Formato não suportado. Use .csv ou .xlsx', 'error'); return;
+    }
+
+    if (!rows.length) { showNotification('Nenhuma linha válida encontrada no arquivo.', 'error'); return; }
+
+    showNotification(`🔄 Enviando ${rows.length} transações para o servidor…`, 'ok');
+    const r = await _apiFetch('/api/finance/import', {
+      method: 'POST',
+      body: JSON.stringify({ transactions: rows }),
+    });
+
+    if (r && !r._coldStart && r.ok) {
+      showNotification(`✅ Importação concluída: ${r.inserted} de ${r.total} transações inseridas.`, 'ok');
+      finLoad();
+    } else {
+      showNotification('❌ Erro na importação: ' + (r?.error || 'resposta inválida do servidor'), 'error');
+    }
+  } catch(e) {
+    showNotification('❌ Falha ao processar arquivo: ' + e.message, 'error');
+  }
+}
+
+function _finNormRow(row) {
+  // Tenta mapear colunas com nomes variados (pt-BR e en)
+  const get = (...keys) => {
+    for (const k of keys) {
+      const v = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
+      if (v !== undefined && v !== null && v !== '') return String(v).trim();
+    }
+    return '';
+  };
+  const rawData  = get('data','date','Data','Date','DATA');
+  const rawValor = get('valor','value','amount','Valor','Amount');
+  const tipo     = (get('tipo','type','Tipo','Type') || '').toLowerCase().includes('rec') ? 'receita' : 'despesa';
+  const cat      = get('categoria','category','Categoria','Category') || 'Outros';
+  const desc     = get('descricao','descricão','description','Descrição','Descricao') || get('memo','historico') || 'Sem descrição';
+
+  // Normaliza data
+  let dataISO = '';
+  if (rawData) {
+    const d = new Date(rawData);
+    if (!isNaN(d)) dataISO = d.toISOString().slice(0,10);
+    else {
+      // Tenta DD/MM/YYYY
+      const parts = rawData.split(/[\/\-\.]/);
+      if (parts.length === 3) {
+        const [d1, m1, y1] = parts[0].length === 4
+          ? [parts[2], parts[1], parts[0]] // YYYY-MM-DD
+          : [parts[0], parts[1], parts[2]]; // DD/MM/YYYY
+        const built = new Date(`${y1}-${String(m1).padStart(2,'0')}-${String(d1).padStart(2,'0')}`);
+        if (!isNaN(built)) dataISO = built.toISOString().slice(0,10);
+      }
+    }
+  }
+  if (!dataISO) return null; // descarta linha sem data válida
+
+  const valor = parseFloat(String(rawValor).replace(/[R$\s.]/g,'').replace(',','.'));
+  if (isNaN(valor) || valor <= 0) return null;
+
+  return { data: dataISO, descricao: desc, categoria: cat, tipo, valor };
+}
+
+async function _finParseCSV(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const text  = e.target.result;
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) { resolve([]); return; }
+        const sep = lines[0].includes(';') ? ';' : ',';
+        const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g,''));
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(sep).map(v => v.trim().replace(/^"|"$/g,''));
+          const obj  = {};
+          headers.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+          const norm = _finNormRow(obj);
+          if (norm) rows.push(norm);
+        }
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo CSV'));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+async function _finParseXLSX(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX === 'undefined') { reject(new Error('Biblioteca XLSX não carregada')); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        const rows = data.map(_finNormRow).filter(Boolean);
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo XLSX'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ── Inicializa a página Financeiro ────────────────────────────── */
+function renderFinanceiro() {
+  // Define o período padrão (este mês) se ainda não foi inicializado
+  const { start, end } = _finDateRange();
+  // Preenche os inputs de data caso custom
+  const ds = document.getElementById('fin-date-start');
+  const de = document.getElementById('fin-date-end');
+  if (ds && !ds.value) ds.value = start;
+  if (de && !de.value) de.value = end;
+  // Re-aplica CSS active no botão de período correto
+  document.querySelectorAll('.fin-period-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.period === _FIN_PERIOD);
+  });
+  finLoad();
+}
+
+/* ── Redesenha o gráfico ao redimensionar a janela ─────────────── */
+window.addEventListener('resize', () => {
+  if (document.getElementById('page-financeiro')?.classList.contains('active') && _FIN_DATA.length) {
+    finRenderChart();
   }
 });
 </script>
