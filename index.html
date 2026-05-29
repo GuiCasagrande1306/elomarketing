@@ -7230,7 +7230,7 @@ function setSyncStatus(status) {
 // Gestor de Tráfego: acesso completo às ferramentas de mídia, sem visão macro admin
 const _TRAFFIC_COLLAB_PAGES = [
   'dashboard','clientes','esteira','contas','campanhas','creatives',
-  'calendar','tarefas','alertas','integracoes','financeiro'
+  'calendar','tarefas','alertas','integracoes','financeiro','relatorios'
 ];
 // Designer: tarefas + integracoes (para conectar o próprio WhatsApp)
 const _DESIGNER_COLLAB_PAGES = ['tarefas','integracoes'];
@@ -17027,8 +17027,12 @@ async function loadUserProfilesFromAPI() {
         changed   = true;
       }
       // Permissões de página (colaboradores)
+      // União com defaults do código: garante que novas páginas adicionadas
+      // ao código cheguem a usuários mesmo que o DB tenha um registro antigo.
       if (!u.isAdmin && Array.isArray(p.allowedPages)) {
-        u.allowedPages = p.allowedPages;
+        const codePages   = u.allowedPages || [];
+        const serverPages = p.allowedPages;
+        u.allowedPages = [...new Set([...codePages, ...serverPages])];
         changed = true;
       }
       // Espelha no localStorage local para modo offline
