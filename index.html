@@ -6942,31 +6942,74 @@ async function syncTasksToDB() {
   );
 }
 
-function updateTaskInDB(id, updates, _attempt = 1) {
+/**
+ * Envia PUT /api/tasks/:id para persistir updates no MongoDB.
+ *
+ * @param {string}   id             — task.id (custom UUID, não o _id do Mongo)
+ * @param {object}   updates        — campos a atualizar
+ * @param {number}   _attempt       — uso interno para retry (começa em 1)
+ * @param {function} _onPermanentFail — callback chamado quando todas as tentativas falham
+ *
+ * Estratégia de retry:
+ *   • null (rede caiu) ou _coldStart (Render dormindo): re-tenta até 4×, back-off 7s/14s/21s
+ *   • !r.ok (500 / 404 notFound): não re-tenta — executa _onPermanentFail imediatamente
+ *   • 404 notFound: tarefa não existe no banco → sobe via POST upsert e depois re-tenta o PUT
+ */
+function updateTaskInDB(id, updates, _attempt = 1, _onPermanentFail = null) {
   if (!currentUser) return;
   _apiFetch(`/api/tasks/${id}`, {
     method: 'PUT',
     body:   JSON.stringify({ ...updates, updated_by: currentUser.id })
   }).then(r => {
-    if (!r) {
-      console.error('[Tasks] PUT falhou (rede):', id);
-    } else if (r._coldStart) {
-      // Render ainda acordando — re-tenta com back-off (máx. 4 tentativas)
+    // ── Sem resposta ou cold start: Render dormindo → re-tenta ─────────────
+    if (!r || r._coldStart) {
       if (_attempt < 4) {
         const delay = _attempt * 7000; // 7s → 14s → 21s
-        console.warn(`[Tasks] PUT cold start — tentativa ${_attempt}/4, retry em ${delay/1000}s:`, id);
-        setTimeout(() => updateTaskInDB(id, updates, _attempt + 1), delay);
+        console.warn(`[Tasks] PUT sem resposta — tentativa ${_attempt}/4, retry em ${delay/1000}s:`, id);
+        setTimeout(() => updateTaskInDB(id, updates, _attempt + 1, _onPermanentFail), delay);
       } else {
-        console.error('[Tasks] PUT desistiu após 4 tentativas (cold start persistente):', id);
+        console.error('[Tasks] PUT desistiu após 4 tentativas:', id);
+        showNotification('⚠️ Falha ao salvar no servidor. Verifique sua conexão.', 'warn');
+        if (_onPermanentFail) _onPermanentFail();
       }
-    } else if (!r.ok) {
-      console.error('[Tasks] PUT erro servidor:', id, r);
-    } else {
-      // ✅ Confirmado — limpa marcador de atualização local pendente
-      const t = TASKS_DATA.find(x => x.id === id);
-      if (t && t._localUpdatedAt) { delete t._localUpdatedAt; saveTasks(); }
-      console.log('[Tasks] tarefa atualizada no MongoDB:', id);
+      return;
     }
+
+    // ── 404 notFound: tarefa ainda não existe no banco → cria via POST e re-tenta ─
+    if (r.notFound) {
+      console.warn('[Tasks] PUT 404 — tarefa não existe no banco, subindo via POST:', id);
+      const task = TASKS_DATA.find(x => x.id === id);
+      if (task) {
+        _apiFetch('/api/tasks', {
+          method: 'POST',
+          body:   JSON.stringify({ ...task, ...updates, updated_by: currentUser.id }),
+        }).then(r2 => {
+          if (r2?.ok) {
+            console.log('[Tasks] POST upsert OK após PUT 404 — re-tentando PUT:', id);
+            updateTaskInDB(id, updates, 1, _onPermanentFail);
+          } else {
+            console.error('[Tasks] POST upsert falhou após PUT 404:', id, r2);
+            if (_onPermanentFail) _onPermanentFail();
+          }
+        }).catch(() => { if (_onPermanentFail) _onPermanentFail(); });
+      } else {
+        if (_onPermanentFail) _onPermanentFail();
+      }
+      return;
+    }
+
+    // ── Erro de servidor (500, etc.) ─────────────────────────────────────────
+    if (!r.ok) {
+      console.error('[Tasks] PUT erro servidor:', id, r);
+      showNotification('⚠️ Falha ao salvar status no servidor. Tente novamente.', 'warn');
+      if (_onPermanentFail) _onPermanentFail();
+      return;
+    }
+
+    // ✅ Confirmado — limpa marcador de atualização local pendente
+    const t = TASKS_DATA.find(x => x.id === id);
+    if (t && t._localUpdatedAt) { delete t._localUpdatedAt; saveTasks(); }
+    console.log('[Tasks] ✅ tarefa atualizada no MongoDB:', id);
   });
   // Supabase (legado — mantido se configurado)
   if (db && currentUser) {
@@ -16776,6 +16819,7 @@ function openPriorityDD(taskId, el) {
 function setMondayStatus(taskId, status) {
   const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
   const prevStatus = normalizeTaskStatus(t.status);
+  const prevGroup  = t.group;
   t.status = status;
   const patch = { status };
 
@@ -16804,7 +16848,19 @@ function setMondayStatus(taskId, status) {
   }
 
   t._localUpdatedAt = Date.now(); // marca atualização local pendente
-  updateTaskInDB(taskId, patch);
+
+  // Rollback visual: se todas as tentativas no servidor falharem, desfaz a mudança
+  const _rollback = () => {
+    const task = TASKS_DATA.find(x => x.id === taskId);
+    if (!task) return;
+    task.status = prevStatus;
+    task.group  = prevGroup;
+    delete task._localUpdatedAt;
+    saveTasks(); renderTasksGrid(); updateNavBadges();
+    showNotification(`❌ Falha ao salvar no servidor — status revertido para "${prevStatus}". Verifique sua conexão.`, 'error');
+  };
+
+  updateTaskInDB(taskId, patch, 1, _rollback);
   saveTasks(); renderTasksGrid(); updateNavBadges();
   showNotification(`Status → ${status}`, 'ok');
 }
@@ -17136,6 +17192,7 @@ function _togglePermChip(chip) {
 
 /**
  * Persiste as permissões de um colaborador no USERS[] + localStorage + API.
+ * Retry automático (até 3×, back-off 6s/12s) quando o Render está em cold start.
  */
 function saveTeamPermissions(userId) {
   const chips = document.querySelectorAll(`[data-user="${userId}"]`);
@@ -17147,29 +17204,44 @@ function saveTeamPermissions(userId) {
   const u = USERS.find(u => u.id === userId);
   if (u) u.allowedPages = allowedPages;
 
-  // Persiste no localStorage (offline backup)
+  // Persiste no localStorage (offline backup imediato)
   const profiles = JSON.parse(localStorage.getItem('tp_user_profiles') || '{}');
   profiles[userId] = { ...(profiles[userId] || {}), allowedPages };
   localStorage.setItem('tp_user_profiles', JSON.stringify(profiles));
 
-  // Desativa botão Salvar imediatamente
+  // Desativa botão Salvar enquanto envia
   const saveBtn = document.getElementById(`perm-save-${userId}`);
   if (saveBtn) { saveBtn.style.opacity = '0.4'; saveBtn.style.pointerEvents = 'none'; }
 
-  // Persiste no servidor — feedback async
-  _apiFetch('/api/users/' + userId, {
-    method: 'PATCH',
-    body: JSON.stringify({ allowedPages })
-  }).then(resp => {
-    showNotification(
-      resp?.ok
-        ? `✅ Permissões de ${u?.name} salvas com sucesso.`
-        : `Permissões de ${u?.name} salvas localmente (erro no servidor).`,
-      resp?.ok ? 'success' : 'warn'
-    );
-  }).catch(() => {
-    showNotification(`Permissões de ${u?.name} salvas localmente (offline).`, 'warn');
-  });
+  // Persiste no servidor com retry automático em cold start (Render free tier)
+  function _sendPatch(attempt) {
+    _apiFetch('/api/users/' + userId, {
+      method: 'PATCH',
+      body:   JSON.stringify({ allowedPages })
+    }).then(resp => {
+      // Cold start: Render ainda dormindo — re-tenta até 3×
+      if (resp?._coldStart && attempt < 3) {
+        const delay = attempt * 6000; // 6s → 12s
+        console.warn(`[Users] PATCH cold start — tentativa ${attempt}/3, retry em ${delay/1000}s:`, userId);
+        setTimeout(() => _sendPatch(attempt + 1), delay);
+        return;
+      }
+      const nome = u?.name || userId;
+      if (resp?.ok) {
+        showNotification(`✅ Permissões de ${nome} salvas com sucesso.`, 'success');
+        // Mantém botão desativado (sem mudanças pendentes)
+      } else {
+        showNotification(`⚠️ Permissões de ${nome} salvas localmente (erro no servidor). Tente novamente.`, 'warn');
+        // Re-habilita o botão para nova tentativa manual
+        if (saveBtn) { saveBtn.style.opacity = ''; saveBtn.style.pointerEvents = ''; }
+      }
+    }).catch(() => {
+      const nome = u?.name || userId;
+      showNotification(`⚠️ Permissões de ${nome} salvas localmente (sem conexão).`, 'warn');
+      if (saveBtn) { saveBtn.style.opacity = ''; saveBtn.style.pointerEvents = ''; }
+    });
+  }
+  _sendPatch(1);
 }
 
 function _applyMetaGa4EditAccess() {
