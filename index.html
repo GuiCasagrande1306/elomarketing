@@ -566,6 +566,47 @@
     outline: none;
   }
 
+  /* ── Searchable Client Picker (Relatórios) ── */
+  .rep-client-picker { position: relative; }
+  .rep-client-trigger {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 9px 12px; cursor: pointer;
+    color: var(--text); font-family: var(--font); font-size: 13px;
+    transition: var(--trans); user-select: none; box-sizing: border-box;
+  }
+  .rep-client-trigger:hover { border-color: var(--border); }
+  .rep-client-trigger.open  { border-color: var(--accent); }
+  .rep-client-trigger .rc-chev { transition: transform 0.15s; font-size: 12px; color: var(--text3); }
+  .rep-client-trigger.open .rc-chev { transform: rotate(180deg); }
+  .rep-client-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35); overflow: hidden;
+  }
+  .rep-client-search-wrap {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-bottom: 1px solid var(--border2);
+  }
+  .rep-client-search-wrap i { color: var(--text3); font-size: 13px; flex-shrink: 0; }
+  .rep-client-search-wrap input {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text); font-family: var(--font); font-size: 13px;
+  }
+  .rep-client-search-wrap input::placeholder { color: var(--text3); }
+  .rep-client-list { max-height: 220px; overflow-y: auto; }
+  .rep-client-list::-webkit-scrollbar { width: 4px; }
+  .rep-client-list::-webkit-scrollbar-track { background: transparent; }
+  .rep-client-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .rep-client-item {
+    padding: 9px 12px; font-size: 13px; color: var(--text);
+    cursor: pointer; transition: background 0.1s;
+  }
+  .rep-client-item:hover  { background: var(--bg4); }
+  .rep-client-item.rc-selected { color: var(--accent); font-weight: 500; }
+  .rep-client-empty { padding: 12px; font-size: 13px; color: var(--text3); text-align: center; }
+
   .section-header {
     display: flex;
     align-items: center;
@@ -2762,6 +2803,8 @@
   .btn-sm     { min-height: 40px; font-size: 12px; }
   .form-input,
   .form-select { min-height: 44px; font-size: 16px; /* evita zoom no iOS */ }
+  .rep-client-trigger { min-height: 44px; font-size: 16px; }
+  .rep-client-search-wrap input { font-size: 16px; } /* evita zoom no iOS */
 
   /* ── Grids inline com 2 colunas → 1 coluna no mobile ────────── */
   [style*="grid-template-columns: 1fr 1fr"],
@@ -3630,7 +3673,25 @@
             <div class="grid-2">
               <div class="form-group">
                 <label class="form-label">Cliente</label>
-                <select class="form-select" id="rep-client" onchange="updateReportPreview()"><option value="">Selecione um cliente...</option></select>
+                <!-- hidden value lido por todo o JS existente -->
+                <input type="hidden" id="rep-client">
+                <div class="rep-client-picker" id="rep-client-picker">
+                  <div class="rep-client-trigger" id="rep-client-trigger" onclick="_repClientToggle()">
+                    <span id="rep-client-display" style="color:var(--text3)">Selecione um cliente...</span>
+                    <i class="ti ti-chevron-down rc-chev"></i>
+                  </div>
+                  <div class="rep-client-panel" id="rep-client-panel" style="display:none">
+                    <div class="rep-client-search-wrap">
+                      <i class="ti ti-search"></i>
+                      <input type="text" id="rep-client-search"
+                             placeholder="Digitar nome do cliente..."
+                             oninput="_repClientFilter(this.value)"
+                             onkeydown="if(event.key==='Escape')_repClientClose()"
+                             autocomplete="off">
+                    </div>
+                    <div class="rep-client-list" id="rep-client-list"></div>
+                  </div>
+                </div>
               </div>
               <div class="form-group">
                 <label class="form-label">Período</label>
@@ -11131,16 +11192,84 @@ function _repPeriodStr() {
   return `${drFmtShort(DR.from)} — ${drFmtShort(DR.to)}`;
 }
 
-function populateReportSelects() {
-  const sel = document.getElementById('rep-client');
-  if (!sel) return;
+/* ════════════════════════════════════════════════════════════════
+   REP CLIENT PICKER — dropdown com busca para a tela de Relatórios
+   ────────────────────────────────────────────────────────────────
+   A hidden <input id="rep-client"> mantém o valor para que todo o JS
+   existente leia .value sem alterações. O picker customizado atualiza
+   esse input ao selecionar e chama updateReportPreview().
+════════════════════════════════════════════════════════════════ */
+let _repClientData = [];
 
-  /* ── Clientes: Relatórios mostra TODOS os clientes para qualquer usuário
-     com acesso à página (Gestor de Tráfego gera relatórios de qualquer cliente
-     da agência — leitura somente, igual ao admin). ── */
-  const _repClients = CLIENTS.list;
-  sel.innerHTML = '<option value="">Selecione um cliente...</option>' +
-    _repClients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+function _repClientRenderList(filter) {
+  const q     = (filter || '').trim().toLowerCase();
+  const items = q ? _repClientData.filter(c => c.name.toLowerCase().includes(q)) : _repClientData;
+  const list  = document.getElementById('rep-client-list');
+  if (!list) return;
+  const selId = document.getElementById('rep-client')?.value || '';
+  if (items.length === 0) {
+    list.innerHTML = '<div class="rep-client-empty">Nenhum cliente localizado.</div>';
+    return;
+  }
+  list.innerHTML = items.map(c => {
+    const cls = c.id === selId ? ' rc-selected' : '';
+    const nm  = c.name.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return `<div class="rep-client-item${cls}" onclick="_repClientSelect('${c.id}','${nm.replace(/'/g,"\\'")}')">${nm}</div>`;
+  }).join('');
+}
+
+function _repClientOutsideClick(e) {
+  const picker = document.getElementById('rep-client-picker');
+  if (picker && !picker.contains(e.target)) _repClientClose();
+}
+
+function _repClientToggle() {
+  const panel = document.getElementById('rep-client-panel');
+  if (!panel) return;
+  if (panel.style.display !== 'none') { _repClientClose(); return; }
+  panel.style.display = 'block';
+  document.getElementById('rep-client-trigger')?.classList.add('open');
+  const srch = document.getElementById('rep-client-search');
+  if (srch) { srch.value = ''; srch.focus(); }
+  _repClientRenderList('');
+  setTimeout(() => document.addEventListener('click', _repClientOutsideClick), 0);
+}
+
+function _repClientClose() {
+  const panel = document.getElementById('rep-client-panel');
+  if (panel) panel.style.display = 'none';
+  document.getElementById('rep-client-trigger')?.classList.remove('open');
+  document.removeEventListener('click', _repClientOutsideClick);
+}
+
+function _repClientFilter(val) {
+  _repClientRenderList(val);
+}
+
+function _repClientSelect(id, name) {
+  const hidden  = document.getElementById('rep-client');
+  const display = document.getElementById('rep-client-display');
+  if (hidden)  hidden.value   = id;
+  if (display) {
+    display.textContent = id ? name : 'Selecione um cliente...';
+    display.style.color = id ? 'var(--text)' : 'var(--text3)';
+  }
+  _repClientClose();
+  updateReportPreview();
+}
+
+function populateReportSelects() {
+  /* ── Clientes: preenche o picker customizado com TODOS os clientes.
+     Relatórios mostra todos para qualquer usuário com acesso à página
+     (Gestor de Tráfego tem leitura igual ao admin). ── */
+  if (!document.getElementById('rep-client-picker')) return;
+
+  _repClientData = CLIENTS.list;
+  // Re-renderiza a lista se o painel estiver aberto
+  const _rcPanel = document.getElementById('rep-client-panel');
+  if (_rcPanel && _rcPanel.style.display !== 'none') {
+    _repClientRenderList(document.getElementById('rep-client-search')?.value || '');
+  }
 
   /* ── Templates (builtins + criados pelo usuário) ── */
   const tplSel = document.getElementById('rep-template');
