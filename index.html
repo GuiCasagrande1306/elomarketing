@@ -3796,9 +3796,12 @@
           <span id="bal-summary-moderate" style="display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:var(--amber);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600"></span>
           <span id="bal-summary-ok"       style="display:inline-flex;align-items:center;gap:5px;background:rgba(34,211,160,0.10);border:1px solid rgba(34,211,160,0.25);color:var(--green);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600"></span>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="toggleBalSimMode()" id="bal-sim-toggle">
             <i class="ti ti-test-pipe"></i> Modo Simulação
+          </button>
+          <button class="btn btn-ghost btn-sm" id="bal-sync-btn" onclick="forceSyncBalances()" title="Força re-fetch dos saldos na Meta API e persiste no banco">
+            <i class="ti ti-rotate"></i> Sincronizar Saldos
           </button>
           <button class="btn btn-primary btn-sm" onclick="renderBalanceMonitor()">
             <i class="ti ti-refresh"></i> Atualizar
@@ -12087,15 +12090,15 @@ const CLIENT_DATA_PATCHES = {
     // goal.realized = faturamento real
     _goalRealized:      8002.78,
   },
-  'cl-4': {  // Istituto di Moda Burgo — pré-pago (PIX/Boleto), saldo e gasto auditados
+  'cl-4': {  // Istituto di Moda Burgo — pré-pago (PIX/Boleto)
     metodo_pagamento:   'pre_pago',
-    meta_balance:       1673.85,   // saldo Meta Ads auditado
-    meta_spend7d:       48.92,     // gasto últimos 7 dias auditado
+    // meta_balance e meta_spend7d removidos dos patches: são campos voláteis
+    // (mudam diariamente). Use o botão "Sincronizar Saldos" para atualizar.
   },
-  'cl-5': {  // Estação Elite Barbearia — pré-pago (PIX/Boleto), saldo e gasto auditados
+  'cl-5': {  // Estação Elite Barbearia — pré-pago (PIX/Boleto)
     metodo_pagamento:   'pre_pago',
-    meta_balance:       220,       // saldo Meta Ads auditado
-    meta_spend7d:       13.33,     // gasto últimos 7 dias auditado
+    // meta_balance e meta_spend7d removidos dos patches: são campos voláteis.
+    // O valor stale R$220 estava mascarando o saldo real (caiu para R$26,10).
   },
 };
 
@@ -12203,18 +12206,18 @@ function detectPaymentMethodFromData(accountId, fsd, txData) {
   return 'cartao';
 }
 
-// Helper: aplica override se o saldo da API parece errado (< 100 ou próximo ao gasto diário)
+// Helper: aplica override SOMENTE se a API retornou zero/nulo (dados ausentes).
+// NUNCA descarta um saldo baixo como "suspeito" — R$26,10 é um saldo legítimo!
 function applyBalanceOverride(accountId, apiBalance, apiSpend7d) {
   const ov = ACCOUNT_BALANCE_OVERRIDES[accountId];
   if (!ov) return { balance: apiBalance, spend7d: apiSpend7d };
 
-  // Considera o valor da API suspeito se for menor que 10% do override esperado
-  const balanceSuspeito = !apiBalance || apiBalance < (ov.meta_balance * 0.1);
-  const balance = balanceSuspeito ? ov.meta_balance : apiBalance;
-  const spend7d = (!apiSpend7d || apiSpend7d <= 0) ? ov.meta_spend7d : apiSpend7d;
+  // Override de saldo: apenas se a API não retornou nada (=0 ou null)
+  const balance = (apiBalance > 0) ? apiBalance : ov.meta_balance;
+  const spend7d = (apiSpend7d > 0) ? apiSpend7d : ov.meta_spend7d;
 
-  if (balanceSuspeito) {
-    console.log(`[balanceOverride] ${accountId}: API retornou ${apiBalance}, usando override ${ov.meta_balance}`);
+  if (apiBalance <= 0 && ov.meta_balance > 0) {
+    console.log(`[balanceOverride] ${accountId}: API retornou ${apiBalance} → usando fallback ${ov.meta_balance}`);
   }
   return { balance, spend7d };
 }
@@ -12231,6 +12234,76 @@ const BAL_SIM_DATA = {
   'Psicologia Saúde':       { meta: { balance: 0, dailySpend: 110, spend7d: 108, amountSpent: 890.20, status: 1, payType: 'postpaid' }, ga4: { activeUsers: 320, sessions: 490, conversions: 12 } },
   'Brazzo Pizza':           { meta: { balance: 0, dailySpend: 53.56, spend7d: 374.09, amountSpent: 1071.16, status: 1, payType: 'postpaid', faturamentoMetaAds: 8002.78, purchaseCount: 66, addToCartCount: 113, landingPageViews: 0 }, ga4: { activeUsers: 680, conversions: 66, purchaseRevenue: 8002.78 }, segment: 'delivery' },
 };
+
+// ── Sincronização forçada de saldos: chama backend → Meta API → atualiza MongoDB ──
+async function forceSyncBalances() {
+  const btn = document.getElementById('bal-sync-btn');
+  const _origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;margin-right:6px;display:inline-block"></i> Sincronizando...';
+  }
+
+  try {
+    const metaToken = loadMetaToken();
+    if (!metaToken) {
+      showNotification('⚠️ Configure o token Meta Ads antes de sincronizar.', 'warn');
+      return;
+    }
+
+    const clientsPayload = CLIENTS.list
+      .filter(c => c.meta_ad_account_id)
+      .map(c => ({ clientId: c.id, meta_ad_account_id: c.meta_ad_account_id }));
+
+    if (clientsPayload.length === 0) {
+      showNotification('Nenhum cliente com conta Meta Ads vinculada encontrado.', 'warn');
+      return;
+    }
+
+    const data = await _renderFetch('/api/alerts/sync', {
+      method: 'POST',
+      body: JSON.stringify({ metaToken, clients: clientsPayload })
+    });
+
+    if (!data) {
+      showNotification('⚠️ Servidor indisponível — tente novamente em instantes.', 'warn');
+      return;
+    }
+
+    if (data.ok && Array.isArray(data.updated) && data.updated.length > 0) {
+      // Aplica valores frescos ao CLIENTS.list em memória
+      let patchCount = 0;
+      data.updated.forEach(u => {
+        const c = CLIENTS.list.find(x => x.id === u.clientId);
+        if (!c) return;
+        if (u.meta_balance > 0)  { c.meta_balance  = u.meta_balance;  patchCount++; }
+        if (u.meta_spend7d > 0)  { c.meta_spend7d  = u.meta_spend7d;             }
+        if (u.meta_account_status) c.meta_account_status = u.meta_account_status;
+      });
+      if (patchCount > 0) {
+        // Persiste em localStorage (sem push para Atlas — valores serão sincronizados na próx. operação)
+        localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+      }
+      const nErr = data.errors?.length || 0;
+      const msg  = nErr > 0
+        ? `✅ ${data.updated.length} conta(s) sincronizada(s) — ${nErr} erro(s) (verifique o console).`
+        : `✅ ${data.updated.length} conta(s) sincronizadas com dados frescos da Meta!`;
+      showNotification(msg, nErr > 0 ? 'warn' : 'success');
+    } else if (data.errors?.length > 0) {
+      showNotification(`⚠️ Sincronização falhou em todos os clientes (${data.errors.length} erro(s)). Verifique o token Meta.`, 'error');
+    } else {
+      showNotification('Sem contas elegíveis para sincronizar.', 'warn');
+    }
+  } catch (err) {
+    console.error('[forceSyncBalances]', err);
+    showNotification('Erro ao sincronizar: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = _origHtml; }
+    // Força re-render com dados frescos (invalida o cache de blocos)
+    BAL_BLOCKS_CACHE = null;
+    renderBalanceMonitor();
+  }
+}
 
 function toggleBalSimMode() {
   BAL_SIM_MODE     = !BAL_SIM_MODE;
@@ -12328,11 +12401,14 @@ function evalBalanceAlert(platformData, clientBudget) {
 }
 
 function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
+  // ── Guarda contra cliente inválido (null/undefined) ─────────────────────────
+  if (!client) client = {};
+  const _clientName = client.name || 'Cliente desconhecido';
   const seg     = CL_SEGMENTS[client.segment] || { label:'—', color:'var(--text3)', bg:'var(--bg3)' };
   const pacing  = calcPacing(client);
   const budgetUsedPct = pacing.investPct !== null ? Math.round(pacing.investPct * 100) : null;
   // Método de faturamento: mesma hierarquia de renderBalanceMonitor
-  const _bNameOvr = CLIENT_NAME_PAY_OVERRIDES[client.name];
+  const _bNameOvr = CLIENT_NAME_PAY_OVERRIDES[_clientName];
   const isPostpaid = _bNameOvr === 'pre_pago'                    ? false
                   : _bNameOvr === 'cartao'                        ? true
                   : client.metodo_pagamento === 'cartao'          ? true
@@ -12340,6 +12416,10 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
                   : metaData?.detectedPayMethod === 'cartao'      ? true
                   : metaData?.detectedPayMethod === 'pre_pago'    ? false
                   : metaData?.payType === 'postpaid' && !(client.meta_balance > 0);
+
+  // Guard: ensure alert objects exist
+  if (!metaAlert)  metaAlert  = { level: 'ok', msg: 'Normal', detail: null };
+  if (!gadsAlert)  gadsAlert  = { level: 'ok', msg: 'Normal', detail: null };
 
   // Determine block severity class
   const levels  = [metaAlert.level, gadsAlert.level];
@@ -12494,15 +12574,21 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
   // ── Google Ads row ─────────────────────────────────────────────────────────
   function gadsRow() {
     if (!client.google_ads_customer_id) {
+      const _gadsClientId = (client.id || '').replace(/'/g, "\\'");
       return `
-        <div class="bal-platform-row">
-          <div class="bal-platform-icon gads">G</div>
+        <div class="bal-platform-row" style="background:rgba(245,158,11,0.04);border-radius:8px;padding:7px 8px;margin-top:4px">
+          <div class="bal-platform-icon gads" style="opacity:0.55">G</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
               <span style="font-size:11px;font-weight:600;color:var(--text)">Google Ads</span>
-              <span class="bal-alert-pill pending"><i class="ti ti-clock" style="font-size:10px"></i>Não Vinculado</span>
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#B45309;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:20px;padding:2px 8px">
+                <i class="ti ti-alert-triangle" style="font-size:10px"></i> Não Vinculado
+              </span>
             </div>
-            <div style="font-size:10px;color:var(--text3);margin-top:3px">Adicione o Customer ID do Google Ads no cadastro do cliente para ativar o monitoramento</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span>Customer ID não configurado.</span>
+              ${_gadsClientId ? `<button class="btn btn-ghost btn-sm" onclick="navigate('clientes');setTimeout(function(){openNewClientModal('${_gadsClientId}');},350)" style="font-size:10px;height:22px;padding:0 8px;color:var(--amber);border-color:rgba(245,158,11,0.35)"><i class="ti ti-link" style="font-size:10px;margin-right:3px"></i>Vincular ID agora</button>` : ''}
+            </div>
           </div>
         </div>`;
     }
@@ -12639,20 +12725,43 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
   // ── Pacing de Mídia (gasto vs orçamento de anúncios) ─────────────────────
   // Renderizado ABAIXO da meta de faturamento (linhas separadas e independentes)
 
+  // ── Botões de ação ────────────────────────────────────────────────────────
+  const _isCrit = metaAlert?.level === 'critical' || gadsAlert?.level === 'critical';
+  const _hasWa  = !!(client.whatsapp_group_jid);
+  const _waBtn  = (_isCrit || _hasWa) ? (() => {
+    const _btnStyle = _isCrit
+      ? `background:rgba(239,68,68,0.10);color:var(--red);border:1px solid rgba(239,68,68,0.28)`
+      : `background:rgba(37,211,102,0.08);color:#25D366;border:1px solid rgba(37,211,102,0.25)`;
+    const _btnLabel = _isCrit ? 'Resolver no WhatsApp' : 'Enviar Relatório';
+    const _clientIdSafe = (client.id || '').replace(/'/g, "\\'");
+    const _navAction = `navigate('relatorios');setTimeout(function(){var s=document.getElementById('report-client-select');if(s){var o=Array.from(s.options).find(function(x){return x.value==='${_clientIdSafe}';});if(o){s.value=o.value;if(typeof loadReportData==='function')loadReportData();}}},350)`;
+    return `<button class="btn btn-sm" onclick="${_navAction}" style="font-size:11px;height:28px;padding:0 10px;border-radius:6px;${_btnStyle}"><i class="ti ti-brand-whatsapp" style="font-size:12px;margin-right:4px"></i>${_btnLabel}</button>`;
+  })() : '';
+
+  const _clientIdSafeVer = (client.id || '').replace(/'/g, "\\'");
+  const _verBtn = client.id ? `<button class="btn btn-ghost btn-sm" onclick="navigate('clientes');setTimeout(function(){openNewClientModal('${_clientIdSafeVer}');},350)" style="font-size:11px;height:28px;padding:0 10px;border-radius:6px"><i class="ti ti-user" style="font-size:12px;margin-right:4px"></i>Ver Cliente</button>` : '';
+
+  const _actionsHtml = (_verBtn || _waBtn) ? `
+    <div style="display:flex;gap:6px;margin-top:10px;padding-top:9px;border-top:1px solid var(--border);flex-wrap:wrap">
+      ${_verBtn}
+      ${_waBtn}
+    </div>` : '';
+
   return `
     <div class="bal-client-block ${blockCls}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
         ${_clAvatar(client, 32, '8px')}
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text)">${client.name}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${_clientName}</div>
           <span class="segment-badge" style="background:${seg.bg};color:${seg.color}">${seg.label}</span>
         </div>
-        ${budgetUsedPct !== null ? `<span style="font-size:11px;color:var(--text3)">Budget: <b style="color:var(--text)">${fmtBRL(client.budget)}</b> · <b style="color:${budgetUsedPct>=90?'var(--red)':budgetUsedPct>=70?'var(--amber)':'var(--text)'}">${budgetUsedPct}%</b> usado</span>` : ''}
+        ${budgetUsedPct !== null ? `<span style="font-size:11px;color:var(--text3)">Budget: <b style="color:var(--text)">${fmtBRL(client.budget || 0)}</b> · <b style="color:${budgetUsedPct>=90?'var(--red)':budgetUsedPct>=70?'var(--amber)':'var(--text)'}">${budgetUsedPct}%</b> usado</span>` : ''}
       </div>
       ${metaRow}
       ${googleRow}
       ${faturamentoRow}
       ${pacingHtml}
+      ${_actionsHtml}
     </div>`;
 }
 
@@ -12670,19 +12779,22 @@ async function fetchMetaAccountStatus(client) {
     // 2) Insights mês vigente (this_month): gasto real do mês atual para pacing do cartão
     // 3) Insights últimos 7 dias (last_7d): média diária para previsão pré-pago
     // 4) Transações recentes: detecta método de pagamento (cartão vs boleto/PIX)
+    // _ts garante URL única a cada chamada → bypass de qualquer cache HTTP/proxy
+    const _ts = Date.now();
+    const _fetchOpts = { cache: 'no-store' };
     const [acctRes, monthInsRes, ins7dRes, txRes] = await Promise.all([
       fetch(`https://graph.facebook.com/v19.0/${acctId}` +
             `?fields=account_status,funding_source_details,balance,amount_remaining,currency` +
-            `&access_token=${enc}`),
+            `&access_token=${enc}&_ts=${_ts}`, _fetchOpts),
       fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
             `?date_preset=this_month&fields=spend,actions,action_values&level=account` +
-            `&access_token=${enc}`),
+            `&access_token=${enc}&_ts=${_ts}`, _fetchOpts),
       fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
             `?date_preset=last_7d&fields=spend&level=account` +
-            `&access_token=${enc}`),
+            `&access_token=${enc}&_ts=${_ts}`, _fetchOpts),
       fetch(`https://graph.facebook.com/v19.0/${acctId}/transactions` +
             `?limit=5&fields=type,payment_method_type,description,amount,status` +
-            `&access_token=${enc}`)
+            `&access_token=${enc}&_ts=${_ts}`, _fetchOpts)
     ]);
 
     const acctJson     = await acctRes.json();
@@ -12821,7 +12933,9 @@ async function renderBalanceMonitor() {
   let nCritical = 0, nModerate = 0, nOk = 0;
   let clientesAtualizados = false; // track if any client had metodo_pagamento auto-detected
 
+  try {
   for (const c of clients) {
+    try {
     let metaData   = null;
     let gadsData   = null;
     let ga4Data    = null;
@@ -12963,8 +13077,28 @@ async function renderBalanceMonitor() {
                   : metaData?.payType === 'prepaid'           ? 'prepaid'
                   : c.meta_balance > 0                        ? 'prepaid'  // legacy: tem saldo pré-pago cadastrado
                   : 'postpaid';
-    blocks.push({ html: buildBalClientBlock(c, metaAlert, gadsAlert, gadsData, metaData), level: worstLevel, payType });
-  }
+      blocks.push({ html: buildBalClientBlock(c, metaAlert, gadsAlert, gadsData, metaData), level: worstLevel, payType });
+    } catch (clientErr) {
+      // ── Isolamento por cliente: um erro não derruba os demais ──────────────
+      console.error('[renderBalanceMonitor] Erro ao processar cliente:', c?.name || c?.id, clientErr.message);
+      const _errPayType = c?.metodo_pagamento === 'pre_pago' ? 'prepaid' : 'postpaid';
+      blocks.push({
+        html: `<div class="bal-client-block" style="border-left:3px solid var(--red);opacity:0.85">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(239,68,68,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="ti ti-alert-triangle" style="color:var(--red);font-size:15px"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">${c?.name || 'Cliente desconhecido'}</div>
+              <div style="font-size:11px;color:var(--red);margin-top:2px">Erro ao carregar dados — os demais clientes não foram afetados.</div>
+            </div>
+          </div>
+        </div>`,
+        level: 'ok',
+        payType: _errPayType
+      });
+    }
+  } // end for
 
   // Persiste métodos de pagamento detectados automaticamente
   if (clientesAtualizados) {
@@ -12975,6 +13109,23 @@ async function renderBalanceMonitor() {
   // Cache all blocks and delegate rendering + filtering to applyFiltroToContainer
   BAL_BLOCKS_CACHE = blocks;
   applyFiltroToContainer();
+
+  } catch (globalErr) {
+    // ── Fallback global: mantém a página de pé mesmo em colapso total ───────
+    console.error('[renderBalanceMonitor] Erro crítico:', globalErr.message, globalErr);
+    container.innerHTML = `
+      <div style="text-align:center;padding:48px 24px 40px">
+        <i class="ti ti-wifi-off" style="font-size:36px;display:block;margin-bottom:14px;color:var(--red);opacity:0.65"></i>
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">Erro ao carregar alertas</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:18px;max-width:280px;margin-left:auto;margin-right:auto">
+          Não foi possível buscar os dados das contas. Verifique sua conexão e tente novamente.
+        </div>
+        <button class="btn btn-primary" onclick="renderBalanceMonitor()" style="font-size:12px">
+          <i class="ti ti-refresh" style="margin-right:6px"></i>Recarregar Alertas
+        </button>
+        <div style="font-size:10px;color:var(--text3);margin-top:12px;font-family:var(--mono)">${globalErr.message}</div>
+      </div>`;
+  }
 }
 
 // ── Renderiza os cards aplicando o filtro ativo — sem re-fetch da API ─────────
@@ -13047,8 +13198,6 @@ function applyFiltroToContainer() {
     </div>`;
   }
 
-  container.innerHTML = finalHtml;
-
   // Contagens do filtro ativo (para badges de severidade)
   let nCritical = 0, nModerate = 0, nOk = 0;
   filteredBlocks.forEach(b => {
@@ -13056,6 +13205,20 @@ function applyFiltroToContainer() {
     else if (b.level === 'moderate') nModerate++;
     else nOk++;
   });
+
+  // ── Banner "Tudo sob controle!" quando não há alertas críticos ou moderados ──
+  if (filteredBlocks.length > 0 && nCritical === 0 && nModerate === 0) {
+    finalHtml = `
+      <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:12px;background:rgba(34,197,94,0.07);border:1.5px solid rgba(34,197,94,0.22);margin-bottom:18px">
+        <i class="ti ti-circle-check-filled" style="font-size:30px;color:var(--green);flex-shrink:0"></i>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--green)">Tudo sob controle! 🎉</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Nenhum alerta crítico ou moderado encontrado. Todas as contas estão saudáveis.</div>
+        </div>
+      </div>` + finalHtml;
+  }
+
+  container.innerHTML = finalHtml;
 
   const sc = document.getElementById('bal-summary-critical');
   const sm = document.getElementById('bal-summary-moderate');
