@@ -12253,18 +12253,16 @@ function showSyncErrorBanner(msg, linkLabel, linkAction) {
 }
 
 // ── Sincronização em lotes: 5 clientes por vez com progresso em tempo real ───
-const _SYNC_BATCH_SIZE = 5;
-
 async function forceSyncBalances() {
-  const btn = document.getElementById('bal-sync-btn');
+  const btn       = document.getElementById('bal-sync-btn');
   const _origHtml = btn ? btn.innerHTML : '';
 
-  // Helper: atualiza o texto do botão com o contador de progresso
+  // Helper: atualiza o texto do botão com contador de progresso em tempo real
   function _setProgress(done, total) {
     if (!btn) return;
     btn.innerHTML =
       `<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;margin-right:6px;display:inline-block"></i>` +
-      ` ${done}/${total}`;
+      `Sincronizando ${done} de ${total}`;
   }
 
   if (btn) { btn.disabled = true; _setProgress(0, '…'); }
@@ -12278,58 +12276,45 @@ async function forceSyncBalances() {
       return;
     }
 
-    const allClients = CLIENTS.list
-      .filter(c => c.meta_ad_account_id)
-      .map(c => ({ clientId: c.id, meta_ad_account_id: c.meta_ad_account_id }));
+    // ── Apenas clientes com conta Meta vinculada ────────────────────────────
+    const eligibleClients = CLIENTS.list.filter(c => c.meta_ad_account_id);
+    const total = eligibleClients.length;
 
-    if (allClients.length === 0) {
+    if (total === 0) {
       showNotification('Nenhum cliente com conta Meta Ads vinculada encontrado.', 'warn');
       return;
     }
 
-    // ── Divide em lotes de _SYNC_BATCH_SIZE ────────────────────────────────
-    const total   = allClients.length;
-    const batches = [];
-    for (let i = 0; i < total; i += _SYNC_BATCH_SIZE) {
-      batches.push(allClients.slice(i, i + _SYNC_BATCH_SIZE));
-    }
-
-    let allUpdated = [];
-    let allErrors  = [];
-    let done       = 0;
-
     _setProgress(0, total);
 
-    for (let b = 0; b < batches.length; b++) {
-      const batch      = batches[b];
-      const isFirst    = b === 0;
+    let done         = 0;
+    let totalUpdated = 0;
+    let totalErrors  = 0;
+    const baseUrl    = (window.PROD_CONFIG?.renderUrl || '').replace(/\/$/, '');
 
-      // ── Chamada ao backend com este lote ─────────────────────────────────
+    // ── Loop sequencial: um cliente por vez — falha individual não para o loop
+    for (const client of eligibleClients) {
       let rawRes, data;
       try {
         rawRes = await fetch(
-          (window.PROD_CONFIG?.renderUrl || '') + '/api/alerts/sync',
+          `${baseUrl}/api/alerts/sync/${encodeURIComponent(client.id)}`,
           {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-              metaToken,
-              clients:   batch,
-              skipProbe: !isFirst,   // probe apenas no primeiro lote
-            }),
-            // Timeout de 75s (lote de 5 + margem): AbortController não está disponível
-            // em todos os ambientes, portanto usamos um wrapper de Promise
+            body:    JSON.stringify({ metaToken }),
           }
         );
         data = await rawRes.json();
       } catch (fetchErr) {
-        console.error('[forceSyncBalances] Lote', b + 1, 'falhou:', fetchErr.message);
-        BAL_SYNC_ERROR = 'SERVER_DOWN';
-        showNotification('⚠️ Servidor indisponível — tente novamente em instantes.', 'warn');
-        return; // aborta os demais lotes
+        // Rede caiu ou Render não respondeu para este cliente → conta como erro e continua
+        console.warn(`[forceSyncBalances] Rede falhou para ${client.id}:`, fetchErr.message);
+        totalErrors++;
+        done++;
+        _setProgress(done, total);
+        continue;
       }
 
-      // ── HTTP 401: token expirado → aborta todos os lotes ─────────────────
+      // ── HTTP 401: token inválido/expirado → interrompe o loop inteiro ──────
       if (rawRes.status === 401 || data?.error === 'META_TOKEN_EXPIRED') {
         BAL_SYNC_ERROR = 'META_TOKEN_EXPIRED';
         console.error('[forceSyncBalances] Token Meta expirado. Código:', data?.code, '—', data?.detail);
@@ -12338,54 +12323,61 @@ async function forceSyncBalances() {
           'Atualizar token em Integrações',
           "navigate('integracoes')"
         );
-        return; // para aqui — não processa os lotes restantes
+        break; // para aqui — não tenta os clientes restantes
       }
 
-      // ── Acumula resultados do lote ─────────────────────────────────────
+      // ── HTTP 504: timeout deste cliente específico → ignora e continua ─────
+      if (rawRes.status === 504) {
+        console.warn(`[forceSyncBalances] Timeout para ${client.id} (${client.meta_ad_account_id})`);
+        totalErrors++;
+        done++;
+        _setProgress(done, total);
+        continue;
+      }
+
+      // ── Erro de conta (permissão, suspensa, etc.) → continua para o próximo
+      if (data?.ok === false) {
+        console.warn(`[forceSyncBalances] Erro de conta ${client.id}:`, data.error, '— código:', data.code);
+        totalErrors++;
+        done++;
+        _setProgress(done, total);
+        continue;
+      }
+
+      // ── Skipped (sem meta_ad_account_id no banco) → ignora silenciosamente ─
+      if (data?.skipped) {
+        done++;
+        _setProgress(done, total);
+        continue;
+      }
+
+      // ── Sucesso: aplica valores frescos ao CLIENTS.list em memória ──────────
       if (data?.ok) {
-        allUpdated = allUpdated.concat(data.updated || []);
-        allErrors  = allErrors.concat(data.errors  || []);
+        const c = CLIENTS.list.find(x => x.id === data.clientId);
+        if (c) {
+          if (data.meta_balance > 0)    { c.meta_balance        = data.meta_balance;        }
+          if (data.meta_spend7d > 0)    { c.meta_spend7d        = data.meta_spend7d;        }
+          if (data.meta_account_status) { c.meta_account_status = data.meta_account_status; }
+        }
+        totalUpdated++;
       }
 
-      // ── Atualiza progresso ────────────────────────────────────────────────
-      done += batch.length;
+      done++;
       _setProgress(done, total);
-      console.log(`[forceSyncBalances] Lote ${b + 1}/${batches.length} concluído (${done}/${total})`);
+      console.log(`[forceSyncBalances] ✅ ${data.clientId}: R$${(data.meta_balance||0).toFixed(2)} · spend7d R$${(data.meta_spend7d||0).toFixed(2)}/d (${done}/${total})`);
     }
 
-    // ── Aplica todos os valores frescos ao CLIENTS.list em memória ──────────
-    if (allUpdated.length > 0) {
-      BAL_SYNC_ERROR = null;
-      let patchCount = 0;
-      allUpdated.forEach(u => {
-        const c = CLIENTS.list.find(x => x.id === u.clientId);
-        if (!c) return;
-        if (u.meta_balance > 0)    { c.meta_balance        = u.meta_balance;        patchCount++; }
-        if (u.meta_spend7d > 0)    { c.meta_spend7d        = u.meta_spend7d;                     }
-        if (u.meta_account_status) { c.meta_account_status = u.meta_account_status;              }
-      });
-      if (patchCount > 0) {
-        localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
-      }
-      const nErr = allErrors.length;
-      const msg  = nErr > 0
-        ? `✅ ${allUpdated.length}/${total} conta(s) sincronizadas — ${nErr} erro(s). Verifique o console.`
-        : `✅ ${allUpdated.length} conta(s) sincronizadas com dados frescos da Meta!`;
-      showNotification(msg, nErr > 0 ? 'warn' : 'success');
-    } else if (allErrors.length > 0) {
-      const hasTokenErr = allErrors.some(e => e.error === 'META_TOKEN_EXPIRED');
-      if (hasTokenErr) {
-        BAL_SYNC_ERROR = 'META_TOKEN_EXPIRED';
-        showSyncErrorBanner('Token da Meta Ads expirado ou inválido.',
-          'Atualizar em Integrações', "navigate('integracoes')");
-      } else {
-        showNotification(
-          `⚠️ Sincronização falhou em todos os clientes (${allErrors.length} erro(s)).`,
-          'error'
-        );
-      }
-    } else {
-      showNotification('Sem contas elegíveis para sincronizar.', 'warn');
+    // ── Persiste CLIENTS.list no localStorage após loop completo ─────────────
+    if (totalUpdated > 0) {
+      if (BAL_SYNC_ERROR !== 'META_TOKEN_EXPIRED') BAL_SYNC_ERROR = null;
+      localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+      const msg = totalErrors > 0
+        ? `✅ ${totalUpdated}/${total} conta(s) sincronizadas — ${totalErrors} erro(s). Verifique o console.`
+        : `✅ ${totalUpdated} conta(s) sincronizadas com dados frescos da Meta!`;
+      showNotification(msg, totalErrors > 0 ? 'warn' : 'success');
+    } else if (BAL_SYNC_ERROR !== 'META_TOKEN_EXPIRED') {
+      // Nenhuma conta atualizada e token OK → avisa
+      showNotification(`⚠️ Nenhuma conta sincronizada (${totalErrors} erro(s)).`, 'warn');
     }
 
   } catch (err) {
