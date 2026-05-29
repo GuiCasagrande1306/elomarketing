@@ -15878,22 +15878,22 @@ async function _loadWaGroups() {
     }
   }
 
-  // ── Passo 4: buscar grupos — Railway confirmado ativo → 3 tentativas, 2s entre elas ──
+  // ── Passo 4: buscar grupos — Railway confirmado ativo → 3 tentativas, 5s entre elas ──
   // Com o ping OK, Railway está de pé. Se a resposta demorar (Railway ainda carregando
-  // contexto) tentamos mais 2 vezes com 2s de espera — rápido e discreto.
-  const RETRY_DELAYS = [2, 2]; // 2 retries após 2s cada → 3 tentativas no total
+  // contexto Baileys) tentamos mais 2 vezes com 5s de espera antes de cada retry.
+  const RETRY_DELAYS = [5, 5]; // 2 retries após 5s cada → 3 tentativas no total
   const MAX_ATTEMPTS = RETRY_DELAYS.length + 1; // 3 tentativas
   let data = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     showSpinner(
       attempt === 1
-        ? 'Carregando grupos da instância…'
-        : `Carregando grupos da instância… <b>tentativa ${attempt}/${MAX_ATTEMPTS}</b>`
+        ? 'Carregando grupos da instância… <span style="opacity:0.65;font-size:10px">(pode levar até 90s)</span>'
+        : `Carregando grupos da instância… <b>tentativa ${attempt}/${MAX_ATTEMPTS}</b> <span style="opacity:0.65;font-size:10px">(pode levar até 90s)</span>`
     );
 
     const ctrl       = new AbortController();
-    const abortTimer = setTimeout(() => ctrl.abort(), 60000); // 60s (backend tem 55s internamente)
+    const abortTimer = setTimeout(() => ctrl.abort(), 100000); // 100s (backend tem 90s internamente)
     data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
     clearTimeout(abortTimer);
 
@@ -15908,7 +15908,7 @@ async function _loadWaGroups() {
     });
 
     const isEvoTimeout = data?.error && (
-      data.error.includes('45s') || data.error.includes('55s') ||
+      data.error.includes('45s') || data.error.includes('55s') || data.error.includes('90s') ||
       data.error.includes('timeout') || data.error.includes('Railway')
     );
     const isTransient = !data || data._coldStart || data._timeout || isEvoTimeout;
@@ -15918,7 +15918,7 @@ async function _loadWaGroups() {
       const waitSecs = RETRY_DELAYS[attempt - 1];
       let secsLeft   = waitSecs;
       showSpinner(
-        `Instância demorando a responder — <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b><br>` +
+        `Instância demorando a responder — <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b> <span style="opacity:0.65;font-size:10px">(pode levar até 90s)</span><br>` +
         `<span id="wa-retry-countdown" style="font-size:10px;opacity:0.7">nova tentativa em ${secsLeft}s…</span>`
       );
       const cdInterval = setInterval(() => {
@@ -15946,8 +15946,8 @@ async function _loadWaGroups() {
   if (data?._timeout) {
     console.error('[_loadWaGroups] timeout final após', MAX_ATTEMPTS, 'tentativa(s)');
     _setSearchHint('Instância demorando a responder no Railway. Tente salvar o card novamente.');
-    showErr('⏱️', 'Evolution API não respondeu a tempo',
-      'A API demorou demais mesmo com o servidor ativo.<br>Clique em <b>Tentar novamente</b> — a conexão já deve estar estável.');
+    showErr('⏱️', 'Evolution API não respondeu em 90s',
+      'O Railway pode estar inicializando o cliente Baileys.<br>Aguarde 1–2 minutos e clique em <b>Tentar novamente</b>.');
     return;
   }
 
@@ -15963,7 +15963,7 @@ async function _loadWaGroups() {
     const err = data.error;
     console.error('[_loadWaGroups] erro da API:', { error: err, detail: data.detail });
 
-    const isTimeout = err.includes('45s') || err.includes('55s') || err.includes('timeout');
+    const isTimeout = err.includes('45s') || err.includes('55s') || err.includes('90s') || err.includes('timeout');
     const isKey     = err.includes('inválida') || err.includes('API Key');
     const isNoInst  = err.includes('não encontrada') || err.includes('instância');
     const isRoute   = err.includes('Rota não encontrada') || err.includes('404');
