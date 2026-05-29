@@ -10068,17 +10068,31 @@ function _buildDetailGoalPacing(c, goalInfo, isLiveGA4) {
    Usa effective_status=ACTIVE, que já garante campanha + conjunto + anúncio
    ativos. Retorna { total, grouped } ou null (sem conta / sem token / erro).
 ── */
-async function fetchActiveAdsForReport(client) {
+async function fetchActiveAdsForReport(client, fromDate, toDate) {
   const token = loadMetaToken();
   if (!token || !client.meta_ad_account_id) return null;
 
   const acctId = client.meta_ad_account_id;
   const enc    = encodeURIComponent(token);
+
+  /* Parâmetro de período para o sub-campo insights:
+     Se fromDate/toDate fornecidos usa time_range específico do relatório,
+     senão cai para date_preset=this_month. */
+  let insightsField;
+  if (fromDate && toDate) {
+    const since = _toISO(fromDate);
+    const until = _toISO(toDate);
+    insightsField = `insights.time_range({"since":"${since}","until":"${until}"}){spend,clicks,impressions,ctr}`;
+  } else {
+    insightsField = 'insights.date_preset(this_month){spend,clicks,impressions,ctr}';
+  }
+
   const fields = encodeURIComponent(
     'name,effective_status,' +
     'adset{name,effective_status},' +
     'campaign{name,objective,effective_status},' +
-    'creative{name,body,title,call_to_action_type,thumbnail_url,image_url,link_url}'
+    `creative{name,body,title,call_to_action_type,thumbnail_url,image_url,link_url},` +
+    insightsField
   );
   // effective_status=["ACTIVE"] filtra anúncios cuja entrega está ativa
   // (propagação já inclui campanha e conjunto, sem precisar filtrar manualmente)
@@ -10092,11 +10106,20 @@ async function fetchActiveAdsForReport(client) {
     if (json.error || !json.data?.length) return null;
 
     // Agrupa: { campNome → { objective, sets: { setNome → [ads] } } }
+    // Também constrói lista plana com métricas para o PDF do backend
     const grouped = {};
+    const ads = [];
     json.data.forEach(ad => {
       const campName = ad.campaign?.name || 'Sem campanha';
       const campObj  = ad.campaign?.objective || '';
       const setName  = ad.adset?.name || 'Sem conjunto';
+      const ins      = ad.insights?.data?.[0] || {};
+      const spend    = parseFloat(ins.spend || 0);
+      const clicks   = parseInt(ins.clicks  || 0, 10);
+      const impr     = parseInt(ins.impressions || 0, 10);
+      const ctr      = impr > 0 ? ((clicks / impr) * 100).toFixed(2) : '0.00';
+      const thumb    = ad.creative?.thumbnail_url || ad.creative?.image_url || '';
+
       if (!grouped[campName]) grouped[campName] = { objective: campObj, sets: {} };
       if (!grouped[campName].sets[setName]) grouped[campName].sets[setName] = [];
       grouped[campName].sets[setName].push({
@@ -10104,12 +10127,25 @@ async function fetchActiveAdsForReport(client) {
         title:     ad.creative?.title     || '',
         body:      ad.creative?.body      || '',
         cta:       ad.creative?.call_to_action_type || '',
-        thumbnail: ad.creative?.thumbnail_url || ad.creative?.image_url || '',
-        link:      ad.creative?.link_url  || ''
+        thumbnail: thumb,
+        link:      ad.creative?.link_url  || '',
+        spend, clicks, impr, ctr,
+      });
+
+      // Lista plana para o PDF do backend
+      ads.push({
+        name:         ad.name,
+        adsetName:    setName,
+        campaignName: campName,
+        spend,
+        clicks,
+        impressions:  impr,
+        ctr,
+        thumbnail:    thumb,
       });
     });
 
-    return { total: json.data.length, grouped };
+    return { total: json.data.length, grouped, ads };
   } catch(e) {
     console.warn('[fetchActiveAdsForReport]', e.message);
     return null;
@@ -16244,10 +16280,15 @@ async function sendReportViaWhatsApp() {
     templateType,
   };
 
-  // Para "completo" inclui os dados do relatório para geração do PDF no backend
+  // Para "completo" inclui os dados do relatório + anúncios ativos para o PDF
   if (templateType === 'completo') {
     const snap = REPORT_STATE.current || {};
     const deliveryData = _repGetDeliveryData(client);
+
+    // Busca anúncios ativos com métricas do período antes de montar o payload
+    setBtn('pdf');
+    const adsResult = await fetchActiveAdsForReport(client, DR.from, DR.to).catch(() => null);
+
     basePayload.reportData = {
       clientName:       client.name,
       categoria:        client.categoria || 'elo_marketing',
@@ -16270,6 +16311,8 @@ async function sendReportViaWhatsApp() {
         target:   client.goal?.target   || 0,
         realized: client.goal?.realized || 0,
       },
+      // Anúncios ativos com métricas do período (null = sem conta Meta)
+      ads: adsResult?.ads ?? null,
     };
   }
 
