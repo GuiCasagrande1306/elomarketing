@@ -7114,7 +7114,11 @@ async function initSupabaseSync() {
       Promise.all([ loadClientsFromDB(), loadTasksFromDB() ]),
       3000
     );
-    if (clientsOk) { renderClients(); renderGoalAlerts(); renderPacingAlerts(); renderDashboard(); }
+    if (clientsOk) {
+      renderClients(); renderGoalAlerts(); renderPacingAlerts(); renderDashboard();
+      /* Atualiza dropdown de clientes em Relatórios após carga do BD */
+      if (document.querySelector('.page.active')?.id === 'page-relatorios') populateReportSelects();
+    }
     setSyncStatus('ok');
     setupRealtimeChannel();
   } catch(err) {
@@ -11095,9 +11099,10 @@ function populateReportSelects() {
   const sel = document.getElementById('rep-client');
   if (!sel) return;
 
-  /* ── Clientes (respeitam filtro de colaborador) ── */
-  const _uid = _collabUid();
-  const _repClients = _filterClientsByCollab(CLIENTS.list, _uid);
+  /* ── Clientes: Relatórios mostra TODOS os clientes para qualquer usuário
+     com acesso à página (Gestor de Tráfego gera relatórios de qualquer cliente
+     da agência — leitura somente, igual ao admin). ── */
+  const _repClients = CLIENTS.list;
   sel.innerHTML = '<option value="">Selecione um cliente...</option>' +
     _repClients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
