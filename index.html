@@ -9147,6 +9147,12 @@ function openNewClientModal(id) {
           addInvestmentRow(rows, inv.month, 'R$ ' + inv.value.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
         });
       loadSocialConnectUI(c);
+
+      // Pré-aquece cache de grupos WA em background — picker responde instantaneamente
+      if (currentUser?.id && PROD_CONFIG.renderUrl) {
+        _renderFetch(`/api/whatsapp/prewarm-groups?userId=${encodeURIComponent(currentUser.id)}`)
+          .catch(() => {}); // fire-and-forget
+      }
     }
   }
   // Novo cliente sem investimentos: accordion vazio, nenhuma linha automática
@@ -15738,11 +15744,10 @@ async function _loadWaGroups() {
   if (!list) return;
 
   const userId = currentUser?.id;
-
-  _waAllGroups = []; // garante estado limpo a cada chamada
+  _waAllGroups = [];
   if (count) count.textContent = '';
 
-  // ── Helper: mostra erro com botão de retry manual ──────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const showErr = (icon, title, sub) => {
     list.innerHTML = `
       <div style="padding:24px 16px;text-align:center">
@@ -15756,8 +15761,6 @@ async function _loadWaGroups() {
         </button>
       </div>`;
   };
-
-  // ── Helper: spinner com texto atualizável ─────────────────────────────────
   const showSpinner = (text) => {
     list.innerHTML = `
       <div id="wa-loading-msg" style="display:flex;flex-direction:column;align-items:center;gap:10px;
@@ -15766,216 +15769,49 @@ async function _loadWaGroups() {
         <span id="wa-loading-text" style="font-size:12px;text-align:center;line-height:1.6">${text}</span>
       </div>`;
   };
-
-  // ── Passo 1: wake-up ping Render (fire-and-forget) ───────────────────────
-  showSpinner('Verificando servidor Railway…');
-  const _kaBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
-  if (_kaBase) fetch(_kaBase + '/health').catch(() => {}); // acorda Render sem bloquear
-
-  // ── Passo 2: pre-flight ping na Evolution API — até 3 tentativas automáticas ──
-  // Railway free tier hiberna e pode levar 20–60s para acordar.
-  // Fazemos 3 pings (0s / 10s / 15s de espera entre eles, 10s timeout cada)
-  // antes de desistir e mostrar o botão "Tentar novamente".
-  {
-    const PING_MAX      = 3;
-    const PING_TIMEOUTS = [10000, 12000, 12000]; // timeout por tentativa
-    const PING_WAITS    = [0, 10, 15];           // espera (s) antes de cada tentativa
-    let pingResult = null;
-    let pingOk     = false;
-
-    for (let pa = 1; pa <= PING_MAX; pa++) {
-      // ── Delay entre tentativas (com countdown) ─────────────────────────────
-      if (pa > 1) {
-        const waitSecs = PING_WAITS[pa - 1];
-        let secsLeft   = waitSecs;
-        showSpinner(
-          `Aguardando servidor Railway iniciar…<br>` +
-          `<span id="wa-ping-cd" style="font-size:10px;opacity:0.7">` +
-          `tentativa ${pa}/${PING_MAX} em ${secsLeft}s</span>`
-        );
-        const cdId = setInterval(() => {
-          secsLeft--;
-          const el = document.getElementById('wa-ping-cd');
-          if (el) el.textContent = `tentativa ${pa}/${PING_MAX} em ${secsLeft}s`;
-          if (secsLeft <= 0) clearInterval(cdId);
-        }, 1000);
-        await new Promise(r => setTimeout(r, waitSecs * 1000));
-        clearInterval(cdId);
-      }
-
-      showSpinner(
-        pa === 1
-          ? 'Verificando servidor Railway…'
-          : `Verificando servidor Railway… <b>(${pa}/${PING_MAX})</b>`
-      );
-
-      const pingCtrl  = new AbortController();
-      const pingTimer = setTimeout(() => pingCtrl.abort(), PING_TIMEOUTS[pa - 1]);
-      try {
-        pingResult = await _renderFetch('/api/whatsapp/ping', { signal: pingCtrl.signal });
-      } catch (e) {
-        console.warn(`[_loadWaGroups] ping ${pa} exceção:`, e?.message);
-        pingResult = null;
-      } finally {
-        clearTimeout(pingTimer);
-      }
-
-      console.log(`[_loadWaGroups] ping ${pa}/${PING_MAX} →`, {
-        ok: pingResult?.ok, latencyMs: pingResult?.latencyMs,
-        error: pingResult?.error, _timeout: pingResult?._timeout,
-      });
-
-      // ── Erro de autenticação — não adianta repetir ─────────────────────────
-      const isAuthErr = pingResult?.error && (
-        pingResult.error.toLowerCase().includes('key') ||
-        pingResult.error.toLowerCase().includes('inválida')
-      );
-      if (isAuthErr) {
-        showErr('🔑', 'API Key inválida',
-          'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.');
-        return;
-      }
-
-      // ── Ping bem-sucedido ──────────────────────────────────────────────────
-      if (pingResult?.ok) {
-        pingOk = true;
-        const latencyMs = pingResult.latencyMs ?? 0;
-        console.log(`[_loadWaGroups] ping OK em ${pa} tentativa(s) — ${latencyMs}ms`);
-        showSpinner(`Evolution API online (${latencyMs}ms) — verificando conexão WhatsApp…`);
-        break;
-      }
+  const _applyGroups = (data) => {
+    _waAllGroups = data.groups || [];
+    _waGroupsCache.userId   = userId;
+    _waGroupsCache.groups   = [..._waAllGroups];
+    _waGroupsCache.loadedAt = Date.now();
+    const dbg = data._debug;
+    if (dbg && dbg.total > 0 && dbg.filtered === 0) {
+      showErr('⚠️', 'Grupos recebidos mas não reconhecidos',
+        `A API retornou ${dbg.total} item(s) mas nenhum tinha JID @g.us.<br>Verifique o console do backend.`);
+      return false;
     }
-
-    // ── Todas as tentativas esgotadas sem sucesso ──────────────────────────────
-    if (!pingOk) {
-      const isTimeout = !pingResult || pingResult._timeout || pingResult._coldStart;
-      console.warn('[_loadWaGroups] ping FALHOU após', PING_MAX, 'tentativas:', pingResult?.error);
-      showErr(
-        '🚫',
-        'Não foi possível conectar à Evolution API',
-        isTimeout
-          ? 'O servidor Railway não respondeu após várias tentativas.<br>' +
-            'Verifique se a instância está ativa e se há créditos no Railway.<br><br>' +
-            'Clique em <b>Tentar novamente</b> para uma nova rodada.'
-          : `${pingResult?.error || 'Erro de rede'} — servidor indisponível.<br>` +
-            'Tente novamente em instantes ou verifique as configurações em Integrações.'
-      );
-      return;
-    }
-  }
-
-  // ── Passo 3: estado da instância WhatsApp ────────────────────────────────
-  const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
-
-  if (stateData && !stateData._coldStart && !stateData._timeout && !stateData.error) {
-    const instanceState = stateData.state || 'disconnected';
-    if (instanceState !== 'open') {
-      showErr('📵', 'WhatsApp desconectado',
-        'A sessão do QR Code caiu ou nunca foi iniciada.<br>' +
-        'Reconecte em <b>Integrações → WhatsApp → Conectar</b><br>' +
-        'e aguarde o status ficar verde antes de buscar grupos.');
-      return;
-    }
-  }
-
-  // ── Passo 4: buscar grupos — Railway confirmado ativo → 3 tentativas, 5s entre elas ──
-  // Com o ping OK, Railway está de pé. Se a resposta demorar (Railway ainda carregando
-  // contexto Baileys) tentamos mais 2 vezes com 5s de espera antes de cada retry.
-  const RETRY_DELAYS = [5, 5]; // 2 retries após 5s cada → 3 tentativas no total
-  const MAX_ATTEMPTS = RETRY_DELAYS.length + 1; // 3 tentativas
-  let data = null;
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    showSpinner(
-      attempt === 1
-        ? 'Carregando grupos da instância… <span style="opacity:0.65;font-size:10px">(pode levar até 90s)</span>'
-        : `Carregando grupos da instância… <b>tentativa ${attempt}/${MAX_ATTEMPTS}</b> <span style="opacity:0.65;font-size:10px">(pode levar até 90s)</span>`
-    );
-
-    const ctrl       = new AbortController();
-    const abortTimer = setTimeout(() => ctrl.abort(), 100000); // 100s (backend tem 90s internamente)
-    data = await _renderFetch(`/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`, { signal: ctrl.signal });
-    clearTimeout(abortTimer);
-
-    // Log detalhado para cada tentativa
-    console.log(`[_loadWaGroups] grupos tentativa ${attempt}/${MAX_ATTEMPTS}:`, {
-      ok:         !!data?.groups,
-      total:      data?.groups?.length,
-      error:      data?.error,
-      _coldStart: data?._coldStart,
-      _timeout:   data?._timeout,
-      debug:      data?._debug,
-    });
-
-    const isEvoTimeout = data?.error && (
-      data.error.includes('45s') || data.error.includes('55s') || data.error.includes('90s') ||
-      data.error.includes('timeout') || data.error.includes('Railway')
-    );
-    const isTransient = !data || data._coldStart || data._timeout || isEvoTimeout;
-    if (!isTransient) break;
-
-    if (attempt < MAX_ATTEMPTS) {
-      const waitSecs = RETRY_DELAYS[attempt - 1];
-      let secsLeft   = waitSecs;
-      showSpinner(
-        `Instância demorando a responder — <b>tentativa ${attempt + 1}/${MAX_ATTEMPTS}</b> <span style="opacity:0.65;font-size:10px">(pode levar até 90s)</span><br>` +
-        `<span id="wa-retry-countdown" style="font-size:10px;opacity:0.7">nova tentativa em ${secsLeft}s…</span>`
-      );
-      const cdInterval = setInterval(() => {
-        secsLeft--;
-        const cdEl = document.getElementById('wa-retry-countdown');
-        if (cdEl) cdEl.textContent = `nova tentativa em ${secsLeft}s…`;
-        if (secsLeft <= 0) clearInterval(cdInterval);
-      }, 1000);
-      await new Promise(r => setTimeout(r, waitSecs * 1000));
-      clearInterval(cdInterval);
-    }
-  }
-
-  // ── Passo 5: tratar resultado final ──────────────────────────────────────
-
-  // Helper: exibe hint informativo no campo de busca (substitui placeholder)
-  const _setSearchHint = (msg) => {
-    const searchEl = document.getElementById('wa-group-search');
-    if (!searchEl) return;
-    searchEl.value       = '';
-    searchEl.placeholder = msg;
-    searchEl.disabled    = true;
+    const _searchEl = document.getElementById('wa-group-search');
+    if (_searchEl) { _searchEl.placeholder = 'Buscar grupo…'; _searchEl.disabled = false; }
+    const staleTag = data._stale
+      ? ` <span style="font-size:10px;opacity:0.6;margin-left:4px">· atualizando…</span>` : '';
+    if (count) count.textContent = `${_waAllGroups.length} grupo${_waAllGroups.length !== 1 ? 's' : ''}${staleTag}`;
+    _filterWaGroups('');
+    return true;
   };
-
-  if (data?._timeout) {
-    console.error('[_loadWaGroups] timeout final após', MAX_ATTEMPTS, 'tentativa(s)');
-    _setSearchHint('Instância demorando a responder no Railway. Tente salvar o card novamente.');
-    showErr('⏱️', 'Evolution API não respondeu em 90s',
-      'O Railway pode estar inicializando o cliente Baileys.<br>Aguarde 1–2 minutos e clique em <b>Tentar novamente</b>.');
-    return;
-  }
-
-  if (!data || data._coldStart) {
-    console.error('[_loadWaGroups] sem resposta válida após', MAX_ATTEMPTS, 'tentativa(s)');
-    _setSearchHint('Instância demorando a responder no Railway. Tente salvar o card novamente.');
-    showErr('⏳', 'Backend sem resposta',
-      'O servidor não retornou dados válidos.<br>Clique em <b>Tentar novamente</b>.');
-    return;
-  }
-
-  if (data.error) {
-    const err = data.error;
-    console.error('[_loadWaGroups] erro da API:', { error: err, detail: data.detail });
-
+  const _handleError = (data) => {
+    if (!data || data._coldStart) {
+      showErr('⏳', 'Backend sem resposta', 'O servidor não retornou dados válidos.<br>Clique em <b>Tentar novamente</b>.');
+      return;
+    }
+    if (data._timeout) {
+      const s = document.getElementById('wa-group-search');
+      if (s) { s.placeholder = 'Instância demorando a responder. Aguarde e tente novamente.'; s.disabled = true; }
+      showErr('⏱️', 'Evolution API não respondeu em 90s',
+        'O Railway pode estar inicializando o cliente Baileys.<br>Aguarde 1–2 minutos e clique em <b>Tentar novamente</b>.');
+      return;
+    }
+    const err      = data.error || 'Erro desconhecido';
     const isTimeout = err.includes('45s') || err.includes('55s') || err.includes('90s') || err.includes('timeout');
     const isKey     = err.includes('inválida') || err.includes('API Key');
     const isNoInst  = err.includes('não encontrada') || err.includes('instância');
     const isRoute   = err.includes('Rota não encontrada') || err.includes('404');
     const isReject  = err.includes('400') || err.includes('rejeitou');
-
     if (isTimeout) {
-      _setSearchHint('Instância demorando a responder no Railway. Tente salvar o card novamente.');
+      const s = document.getElementById('wa-group-search');
+      if (s) { s.placeholder = 'Instância demorando a responder no Railway. Tente novamente.'; s.disabled = true; }
     }
-
     const icon = isKey ? '🔑' : isTimeout ? '⏱️' : isNoInst ? '📵' : isRoute ? '🔌' : '❌';
-
-    const sub = isKey
+    const sub  = isKey
       ? 'Verifique a chave da Evolution API em <b>Integrações → Evolution API → Salvar</b>.'
       : isTimeout
         ? 'A Evolution API demorou para responder. Clique em <b>Tentar novamente</b>.'
@@ -15988,32 +15824,66 @@ async function _loadWaGroups() {
               ? 'Verifique se a instância WhatsApp está ativa no Railway.<br>'
                 + (data.detail ? `<code style="font-size:9px;opacity:0.7">${String(data.detail).substring(0,100)}</code>` : '')
               : `${err}${data.detail ? '<br><code style="font-size:9px;opacity:0.7">' + String(data.detail).substring(0,120) + '</code>' : ''}`;
-
     showErr(icon, err, sub);
+  };
+
+  // ── Render wake-up (fire-and-forget) ─────────────────────────────────────
+  const _kaBase = (PROD_CONFIG.renderUrl || '').replace(/\/$/, '');
+  if (_kaBase) fetch(_kaBase + '/health').catch(() => {});
+
+  // ── Dispara busca de grupos imediatamente ─────────────────────────────────
+  // Backend responde em < 200ms se tiver cache em memória; caso contrário busca
+  // da Evolution API, podendo levar até 90s na primeira vez.
+  const mainCtrl    = new AbortController();
+  const mainTimeout = setTimeout(() => mainCtrl.abort(), 100000);
+
+  const groupsPromise = _renderFetch(
+    `/api/whatsapp/groups?userId=${encodeURIComponent(userId)}`,
+    { signal: mainCtrl.signal }
+  ).catch(() => null);
+
+  // ── Race: aguarda até 1.5s — resposta nesse prazo = cache hit ────────────
+  const fastResult = await Promise.race([
+    groupsPromise,
+    new Promise(r => setTimeout(() => r({ _slow: true }), 1500)),
+  ]);
+
+  if (!fastResult?._slow) {
+    // Resposta chegou em < 1.5s → backend tinha cache em memória
+    clearTimeout(mainTimeout);
+    console.log('[_loadWaGroups] cache hit rápido:', { ok: !!fastResult?.groups, stale: fastResult?._stale });
+    if (fastResult?.groups && !fastResult.error) {
+      _applyGroups(fastResult);
+    } else {
+      _handleError(fastResult);
+    }
     return;
   }
 
-  _waAllGroups = data.groups || [];
+  // ── Sem cache: Evolution API sendo consultada (pode levar até 90s) ────────
+  showSpinner(
+    'Conectando à instância WhatsApp…<br>' +
+    '<span style="opacity:0.65;font-size:10px">Aguardando Railway (pode levar até 90s na 1ª vez)</span>'
+  );
 
-  // ── Salva no cache de sessão — próxima abertura do picker usa lista local ──
-  _waGroupsCache.userId   = userId;
-  _waGroupsCache.groups   = [..._waAllGroups];
-  _waGroupsCache.loadedAt = Date.now();
+  // Ping em paralelo para atualizar o spinner com latência — não-bloqueante
+  _renderFetch('/api/whatsapp/ping').then(p => {
+    if (!p?.ok) return;
+    const el = document.getElementById('wa-loading-text');
+    if (el) el.innerHTML =
+      `Evolution API online (${p.latencyMs ?? 0}ms) — carregando grupos…<br>` +
+      `<span style="opacity:0.65;font-size:10px">Pode levar até 90s enquanto o Railway inicializa o Baileys</span>`;
+  }).catch(() => {});
 
-  const dbg = data._debug;
-  if (dbg && dbg.total > 0 && dbg.filtered === 0) {
-    // Grupos vieram mas nenhum passou no filtro @g.us — problema de formato
-    showErr('⚠️', 'Grupos recebidos mas não reconhecidos',
-      `A API retornou ${dbg.total} item(s) mas nenhum tinha JID @g.us.<br>Verifique o console do backend.`);
-    return;
+  // Aguarda a resposta que já está em andamento
+  const data = await groupsPromise;
+  clearTimeout(mainTimeout);
+
+  if (data?.groups && !data.error) {
+    _applyGroups(data);
+  } else {
+    _handleError(data);
   }
-
-  // Reabilita campo de busca (pode ter sido desabilitado por tentativa anterior)
-  const _searchEl = document.getElementById('wa-group-search');
-  if (_searchEl) { _searchEl.placeholder = 'Buscar grupo…'; _searchEl.disabled = false; }
-
-  if (count) count.textContent = `${_waAllGroups.length} grupo${_waAllGroups.length !== 1 ? 's' : ''}`;
-  _filterWaGroups('');
 }
 
 function _filterWaGroups(query) {
