@@ -12052,6 +12052,7 @@ async function _callOpenAI(apiKey, payloadIA) {
 let BAL_SIM_MODE      = false;
 let BAL_FILTRO_METODO = 'todos';   // 'todos' | 'cartao' | 'pre_pago'
 let BAL_BLOCKS_CACHE  = null;      // cache dos blocks para filtragem instantânea
+let BAL_SYNC_ERROR    = null;      // null | 'META_TOKEN_EXPIRED' | 'SERVER_DOWN'
 
 // Overrides auditados por account_id — usados quando a API retorna valor inconsistente.
 // Útil para contas pré-pagas (boleto/PIX) onde balance != saldo disponível real.
@@ -12236,6 +12237,21 @@ const BAL_SIM_DATA = {
 };
 
 // ── Sincronização forçada de saldos: chama backend → Meta API → atualiza MongoDB ──
+// Exibe notificação persistente (duração mais longa) com link de ação
+function showSyncErrorBanner(msg, linkLabel, linkAction) {
+  const toast = document.getElementById('welcome-toast');
+  if (!toast) return;
+  toast.className = 'toast-error show';
+  toast.innerHTML =
+    `<i class="ti ti-key-off" style="color:var(--red);font-size:18px;margin-right:8px;flex-shrink:0"></i>` +
+    `<span style="flex:1">${msg}` +
+    (linkLabel ? ` <span onclick="${linkAction}" style="color:var(--accent);text-decoration:underline;cursor:pointer;font-weight:600;white-space:nowrap">${linkLabel} →</span>` : '') +
+    `</span>`;
+  clearTimeout(toast._nt);
+  // 10s para dar tempo ao gestor de ler e clicar no link
+  toast._nt = setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.className='', 300); }, 10000);
+}
+
 async function forceSyncBalances() {
   const btn = document.getElementById('bal-sync-btn');
   const _origHtml = btn ? btn.innerHTML : '';
@@ -12247,7 +12263,12 @@ async function forceSyncBalances() {
   try {
     const metaToken = loadMetaToken();
     if (!metaToken) {
-      showNotification('⚠️ Configure o token Meta Ads antes de sincronizar.', 'warn');
+      BAL_SYNC_ERROR = 'META_TOKEN_MISSING';
+      showSyncErrorBanner(
+        'Token Meta Ads não configurado.',
+        'Configurar em Integrações',
+        "navigate('integracoes')"
+      );
       return;
     }
 
@@ -12260,46 +12281,78 @@ async function forceSyncBalances() {
       return;
     }
 
-    const data = await _renderFetch('/api/alerts/sync', {
-      method: 'POST',
-      body: JSON.stringify({ metaToken, clients: clientsPayload })
-    });
-
-    if (!data) {
+    // ── Chamada ao backend — pode retornar 401 se token expirou ─────────────
+    let rawRes, data;
+    try {
+      rawRes = await fetch(
+        (window.PROD_CONFIG?.renderUrl || '') + '/api/alerts/sync',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ metaToken, clients: clientsPayload })
+        }
+      );
+      data = await rawRes.json();
+    } catch (fetchErr) {
+      BAL_SYNC_ERROR = 'SERVER_DOWN';
       showNotification('⚠️ Servidor indisponível — tente novamente em instantes.', 'warn');
       return;
     }
 
-    if (data.ok && Array.isArray(data.updated) && data.updated.length > 0) {
-      // Aplica valores frescos ao CLIENTS.list em memória
+    // ── HTTP 401: token inválido ou expirado ─────────────────────────────────
+    if (rawRes.status === 401 || data?.error === 'META_TOKEN_EXPIRED') {
+      BAL_SYNC_ERROR = 'META_TOKEN_EXPIRED';
+      console.error('[forceSyncBalances] Token Meta expirado. Código:', data?.code, '—', data?.detail);
+      showSyncErrorBanner(
+        'Token da Meta Ads expirado ou inválido — saldos exibidos podem estar desatualizados.',
+        'Atualizar token em Integrações',
+        "navigate('integracoes')"
+      );
+      return;
+    }
+
+    // ── Sucesso parcial ou total ──────────────────────────────────────────────
+    if (data?.ok && Array.isArray(data.updated) && data.updated.length > 0) {
+      BAL_SYNC_ERROR = null; // limpa erro anterior se existia
       let patchCount = 0;
       data.updated.forEach(u => {
         const c = CLIENTS.list.find(x => x.id === u.clientId);
         if (!c) return;
-        if (u.meta_balance > 0)  { c.meta_balance  = u.meta_balance;  patchCount++; }
-        if (u.meta_spend7d > 0)  { c.meta_spend7d  = u.meta_spend7d;             }
-        if (u.meta_account_status) c.meta_account_status = u.meta_account_status;
+        if (u.meta_balance > 0)    { c.meta_balance         = u.meta_balance; patchCount++; }
+        if (u.meta_spend7d > 0)    { c.meta_spend7d         = u.meta_spend7d; }
+        if (u.meta_account_status) { c.meta_account_status  = u.meta_account_status; }
       });
       if (patchCount > 0) {
-        // Persiste em localStorage (sem push para Atlas — valores serão sincronizados na próx. operação)
         localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
       }
       const nErr = data.errors?.length || 0;
       const msg  = nErr > 0
-        ? `✅ ${data.updated.length} conta(s) sincronizada(s) — ${nErr} erro(s) (verifique o console).`
+        ? `✅ ${data.updated.length} conta(s) sincronizada(s) com ${nErr} erro(s) — verifique o console.`
         : `✅ ${data.updated.length} conta(s) sincronizadas com dados frescos da Meta!`;
       showNotification(msg, nErr > 0 ? 'warn' : 'success');
-    } else if (data.errors?.length > 0) {
-      showNotification(`⚠️ Sincronização falhou em todos os clientes (${data.errors.length} erro(s)). Verifique o token Meta.`, 'error');
+    } else if (data?.errors?.length > 0) {
+      // Todos falharam por motivo não-token — pode ser erro de permissão por conta
+      const hasTokenErr = data.errors.some(e => e.error === 'META_TOKEN_EXPIRED');
+      if (hasTokenErr) {
+        BAL_SYNC_ERROR = 'META_TOKEN_EXPIRED';
+        showSyncErrorBanner(
+          'Token da Meta Ads expirado ou inválido.',
+          'Atualizar em Integrações',
+          "navigate('integracoes')"
+        );
+      } else {
+        showNotification(`⚠️ Sincronização falhou (${data.errors.length} erro(s)). Verifique o token Meta Ads.`, 'error');
+      }
     } else {
       showNotification('Sem contas elegíveis para sincronizar.', 'warn');
     }
+
   } catch (err) {
     console.error('[forceSyncBalances]', err);
-    showNotification('Erro ao sincronizar: ' + err.message, 'error');
+    BAL_SYNC_ERROR = 'SERVER_DOWN';
+    showNotification('Erro inesperado ao sincronizar: ' + err.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = _origHtml; }
-    // Força re-render com dados frescos (invalida o cache de blocos)
     BAL_BLOCKS_CACHE = null;
     renderBalanceMonitor();
   }
@@ -12747,12 +12800,17 @@ function buildBalClientBlock(client, metaAlert, gadsAlert, gadsData, metaData) {
       ${_waBtn}
     </div>` : '';
 
+  // ── Badge "Desatualizado" quando há erro de token/sincronização ─────────────
+  const _staleTag = (BAL_SYNC_ERROR && client.meta_ad_account_id)
+    ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:600;color:#92400E;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.30);border-radius:20px;padding:2px 7px;margin-left:6px"><i class="ti ti-clock-exclamation" style="font-size:9px"></i> Desatualizado</span>`
+    : '';
+
   return `
     <div class="bal-client-block ${blockCls}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
         ${_clAvatar(client, 32, '8px')}
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text)">${_clientName}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${_clientName}${_staleTag}</div>
           <span class="segment-badge" style="background:${seg.bg};color:${seg.color}">${seg.label}</span>
         </div>
         ${budgetUsedPct !== null ? `<span style="font-size:11px;color:var(--text3)">Budget: <b style="color:var(--text)">${fmtBRL(client.budget || 0)}</b> · <b style="color:${budgetUsedPct>=90?'var(--red)':budgetUsedPct>=70?'var(--amber)':'var(--text)'}">${budgetUsedPct}%</b> usado</span>` : ''}
@@ -13108,6 +13166,9 @@ async function renderBalanceMonitor() {
 
   // Cache all blocks and delegate rendering + filtering to applyFiltroToContainer
   BAL_BLOCKS_CACHE = blocks;
+  // Se todos os blocos vieram de sucesso real (nenhum erro global), limpa o estado de erro
+  // O BAL_SYNC_ERROR de token é gerenciado por forceSyncBalances — não resetar aqui automaticamente
+  // para que o banner "Desatualizado" persista até o gestor renovar o token.
   applyFiltroToContainer();
 
   } catch (globalErr) {
@@ -13207,7 +13268,7 @@ function applyFiltroToContainer() {
   });
 
   // ── Banner "Tudo sob controle!" quando não há alertas críticos ou moderados ──
-  if (filteredBlocks.length > 0 && nCritical === 0 && nModerate === 0) {
+  if (filteredBlocks.length > 0 && nCritical === 0 && nModerate === 0 && !BAL_SYNC_ERROR) {
     finalHtml = `
       <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:12px;background:rgba(34,197,94,0.07);border:1.5px solid rgba(34,197,94,0.22);margin-bottom:18px">
         <i class="ti ti-circle-check-filled" style="font-size:30px;color:var(--green);flex-shrink:0"></i>
@@ -13218,14 +13279,55 @@ function applyFiltroToContainer() {
       </div>` + finalHtml;
   }
 
+  // ── Banner persistente de erro de token / dados desatualizados ──────────────
+  if (BAL_SYNC_ERROR) {
+    const _isToken = BAL_SYNC_ERROR === 'META_TOKEN_EXPIRED' || BAL_SYNC_ERROR === 'META_TOKEN_MISSING';
+    const _errIcon   = _isToken ? 'ti-key-off' : 'ti-wifi-off';
+    const _errTitle  = _isToken ? 'Token da Meta Ads inválido ou expirado' : 'Sincronização indisponível';
+    const _errDetail = _isToken
+      ? 'Os saldos exibidos abaixo podem estar desatualizados. Renove o token permanente da Meta Ads para restaurar o monitoramento em tempo real.'
+      : 'O servidor de sincronização está temporariamente indisponível. Os saldos abaixo refletem os últimos dados salvos.';
+    const _errBtn = _isToken
+      ? `<button class="btn btn-sm" onclick="navigate('integracoes')" style="margin-top:8px;font-size:11px;height:26px;padding:0 10px;background:rgba(245,158,11,0.15);color:#92400E;border:1px solid rgba(245,158,11,0.4)"><i class="ti ti-settings" style="font-size:11px;margin-right:4px"></i>Atualizar token em Configurações › Integrações</button>`
+      : '';
+    finalHtml = `
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:10px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.32);margin-bottom:14px">
+        <i class="ti ${_errIcon}" style="font-size:20px;color:var(--amber);flex-shrink:0;margin-top:1px"></i>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--amber)">${_errTitle}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.5">${_errDetail}</div>
+          ${_errBtn}
+        </div>
+        <button onclick="BAL_SYNC_ERROR=null;applyFiltroToContainer()" title="Dispensar" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;padding:0 2px;line-height:1;margin-top:-2px">×</button>
+      </div>` + finalHtml;
+  }
+
   container.innerHTML = finalHtml;
 
+  // ── Summary badges — cor laranja/cinza quando há erro de token ──────────────
   const sc = document.getElementById('bal-summary-critical');
   const sm = document.getElementById('bal-summary-moderate');
   const so = document.getElementById('bal-summary-ok');
-  if (sc) { sc.innerHTML = `<i class="ti ti-alert-octagon" style="font-size:12px"></i> ${nCritical} Crítico${nCritical!==1?'s':''}`; sc.style.display = nCritical > 0 ? 'inline-flex' : 'none'; }
-  if (sm) { sm.innerHTML = `<i class="ti ti-alert-triangle" style="font-size:12px"></i> ${nModerate} Moderado${nModerate!==1?'s':''}`; sm.style.display = nModerate > 0 ? 'inline-flex' : 'none'; }
-  if (so) { so.innerHTML = `<i class="ti ti-circle-check" style="font-size:12px"></i> ${nOk} OK`; so.style.display = nOk > 0 ? 'inline-flex' : 'none'; }
+  if (BAL_SYNC_ERROR) {
+    // Substitui badges de status por indicador de "Desatualizado"
+    const _staleBadgeStyle = 'display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#92400E;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600';
+    if (sc) { sc.innerHTML = ''; sc.style.display = 'none'; }
+    if (sm) { sm.innerHTML = ''; sm.style.display = 'none'; }
+    if (so) {
+      so.setAttribute('style', _staleBadgeStyle);
+      so.innerHTML = `<i class="ti ti-clock-exclamation" style="font-size:12px"></i> ⚠️ Desatualizado — Erro de Token`;
+      so.style.display = 'inline-flex';
+    }
+  } else {
+    if (sc) { sc.innerHTML = `<i class="ti ti-alert-octagon" style="font-size:12px"></i> ${nCritical} Crítico${nCritical!==1?'s':''}`; sc.style.display = nCritical > 0 ? 'inline-flex' : 'none'; }
+    if (sm) { sm.innerHTML = `<i class="ti ti-alert-triangle" style="font-size:12px"></i> ${nModerate} Moderado${nModerate!==1?'s':''}`; sm.style.display = nModerate > 0 ? 'inline-flex' : 'none'; }
+    if (so) {
+      so.removeAttribute('style');
+      so.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(34,211,160,0.10);border:1px solid rgba(34,211,160,0.25);color:var(--green);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600';
+      so.innerHTML = `<i class="ti ti-circle-check" style="font-size:12px"></i> ${nOk} OK`;
+      so.style.display = nOk > 0 ? 'inline-flex' : 'none';
+    }
+  }
 
   // Badge de navegação — sempre reflete total crítico de todos os clientes
   const nCriticalAll = allBlocks.filter(b => b.level === 'critical').length;
