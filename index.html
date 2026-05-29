@@ -3664,9 +3664,15 @@
               <div class="card-title"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i> Texto para o cliente</div>
               <button class="btn btn-ghost btn-sm" onclick="copyReportMsg()"><i class="ti ti-copy"></i> Copiar</button>
             </div>
-            <div id="rep-wa-msg" style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;line-height:1.9;color:var(--text2)">
-              <span style="color:var(--text3)">Selecione um cliente e um template para gerar a mensagem.</span>
-            </div>
+            <textarea id="rep-wa-msg" rows="9"
+              placeholder="Selecione um cliente e um template para gerar a mensagem."
+              style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;
+                     line-height:1.9;color:var(--text2);width:100%;resize:vertical;
+                     border:1.5px solid var(--border);font-family:inherit;
+                     outline:none;box-sizing:border-box;transition:border-color 0.15s"
+              onfocus="this.style.borderColor='rgba(34,211,160,0.5)'"
+              onblur="this.style.borderColor='var(--border)'"
+            ></textarea>
 
             <!-- ── Seletor de tipo de relatório ── -->
             <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
@@ -11333,14 +11339,13 @@ async function updateReportPreview() {
     REPORT_STATE.periodStr = null;
     REPORT_STATE.fetching  = false;
     /* Limpa a UI imediatamente — sem dados do cliente anterior visíveis */
-    if (msgEl) msgEl.innerHTML =
-      '<span style="color:var(--text3);font-size:11px">⏳ Carregando dados do cliente…</span>';
+    if (msgEl) { if (msgEl.tagName === 'TEXTAREA') { msgEl.value = ''; msgEl.placeholder = '⏳ Carregando dados do cliente…'; } else { msgEl.innerHTML = '<span style="color:var(--text3);font-size:11px">⏳ Carregando dados do cliente…</span>'; } }
     ['rep-cover-name','rep-cover-period','rep-cover-inv','rep-cover-m2','rep-cover-m3']
       .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
   }
 
   if (!client) {
-    if (msgEl) msgEl.innerHTML = '<span style="color:var(--text3)">Selecione um cliente e um template para gerar a mensagem.</span>';
+    if (msgEl) { if (msgEl.tagName === 'TEXTAREA') { msgEl.value = ''; msgEl.placeholder = 'Selecione um cliente e um template para gerar a mensagem.'; } else { msgEl.innerHTML = '<span style="color:var(--text3)">Selecione um cliente e um template para gerar a mensagem.</span>'; } }
     REPORT_STATE.clientId = null;
     return;
   }
@@ -11486,11 +11491,19 @@ function _applyReportSnapshot(client, snapshot, periodStr, seg, msgEl, tpl) {
     lines = _buildMsgLeads(client, periodStr, snapshot);
   }
 
-  if (msgEl) msgEl.innerHTML = lines
-    .join('\n')
-    .replace(/\n/g, '<br>')
-    .replace(/\*(.*?)\*/g, '<strong style="color:var(--text)">$1</strong>')
-    .replace(/_(.*?)_/g, '<em style="color:var(--text3)">$1</em>');
+  if (msgEl) {
+    const plainText = lines.join('\n');
+    if (msgEl.tagName === 'TEXTAREA') {
+      msgEl.placeholder = 'Edite o texto antes de enviar…';
+      msgEl.value = plainText;
+      repTypeChanged(); // ajusta linha de anexo conforme tipo selecionado
+    } else {
+      msgEl.innerHTML = plainText
+        .replace(/\n/g, '<br>')
+        .replace(/\*(.*?)\*/g, '<strong style="color:var(--text)">$1</strong>')
+        .replace(/_(.*?)_/g, '<em style="color:var(--text3)">$1</em>');
+    }
+  }
 
   /* Card roxo — lê do mesmo snapshot */
   _updateRepCover(client, snapshot, periodStr, seg);
@@ -11500,7 +11513,9 @@ function _applyReportSnapshot(client, snapshot, periodStr, seg, msgEl, tpl) {
 function copyReportMsg() {
   const msgEl = document.getElementById('rep-wa-msg');
   if (!msgEl) return;
-  navigator.clipboard.writeText(msgEl.innerText)
+  const text = (msgEl.tagName === 'TEXTAREA' ? msgEl.value : msgEl.innerText).trim();
+  if (!text) { showNotification('Nenhum texto para copiar.', 'warn'); return; }
+  navigator.clipboard.writeText(text)
     .then(() => showNotification('Mensagem copiada! ✅', 'ok'))
     .catch(() => showNotification('Não foi possível copiar.', 'warn'));
 }
@@ -11569,7 +11584,8 @@ async function exportarRelatorioPDF() {
   }
 
   /* — Texto para o cliente (limpo) — */
-  const msgRaw = document.getElementById('rep-wa-msg')?.innerText?.trim() || '';
+  const _repWaEl = document.getElementById('rep-wa-msg');
+  const msgRaw = (_repWaEl ? (_repWaEl.tagName === 'TEXTAREA' ? _repWaEl.value : _repWaEl.innerText) : '').trim();
   const msgLines = msgRaw.split('\n').map(l => {
     // converte *bold* e _italic_ para HTML
     return l.replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/_(.*?)_/g, '<em>$1</em>');
@@ -11845,11 +11861,16 @@ async function _fetchPeriodMetrics(client, fromDate, toDate) {
 function _setRepMsg(lines) {
   const msgEl = document.getElementById('rep-wa-msg');
   if (!msgEl) return;
-  msgEl.innerHTML = lines
-    .join('\n')
-    .replace(/\n/g, '<br>')
-    .replace(/\*(.*?)\*/g, '<strong style="color:var(--text)">$1</strong>')
-    .replace(/_(.*?)_/g, '<em style="color:var(--text3)">$1</em>');
+  const plainText = lines.join('\n');
+  if (msgEl.tagName === 'TEXTAREA') {
+    msgEl.value = plainText;
+    repTypeChanged();
+  } else {
+    msgEl.innerHTML = plainText
+      .replace(/\n/g, '<br>')
+      .replace(/\*(.*?)\*/g, '<strong style="color:var(--text)">$1</strong>')
+      .replace(/_(.*?)_/g, '<em style="color:var(--text3)">$1</em>');
+  }
 }
 
 /* Versão pure-function do builder de delivery (recebe snapshot, não cliente) */
@@ -15780,6 +15801,13 @@ async function _loadWaGroups() {
         `A API retornou ${dbg.total} item(s) mas nenhum tinha JID @g.us.<br>Verifique o console do backend.`);
       return false;
     }
+    // Cache retornou lista vazia (instância pode ainda estar inicializando)
+    if (_waAllGroups.length === 0 && (data._cached || data._stale)) {
+      _waGroupsCache.loadedAt = 0; // invalida cache local para forçar nova busca
+      showErr('🔄', 'Nenhum grupo em cache',
+        'A instância WhatsApp pode estar inicializando.<br>Clique em <b>Tentar novamente</b> para buscar os grupos.');
+      return false;
+    }
     const _searchEl = document.getElementById('wa-group-search');
     if (_searchEl) { _searchEl.placeholder = 'Buscar grupo…'; _searchEl.disabled = false; }
     const staleTag = data._stale
@@ -15997,11 +16025,15 @@ function _saveWaGroupToAtlas(clientId, jid, name, _attempt) {
 
 // ── Atualiza o visual do seletor de tipo de relatório ─────────────────────────
 function repTypeChanged() {
-  const completo = document.getElementById('rep-type-completo');
+  const completo  = document.getElementById('rep-type-completo');
   const lCompleto = document.getElementById('rep-type-completo-label');
   const lSimples  = document.getElementById('rep-type-simples-label');
   if (!completo || !lCompleto || !lSimples) return;
-  if (completo.checked) {
+
+  const isCompleto = completo.checked;
+
+  // Atualiza estilos dos labels
+  if (isCompleto) {
     lCompleto.style.borderColor = 'var(--accent)';
     lCompleto.style.background  = 'rgba(108,99,255,0.07)';
     lSimples.style.borderColor  = 'var(--border)';
@@ -16011,6 +16043,24 @@ function repTypeChanged() {
     lSimples.style.background   = 'rgba(108,99,255,0.07)';
     lCompleto.style.borderColor = 'var(--border)';
     lCompleto.style.background  = 'transparent';
+  }
+
+  // Adiciona/remove linha de anexo no textarea conforme tipo de relatório
+  const ANEXO    = '_Relatório completo em anexo!_ 📎';
+  const textarea = document.getElementById('rep-wa-msg');
+  if (!textarea || textarea.tagName !== 'TEXTAREA' || !textarea.value.trim()) return;
+
+  const lines       = textarea.value.split('\n');
+  const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
+
+  if (!isCompleto && lastNonEmpty === ANEXO) {
+    // Simples: remove linha de anexo e linhas em branco antes dela
+    let end = lines.length - 1;
+    while (end >= 0 && (lines[end] === ANEXO || lines[end].trim() === '')) end--;
+    textarea.value = lines.slice(0, end + 1).join('\n');
+  } else if (isCompleto && lastNonEmpty !== ANEXO) {
+    // Completo: adiciona linha de anexo se ausente
+    textarea.value = textarea.value.trimEnd() + '\n\n' + ANEXO;
   }
 }
 
@@ -16127,7 +16177,8 @@ async function sendReportViaWhatsApp() {
   const templateType = document.querySelector('input[name="rep-template-type"]:checked')?.value || 'simples';
 
   const msgEl  = document.getElementById('rep-wa-msg');
-  const msg    = msgEl ? msgEl.innerText : '';
+  const msg    = msgEl ? (msgEl.tagName === 'TEXTAREA' ? msgEl.value : msgEl.innerText).trim() : '';
+  if (!msg) { showNotification('O texto da mensagem está vazio. Gere o relatório antes de enviar.', 'warn'); return; }
   const userId = currentUser?.id;
 
   const btn = document.getElementById('rep-send-btn');
