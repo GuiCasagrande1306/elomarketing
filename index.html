@@ -9556,11 +9556,17 @@ function getOtimStatus(c) {
   //   = 7 dias  → Dia de Otimizar (atenção amarela, NÃO conta como atraso)
   //   ≥ 8 dias  → Atrasado (vermelho piscante, conta no indicador)
   //   sem data  → Nunca otimizado (conta como atraso)
-  if (!c.ultima_otimizacao) return { cls:'never',   icon:'ti-clock-off',          label:'Nunca',          days: null };
-  const diffDays = Math.floor((Date.now() - new Date(c.ultima_otimizacao)) / 86400000);
-  if (diffDays <= 6)  return { cls:'done',    icon:'ti-circle-check',       label:'Em dia',         days: diffDays };
-  if (diffDays === 7) return { cls:'warning', icon:'ti-clock-exclamation',  label:'Otimizar hoje',  days: 7 };
-  return                     { cls:'overdue', icon:'ti-alert-circle',       label:'Atrasado',       days: diffDays };
+  if (!c.ultima_otimizacao) return { cls:'never', icon:'ti-clock-off', label:'Nunca', days: null };
+  const now  = new Date();
+  const last = new Date(c.ultima_otimizacao);
+  // Compara em horário LOCAL (evita erro de UTC midnight ≠ meia-noite BRT:
+  // ex: '2026-05-29T03:00:00Z' = 29/05 00:00 BRT — toDateString/ms-diff falhariam)
+  const nowLocal  = new Date(now.getFullYear(),  now.getMonth(),  now.getDate());
+  const lastLocal = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+  const diffDays  = Math.round((nowLocal - lastLocal) / 86400000);
+  if (diffDays <= 6)  return { cls:'done',    icon:'ti-circle-check',      label:'Em dia',        days: diffDays };
+  if (diffDays === 7) return { cls:'warning', icon:'ti-clock-exclamation', label:'Otimizar hoje', days: 7 };
+  return                     { cls:'overdue', icon:'ti-alert-circle',      label:'Atrasado',      days: diffDays };
 }
 
 function esteiraFilterByColaborador(val) {
@@ -9620,9 +9626,13 @@ function renderEsteira() {
   /* ---- stats (always over ALL clients with routine, for global view) ---- */
   const totalWithRoutine = baseList.filter(c => c.dia_otimizacao).length;
   const todayClients     = baseList.filter(c => c.dia_otimizacao === todayKey);
-  const doneToday        = todayClients.filter(c => {
-    if (!c.ultima_otimizacao) return false;
-    return new Date(c.ultima_otimizacao).toDateString() === today.toDateString();
+  // doneToday: conta TODOS os clientes com rotina otimizados hoje (qualquer dia da semana).
+  // Usa componentes de data LOCAL para evitar bug de UTC midnight ≠ meia-noite BRT.
+  const _todayY = today.getFullYear(), _todayM = today.getMonth(), _todayD = today.getDate();
+  const doneToday = baseList.filter(c => {
+    if (!c.dia_otimizacao || !c.ultima_otimizacao) return false;
+    const d = new Date(c.ultima_otimizacao);
+    return d.getFullYear() === _todayY && d.getMonth() === _todayM && d.getDate() === _todayD;
   });
   const lateClients = baseList.filter(c => c.dia_otimizacao && getOtimStatus(c).cls === 'overdue');
 
@@ -9793,44 +9803,64 @@ function _recalcUltimaOtimizacao(c) {
   c.ultima_otimizacao = sorted[0].data;
 }
 
-function saveOptimization() {
+async function saveOptimization() {
   if (!OTIM_CLIENT_ID) return;
   const c = CLIENTS.list.find(x => x.id === OTIM_CLIENT_ID);
   if (!c) return;
 
   const nota = _otimGetContent();
-
   if (!Array.isArray(c.historico_otimizacoes)) c.historico_otimizacoes = [];
 
   if (OTIM_EDIT_ID !== null) {
-    /* ---- EDIT MODE: update existing entry ---- */
+    /* ---- EDIT MODE: atualiza entrada existente ---- */
     const entry = c.historico_otimizacoes.find(h => h.id === OTIM_EDIT_ID);
     if (entry) {
-      entry.texto_nota = nota;
-      entry.editado    = true;
+      entry.texto_nota  = nota;
+      entry.editado     = true;
       entry.data_edicao = new Date().toISOString();
     }
     OTIM_EDIT_ID = null;
     _otimSetEditMode(false);
-    /* remove editing-active highlight */
     document.querySelectorAll('.otim-note-item.editing-active')
       .forEach(el => el.classList.remove('editing-active'));
+    _recalcUltimaOtimizacao(c);
+    saveClients(); // edição: bulk sync é aceitável
   } else {
-    /* ---- NEW ENTRY ---- */
-    const now = new Date().toISOString();
+    /* ---- NOVA ENTRADA: update otimista em memória + POST atômico ----
+       Salva via endpoint dedicado (/api/clients/:id/optimizations) para evitar
+       race condition do bulk sync: o POST é atômico no MongoDB via $push/$set,
+       enquanto o bulk sync pode chegar ao servidor com uma versão já stale.     */
+    const nowISO = new Date().toISOString();
     c.historico_otimizacoes.unshift({
       id:         Date.now(),
-      data:       now,
+      data:       nowISO,
       texto_nota: nota,
       autor:      currentUser?.name || 'Usuário'
     });
+    _recalcUltimaOtimizacao(c);
+    // Persiste localStorage imediatamente (UX: dados não se perdem se fechar aba)
+    localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+
+    // POST atômico — não interfere com outros bulk syncs em voo
+    _apiFetch(`/api/clients/${c.id}/optimizations`, {
+      method: 'POST',
+      body:   JSON.stringify({ texto_nota: nota, autor: currentUser?.name || 'Usuário' })
+    }).then(updated => {
+      if (updated && updated.id) {
+        // Mescla resposta do servidor (IDs/datas confirmados) de volta em memória
+        const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
+        if (idx !== -1) {
+          CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
+          localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+        }
+      }
+    }).catch(() => saveClients()); // fallback: bulk sync se POST falhar
   }
 
-  _recalcUltimaOtimizacao(c);
-  saveClients();
   _otimClearContent();
   renderOtimHistory(c);
   renderEsteira();
+  renderDashboard(); // ← atualiza card "Otimizar Hoje" imediatamente
 }
 
 function editOtimEntry(entryId) {
