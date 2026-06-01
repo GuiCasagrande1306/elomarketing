@@ -6855,14 +6855,22 @@ async function loadTasksFromDB() {
     const srvStatus = normalizeTaskStatus(t.status);
     const group = srvStatus === 'Pronto' ? 'concluidos'
                 : (_srvValidGroups.has(rawGrp) ? rawGrp : 'semana');
+    // Sanitiza timer: tarefas Pronto jamais devem ter timerStartedAt ativo.
+    // Acumula qualquer delta pendente em timeSpent antes de zerar o ponteiro.
+    let srvTimerStartedAt = t.timerStartedAt || null;
+    let srvTimeSpent      = t.timeSpent      || 0;
+    if (srvStatus === 'Pronto' && srvTimerStartedAt) {
+      srvTimeSpent += (Date.now() - new Date(srvTimerStartedAt).getTime()) / 1000;
+      srvTimerStartedAt = null;
+    }
     return {
       ...t,
       status:         srvStatus,
       priority:       normalizeTaskPriority(t),
       group,
       assignedTo:     t.assignedTo || t.owner || '',
-      timeSpent:      t.timeSpent      || 0,
-      timerStartedAt: t.timerStartedAt || null,
+      timeSpent:      srvTimeSpent,
+      timerStartedAt: srvTimerStartedAt,
     };
   });
 
@@ -8121,14 +8129,21 @@ async function _pollTasks() {
     const incoming = data.filter(t => !_pendingDeletions.has(t.id)).map(t => {
       const rawGrp  = t.group === 'backlog' ? 'semana' : (t.group || 'semana');
       const srvStat = normalizeTaskStatus(t.status);
+      // Sanitiza timer: Pronto jamais pode ter timerStartedAt ativo (dado legado/corrompido)
+      let pollTimerStartedAt = t.timerStartedAt || null;
+      let pollTimeSpent      = t.timeSpent      || 0;
+      if (srvStat === 'Pronto' && pollTimerStartedAt) {
+        pollTimeSpent += (Date.now() - new Date(pollTimerStartedAt).getTime()) / 1000;
+        pollTimerStartedAt = null;
+      }
       return {
         ...t,
         status:   srvStat,
         priority: normalizeTaskPriority(t),
         group:    srvStat === 'Pronto' ? 'concluidos' : (_srvValidGroups.has(rawGrp) ? rawGrp : 'semana'),
         assignedTo: t.assignedTo || t.owner || '',
-        timeSpent:  t.timeSpent  || 0,
-        timerStartedAt: t.timerStartedAt || null,
+        timeSpent:      pollTimeSpent,
+        timerStartedAt: pollTimerStartedAt,
       };
     });
 
@@ -16996,12 +17011,27 @@ function _buildTaskRow(task, groupKey = 'semana') {
   }
 
   // Timer display
-  const timerSecs = task.timerStartedAt
-    ? (task.timeSpent || 0) + (Date.now() - new Date(task.timerStartedAt).getTime()) / 1000
-    : (task.timeSpent || 0);
-  const timerHtml = timerSecs > 0 || task.timerStartedAt
-    ? `<span class="m-timer${task.timerStartedAt ? ' m-timer-running' : ''}" data-timer-id="${task.id}">${_formatTaskTime(timerSecs)}</span>`
-    : `<span class="m-timer" data-timer-id="${task.id}" style="opacity:.35">—</span>`;
+  // Concluídos: timer ESTÁTICO — sem data-timer-id (o tick do setInterval não consegue
+  // encontrar o elemento e não o atualiza). Resolve o bug de timer contínuo em tarefas
+  // Pronto que ainda tenham timerStartedAt no banco por dado legado.
+  let timerHtml;
+  if (groupKey === 'concluidos') {
+    // Congela o tempo: inclui qualquer delta pendente de dado legado, mas não torna dinâmico
+    const frozenSecs = task.timerStartedAt
+      ? (task.timeSpent || 0) + (Date.now() - new Date(task.timerStartedAt).getTime()) / 1000
+      : (task.timeSpent || 0);
+    timerHtml = frozenSecs > 0
+      ? `<span class="m-timer">${_formatTaskTime(frozenSecs)}</span>`
+      : `<span class="m-timer" style="opacity:.35">—</span>`;
+  } else {
+    // Grupos ativos: timer vivo com data-timer-id para o tick do cronômetro
+    const timerSecs = task.timerStartedAt
+      ? (task.timeSpent || 0) + (Date.now() - new Date(task.timerStartedAt).getTime()) / 1000
+      : (task.timeSpent || 0);
+    timerHtml = timerSecs > 0 || task.timerStartedAt
+      ? `<span class="m-timer${task.timerStartedAt ? ' m-timer-running' : ''}" data-timer-id="${task.id}">${_formatTaskTime(timerSecs)}</span>`
+      : `<span class="m-timer" data-timer-id="${task.id}" style="opacity:.35">—</span>`;
+  }
 
   tr.innerHTML = `
     <td class="monday-td" style="padding-left:14px">
