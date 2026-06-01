@@ -16823,18 +16823,28 @@ function renderTasksGrid() {
   board.innerHTML = '';
   TASK_GROUPS_CFG.forEach(g => {
     let groupTasks = tasks.filter(t => t.group === g.key);
-    // Filtra aba Concluídos pela data selecionada (componentes locais — BRT-safe)
+
+    if (g.key === 'semana') {
+      // Guarda defensiva: nunca exibe tarefas Pronto na aba Demandas da Semana,
+      // independente de como o campo group possa estar no banco (dados legados, etc.)
+      groupTasks = groupTasks.filter(t => t.status !== 'Pronto');
+    }
+
     if (g.key === 'concluidos') {
+      // Filtra pela data selecionada (componentes locais — BRT-safe).
+      // Tarefas sem completed_at (dados legados sem timestamp) são sempre exibidas
+      // quando não há filtro de data; com filtro ativo, são ocultadas.
       const dateFilter = _getCompletedDateFilter();
       if (dateFilter) {
         groupTasks = groupTasks.filter(t => {
-          if (!t.completed_at) return false;
+          if (!t.completed_at) return false; // sem timestamp → não exibe no filtro por data
           const d = new Date(t.completed_at);
           const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
           return localDate === dateFilter;
         });
       }
     }
+
     board.appendChild(_buildTaskGroup(g, groupTasks));
   });
   // Gerencia tick do cronômetro
@@ -17081,17 +17091,22 @@ function setMondayStatus(taskId, status) {
   const prevGroup          = t.group;
   const prevTimerStartedAt = t.timerStartedAt; // captura antes da mudança para rollback
   const prevTimeSpent      = t.timeSpent;       // captura antes da mudança para rollback
+  const prevCompletedAt    = t.completed_at;    // captura antes da mudança para rollback
   t.status = status;
   const patch = { status };
 
   // ── Automação de grupo ─────────────────────────────────────────────────
   if (status === 'Pronto') {
-    t.group = 'concluidos';
-    patch.group = 'concluidos';
-    patch.completed_at = new Date().toISOString();
+    const nowISO = new Date().toISOString();
+    t.group        = 'concluidos';
+    t.completed_at = nowISO;          // ← grava em MEMÓRIA (necessário para o filtro de data)
+    patch.group        = 'concluidos';
+    patch.completed_at = nowISO;
   } else if (prevStatus === 'Pronto' && t.group === 'concluidos') {
-    t.group = 'semana';
-    patch.group = 'semana';
+    t.group        = 'semana';
+    t.completed_at = null;            // ← remove o timestamp ao desfazer conclusão
+    patch.group        = 'semana';
+    patch.completed_at = null;
   }
 
   // ── Automação de timer ─────────────────────────────────────────────────
@@ -17120,6 +17135,7 @@ function setMondayStatus(taskId, status) {
     task.group           = prevGroup;
     task.timerStartedAt  = prevTimerStartedAt; // ← reverte timer
     task.timeSpent       = prevTimeSpent;       // ← reverte tempo acumulado
+    task.completed_at    = prevCompletedAt;     // ← reverte timestamp de conclusão
     delete task._localUpdatedAt;
     saveTasks(); renderTasksGrid(); updateNavBadges();
     showNotification(`❌ Falha ao salvar no servidor — status revertido para "${prevStatus}". Verifique sua conexão.`, 'error');
