@@ -2805,6 +2805,7 @@
   .form-select { min-height: 44px; font-size: 16px; /* evita zoom no iOS */ }
   .rep-client-trigger { min-height: 44px; font-size: 16px; }
   .rep-client-search-wrap input { font-size: 16px; } /* evita zoom no iOS */
+  #completed-date-filter { min-height: 36px; font-size: 15px; } /* toque confortável no header */
 
   /* ── Grids inline com 2 colunas → 1 coluna no mobile ────────── */
   [style*="grid-template-columns: 1fr 1fr"],
@@ -3835,15 +3836,6 @@
             <option value="Travado">Travado</option>
             <option value="Pronto">Pronto</option>
           </select>
-          <!-- Filtro de data para a aba Concluídos — padrão = hoje -->
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);white-space:nowrap">
-            <i class="ti ti-calendar-check" style="font-size:12px"></i>
-            <input type="date" id="completed-date-filter"
-                   class="monday-filter-sel"
-                   style="color-scheme:dark;min-width:120px;padding:4px 7px"
-                   onchange="renderTasksGrid()"
-                   title="Filtrar aba Concluídos por data de entrega">
-          </label>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost btn-sm" id="task-sync-btn"
@@ -6107,9 +6099,8 @@ function tkTimeStr(d) {
 function toggleTask(el) { } // legado - não usado
 
 function filterCompletedTasks(date) {
-  // Atualiza o input de filtro e re-renderiza (compatibilidade com chamadas legadas)
-  const el = document.getElementById('completed-date-filter');
-  if (el && typeof date === 'string') el.value = date;
+  // Atualiza a variável de estado e re-renderiza (compatibilidade com chamadas legadas)
+  if (typeof date === 'string') _completedDateFilter = date;
   renderTasksGrid();
 }
 
@@ -7917,8 +7908,7 @@ function filterByCollaborator(uid) {
   document.querySelectorAll('#task-list .task-item').forEach(el => {
     if (el.dataset.owner) el.style.display = match(el) ? '' : 'none';
   });
-  const dateVal = document.getElementById('completed-date-filter')?.value || '';
-  filterCompletedTasks(dateVal);
+  filterCompletedTasks(_getCompletedDateFilter());
 
   // ── Re-renderiza a página ativa para refletir o filtro ────────────────────
   const activePage = document.querySelector('.page.active')?.id || '';
@@ -9581,6 +9571,15 @@ function _otimClearContent() {
 }
 let ESTEIRA_COLABORADOR = 'todos';
 let ESTEIRA_CATEGORIA   = 'todos';
+// Filtro de data da aba Concluídos — null = "ainda não inicializado" (será setado para hoje)
+let _completedDateFilter = null;
+function _getCompletedDateFilter() {
+  if (_completedDateFilter === null) {
+    const now = new Date();
+    _completedDateFilter = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  }
+  return _completedDateFilter;
+}
 
 function getOtimStatus(c) {
   // Regra oficial de prazos:
@@ -16826,7 +16825,7 @@ function renderTasksGrid() {
     let groupTasks = tasks.filter(t => t.group === g.key);
     // Filtra aba Concluídos pela data selecionada (componentes locais — BRT-safe)
     if (g.key === 'concluidos') {
-      const dateFilter = document.getElementById('completed-date-filter')?.value || '';
+      const dateFilter = _getCompletedDateFilter();
       if (dateFilter) {
         groupTasks = groupTasks.filter(t => {
           if (!t.completed_at) return false;
@@ -16865,12 +16864,6 @@ function _populateTaskFilters() {
       clientSel.appendChild(o);
     });
   }
-  // Filtro de data de conclusão: inicializa com hoje se ainda não tiver valor
-  const dateSel = document.getElementById('completed-date-filter');
-  if (dateSel && !dateSel.value) {
-    const now = new Date();
-    dateSel.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  }
 }
 
 function _buildTaskGroup(group, tasks) {
@@ -16879,11 +16872,27 @@ function _buildTaskGroup(group, tasks) {
 
   const hdr = document.createElement('div');
   hdr.className = 'monday-group-hdr';
+  // Para o grupo Concluídos: injeta o filtro de data alinhado à direita no header
+  const isDoneGroup = group.key === 'concluidos';
+  const _dateVal = isDoneGroup ? _getCompletedDateFilter() : '';
   hdr.innerHTML = `
     <div class="monday-group-dot" style="background:${group.color}"></div>
     <div class="monday-group-name">${group.label}</div>
     <div class="monday-group-cnt">${tasks.length}</div>
     <i class="ti ti-chevron-down" id="chv-${group.key}" style="color:var(--text3);font-size:13px;transition:transform .2s;margin-left:4px"></i>
+    ${isDoneGroup ? `
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;padding-left:12px" onclick="event.stopPropagation()">
+      <span style="font-size:11px;color:var(--text3);white-space:nowrap"><i class="ti ti-calendar-check" style="font-size:11px;margin-right:3px"></i>Filtrar por dia:</span>
+      <input type="date" id="completed-date-filter"
+             value="${_dateVal}"
+             style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;
+                    color:var(--text);font-family:var(--font);font-size:11px;padding:3px 8px;
+                    color-scheme:dark;outline:none;cursor:pointer;transition:border-color .15s"
+             onfocus="this.style.borderColor='var(--accent)'"
+             onblur="this.style.borderColor='var(--border2)'"
+             onchange="(function(v){_completedDateFilter=v;renderTasksGrid()})(this.value)"
+             title="Filtrar tarefas concluídas por data de entrega">
+    </div>` : ''}
   `;
 
   const body = document.createElement('div');
@@ -16892,7 +16901,6 @@ function _buildTaskGroup(group, tasks) {
   const table = document.createElement('table');
   table.className = 'monday-table';
 
-  const isDoneGroup = group.key === 'concluidos';
   const thead = `<thead><tr>
     <th class="monday-th" style="width:30%;padding-left:46px">Tarefa</th>
     <th class="monday-th" style="width:13%">Cliente</th>
