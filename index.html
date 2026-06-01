@@ -3835,6 +3835,15 @@
             <option value="Travado">Travado</option>
             <option value="Pronto">Pronto</option>
           </select>
+          <!-- Filtro de data para a aba Concluídos — padrão = hoje -->
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);white-space:nowrap">
+            <i class="ti ti-calendar-check" style="font-size:12px"></i>
+            <input type="date" id="completed-date-filter"
+                   class="monday-filter-sel"
+                   style="color-scheme:dark;min-width:120px;padding:4px 7px"
+                   onchange="renderTasksGrid()"
+                   title="Filtrar aba Concluídos por data de entrega">
+          </label>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost btn-sm" id="task-sync-btn"
@@ -6097,7 +6106,12 @@ function tkTimeStr(d) {
 
 function toggleTask(el) { } // legado - não usado
 
-function filterCompletedTasks(date) { } // legado - não usado
+function filterCompletedTasks(date) {
+  // Atualiza o input de filtro e re-renderiza (compatibilidade com chamadas legadas)
+  const el = document.getElementById('completed-date-filter');
+  if (el && typeof date === 'string') el.value = date;
+  renderTasksGrid();
+}
 
 function updateCompletedCount() {
   const el = document.getElementById('completed-count');
@@ -16809,7 +16823,20 @@ function renderTasksGrid() {
 
   board.innerHTML = '';
   TASK_GROUPS_CFG.forEach(g => {
-    board.appendChild(_buildTaskGroup(g, tasks.filter(t => t.group === g.key)));
+    let groupTasks = tasks.filter(t => t.group === g.key);
+    // Filtra aba Concluídos pela data selecionada (componentes locais — BRT-safe)
+    if (g.key === 'concluidos') {
+      const dateFilter = document.getElementById('completed-date-filter')?.value || '';
+      if (dateFilter) {
+        groupTasks = groupTasks.filter(t => {
+          if (!t.completed_at) return false;
+          const d = new Date(t.completed_at);
+          const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          return localDate === dateFilter;
+        });
+      }
+    }
+    board.appendChild(_buildTaskGroup(g, groupTasks));
   });
   // Gerencia tick do cronômetro
   if (_hasRunningTimers()) _startTimerTick();
@@ -16838,6 +16865,12 @@ function _populateTaskFilters() {
       clientSel.appendChild(o);
     });
   }
+  // Filtro de data de conclusão: inicializa com hoje se ainda não tiver valor
+  const dateSel = document.getElementById('completed-date-filter');
+  if (dateSel && !dateSel.value) {
+    const now = new Date();
+    dateSel.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  }
 }
 
 function _buildTaskGroup(group, tasks) {
@@ -16859,6 +16892,7 @@ function _buildTaskGroup(group, tasks) {
   const table = document.createElement('table');
   table.className = 'monday-table';
 
+  const isDoneGroup = group.key === 'concluidos';
   const thead = `<thead><tr>
     <th class="monday-th" style="width:30%;padding-left:46px">Tarefa</th>
     <th class="monday-th" style="width:13%">Cliente</th>
@@ -16866,13 +16900,15 @@ function _buildTaskGroup(group, tasks) {
     ${_thSort('status',   'Status',     'width:12%')}
     <th class="monday-th" style="width:9%">Tempo</th>
     ${_thSort('priority', 'Prioridade', 'width:11%')}
-    ${_thSort('dueDate',  'Prazo',      'width:8%')}
+    ${isDoneGroup
+      ? `<th class="monday-th" style="width:8%"><i class="ti ti-clock-check" style="font-size:10px;opacity:.7;vertical-align:middle"></i> Concluído</th>`
+      : _thSort('dueDate', 'Prazo', 'width:8%')}
     <th class="monday-th" style="width:4%"></th>
   </tr></thead>`;
   table.innerHTML = thead;
 
   const tbody = document.createElement('tbody');
-  tasks.forEach(t => tbody.appendChild(_buildTaskRow(t)));
+  tasks.forEach(t => tbody.appendChild(_buildTaskRow(t, group.key)));
   table.appendChild(tbody);
 
   const addRow = document.createElement('div');
@@ -16895,10 +16931,11 @@ function _buildTaskGroup(group, tasks) {
   return section;
 }
 
-function _buildTaskRow(task) {
+function _buildTaskRow(task, groupKey = 'semana') {
   const tr = document.createElement('tr');
   tr.className = 'monday-tr';
   tr.dataset.taskId = task.id;
+  if (task.completed_at) tr.dataset.completedAt = task.completed_at; // para filtragem futura
 
   const sc = TASK_STATUS_CFG[task.status]   || TASK_STATUS_CFG['Não Iniciada'];
   const pc = TASK_PRIORITY_CFG[task.priority] || TASK_PRIORITY_CFG['Média'];
@@ -16917,16 +16954,27 @@ function _buildTaskRow(task) {
   }).filter(Boolean).join('');
   const userHtml = _ownerAvatars || '<span style="color:var(--text3);font-size:11px">—</span>';
 
-  const due = task.dueDate || task.deadline || '';
-  let dueHtml = '<span style="color:var(--text3);font-size:11px">—</span>';
-  if (due) {
-    // Parse como data local (evita UTC shift que adianta/atrasa 1 dia no Brasil)
-    const [dy, dm, dd] = due.slice(0,10).split('-').map(Number);
-    const dt = new Date(dy, dm - 1, dd);
-    const now = new Date(); const diff = (dt - now) / 86400000;
-    const fmt = dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
-    const cls = diff < 0 ? 'overdue' : diff < 3 ? 'soon' : '';
-    dueHtml = `<span class="m-due ${cls}">${fmt}</span>`;
+  // ── Coluna variável: prazo (grupos normais) ou horário de conclusão (Concluídos) ──
+  let lastDataColHtml;
+  if (groupKey === 'concluidos' && task.completed_at) {
+    // Exibe horário local BRT + data (tooltip com ISO completo)
+    const d = new Date(task.completed_at);
+    const timeStr = d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    const dateStr = d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+    lastDataColHtml = `<span title="${d.toLocaleString('pt-BR')}" style="font-size:12px;font-weight:600;color:var(--green)">${timeStr}</span>`
+                    + `<span style="display:block;font-size:10px;color:var(--text3)">${dateStr}</span>`;
+  } else {
+    const due = task.dueDate || task.deadline || '';
+    lastDataColHtml = '<span style="color:var(--text3);font-size:11px">—</span>';
+    if (due) {
+      // Parse como data local (evita UTC shift que adianta/atrasa 1 dia no Brasil)
+      const [dy, dm, dd] = due.slice(0,10).split('-').map(Number);
+      const dt = new Date(dy, dm - 1, dd);
+      const now = new Date(); const diff = (dt - now) / 86400000;
+      const fmt = dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
+      const cls = diff < 0 ? 'overdue' : diff < 3 ? 'soon' : '';
+      lastDataColHtml = `<span class="m-due ${cls}">${fmt}</span>`;
+    }
   }
 
   // Timer display
@@ -16953,7 +17001,7 @@ function _buildTaskRow(task) {
     <td class="monday-td">
       <span class="m-prio" style="background:${pc.bg};color:${pc.color};border-color:${pc.color}33" onclick="openPriorityDD('${task.id}',this)">${pc.icon} ${task.priority}</span>
     </td>
-    <td class="monday-td">${dueHtml}</td>
+    <td class="monday-td">${lastDataColHtml}</td>
     <td class="monday-td" style="text-align:center">
       <button onclick="deleteTaskRow('${task.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;border-radius:4px" title="Excluir"><i class="ti ti-trash" style="font-size:12px"></i></button>
     </td>
