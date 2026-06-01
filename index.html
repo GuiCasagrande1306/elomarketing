@@ -6892,9 +6892,11 @@ async function loadTasksFromDB() {
 
   // ── Merge com preferência local quando há atualização pendente ─────────────
   // Regra 1: _localUpdatedAt > updatedAt do servidor + 3s → local mais recente (PUT não chegou)
-  // Regra 2: timer em andamento localmente com checkpoint mais recente → preserva campos de timer
+  // Regra 2: Pronto local vs servidor stale → imutabilidade de conclusão
+  // Regra 3: timer em andamento localmente com checkpoint mais recente → preserva timer
   const mergedFromServer = fromServer.map(srvTask => {
     const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
+    // Regra 1 — mudança local pendente (janela 3s após PUT)
     if (localTask?._localUpdatedAt) {
       const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
       const localTime = localTask._localUpdatedAt;
@@ -6912,7 +6914,24 @@ async function loadTasksFromDB() {
         return localTask;
       }
     }
-    // Regra 2: timer local em andamento — se o checkpoint local for mais novo que o servidor,
+    // Regra 2 — Pronto local vs servidor stale (dado velho / PUT em cold-start):
+    // Uma tarefa marcada como Pronto nunca deve ser revertida por sync automático.
+    // Apenas ações explícitas do usuário (com _localUpdatedAt) podem desfazer Pronto.
+    if (localTask
+        && normalizeTaskStatus(localTask.status) === 'Pronto'
+        && normalizeTaskStatus(srvTask.status)   !== 'Pronto'
+        && !localTask._localUpdatedAt) {
+      console.warn(`[Tasks] merge loadDB: PRONTO protegido para "${srvTask.title || srvTask.id}" — servidor tem "${srvTask.status}" (stale). Re-enviando.`);
+      // Corrige o servidor com o status correto
+      if (currentUser) updateTaskInDB(srvTask.id, {
+        status:       'Pronto',
+        group:        'concluidos',
+        completed_at: localTask.completed_at || new Date().toISOString(),
+        timerStartedAt: null,
+      });
+      return localTask;
+    }
+    // Regra 3: timer local em andamento — se o checkpoint local for mais novo que o servidor,
     // preserva timerStartedAt + timeSpent (o restante vem do servidor)
     if (localTask?.timerStartedAt && normalizeTaskStatus(localTask.status) === 'Em Andamento') {
       const localAnchor = new Date(localTask.timerStartedAt).getTime();
@@ -6991,12 +7010,20 @@ async function _autoSyncAndLoad() {
     const v = r.status === 'fulfilled' ? r.value : null;
     return !v || v._coldStart || v.error;
   }).length;
+
+  if (_coldStarts > 0 && _coldStarts === TASKS_DATA.length) {
+    // TODOS os uploads falharam por cold-start: o servidor está acordando.
+    // Cancelamos o GET para evitar que dados stale do Atlas (antes dos POSTs chegarem)
+    // sobrescrevam tasks locais recentes — ex: tarefas recém marcadas como Pronto.
+    // O próximo ciclo de sync (ao navegar ou clicar Sincronizar) tentará novamente.
+    console.warn(`[Tasks] _autoSyncAndLoad: todos os uploads retornaram cold-start — fetch cancelado para proteger dados locais.`);
+    return;
+  }
   if (_coldStarts > 0) {
-    console.warn(`[Tasks] _autoSyncAndLoad: ${_coldStarts}/${TASKS_DATA.length} upload(s) não confirmado(s) (cold-start?)`);
+    console.warn(`[Tasks] _autoSyncAndLoad: ${_coldStarts}/${TASKS_DATA.length} upload(s) não confirmado(s) (cold-start parcial).`);
   }
 
-  // Busca do servidor — loadTasksFromDB usa merge seguro: tarefas locais não confirmadas
-  // pelo servidor são preservadas no localStorage até o próximo sync bem-sucedido.
+  // Busca do servidor — merge usa Regra 2 (Pronto imutável) como proteção adicional.
   await loadTasksFromDB();
 }
 
@@ -8167,17 +8194,29 @@ async function _pollTasks() {
     const serverIds = new Set(incoming.map(t => t.id).filter(Boolean));
     const localOnly = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
 
-    // Respeita _localUpdatedAt: se o PUT ainda não confirmou, a versão local é
-    // mais nova que o servidor — não sobrescrever (mesmo critério de loadTasksFromDB).
-    // Também preserva checkpoint de timer local mais recente que o servidor.
+    // Merge: mesmo conjunto de regras de loadTasksFromDB.
     const mergedIncoming = incoming.map(srvTask => {
       const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
+      // Regra 1 — _localUpdatedAt: PUT local ainda não confirmado pelo servidor
       if (localTask?._localUpdatedAt) {
         const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
         const localTime = localTask._localUpdatedAt;
         if (localTime > srvTime + 3000) return localTask; // mantém versão local mais nova
       }
-      // Timer em andamento: preserva checkpoint local se mais recente que o servidor
+      // Regra 2 — Pronto local nunca é revertido por polling com dado stale
+      if (localTask
+          && normalizeTaskStatus(localTask.status) === 'Pronto'
+          && normalizeTaskStatus(srvTask.status)   !== 'Pronto'
+          && !localTask._localUpdatedAt) {
+        console.warn(`[Tasks] merge poll: PRONTO protegido para "${srvTask.title || srvTask.id}" — servidor tem "${srvTask.status}" (stale). Re-enviando.`);
+        if (currentUser) updateTaskInDB(srvTask.id, {
+          status: 'Pronto', group: 'concluidos',
+          completed_at: localTask.completed_at || new Date().toISOString(),
+          timerStartedAt: null,
+        });
+        return localTask;
+      }
+      // Regra 3 — timer em andamento: preserva checkpoint local se mais recente
       if (localTask?.timerStartedAt && normalizeTaskStatus(localTask.status) === 'Em Andamento') {
         const localAnchor = new Date(localTask.timerStartedAt).getTime();
         const srvAnchor   = new Date(srvTask.timerStartedAt || 0).getTime();
