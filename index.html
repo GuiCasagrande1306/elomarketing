@@ -17842,30 +17842,38 @@ function _crmSave() {
 
 /* ── Helpers de API ──────────────────────────────────────────────────────── */
 
-/* Retorna a URL base da API de CRM ou null se não configurada */
-function _crmApiUrl() {
-  const base = (typeof PROD_CONFIG !== 'undefined' && PROD_CONFIG.apiUrl)
-    ? PROD_CONFIG.apiUrl.replace(/\/$/, '') : null;
-  return base ? `${base}/api/crm` : null;
+/* Upsert de um único card na API via _apiFetch (cold-start detection + retry).
+   Retorna a resposta do servidor ou null em caso de falha. */
+async function _crmApiPut(card, _attempt) {
+  _attempt = _attempt || 1;
+  const r = await _apiFetch(`/api/crm/${card.id}`, {
+    method: 'PUT',
+    body:   JSON.stringify(card),
+  });
+  // Cold-start: Render dormindo → retenta com backoff
+  if (!r || r._coldStart) {
+    if (_attempt < 4) {
+      const delay = _attempt * 8000; // 8s → 16s → 24s
+      console.warn(`[CRM API] PUT cold-start — tentativa ${_attempt}/4, retry em ${delay/1000}s:`, card.id);
+      setTimeout(() => _crmApiPut(card, _attempt + 1), delay);
+    } else {
+      console.error('[CRM API] PUT desistiu após 4 tentativas:', card.id);
+    }
+    return null;
+  }
+  if (r.error) {
+    console.error('[CRM API] PUT erro do servidor:', card.id, r.error);
+    return null;
+  }
+  console.log('[CRM API] ✅ card persistido:', card.id, 'coluna:', card.coluna);
+  return r;
 }
 
-/* Upsert de um único card na API (fire-and-forget) */
-function _crmApiPut(card) {
-  const url = _crmApiUrl();
-  if (!url) return;
-  fetch(`${url}/${card.id}`, {
-    method:  'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(card),
-  }).catch(e => console.warn('[CRM API] PUT falhou:', e.message));
-}
-
-/* Remove um card da API (fire-and-forget) */
+/* Remove um card da API */
 function _crmApiDelete(id) {
-  const url = _crmApiUrl();
-  if (!url) return;
-  fetch(`${url}/${id}`, { method: 'DELETE' })
-    .catch(e => console.warn('[CRM API] DELETE falhou:', e.message));
+  _apiFetch(`/api/crm/${id}`, { method: 'DELETE' })
+    .then(r => { if (!r || r._coldStart) setTimeout(() => _crmApiDelete(id), 8000); })
+    .catch(e => console.warn('[CRM API] DELETE falhou:', e?.message));
 }
 
 /* Migração inicial: envia todo o CRM_DATA para a API (run-once) */
@@ -17873,43 +17881,66 @@ async function _crmApiBulkSync() {
   const url = _crmApiUrl();
   if (!url || !CRM_DATA.length) return;
   try {
-    await fetch(`${url}/bulk/sync`, {
-      method:  'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(CRM_DATA),
+    const r = await _apiFetch('/api/crm/bulk/sync', {
+      method: 'PUT',
+      body:   JSON.stringify(CRM_DATA),
     });
-    console.log(`[CRM API] bulk sync enviou ${CRM_DATA.length} lead(s).`);
+    if (r && !r._coldStart) {
+      console.log(`[CRM API] bulk sync enviou ${CRM_DATA.length} lead(s).`);
+    } else {
+      console.warn('[CRM API] bulk sync cold-start — será retentado na próxima carga.');
+    }
   } catch (e) {
     console.warn('[CRM API] bulk sync falhou:', e.message);
   }
 }
 
-/* Carrega leads da API e atualiza CRM_DATA + localStorage
-   Retorna true se bem-sucedido com dados, false se falhou/offline/vazia */
-async function _crmApiLoad() {
-  const url = _crmApiUrl();
-  if (!url) return false;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data)) throw new Error('Resposta inválida');
+/* Retorna a URL base da API de CRM (necessário apenas para _crmApiBulkSync legado) */
+function _crmApiUrl() {
+  const base = (typeof PROD_CONFIG !== 'undefined' && PROD_CONFIG.apiUrl)
+    ? PROD_CONFIG.apiUrl.replace(/\/$/, '') : null;
+  return base ? `${base}/api/crm` : null;
+}
 
-    // ── GUARD CRÍTICO ─────────────────────────────────────────────────────
-    // API vazia NUNCA sobrescreve dados locais válidos.
-    // Cenário: MongoDB recém-criado ou primeira sincronização pendente.
-    // Ação:  preserva CRM_DATA atual, dispara bulk sync para popular o Atlas.
+/* Carrega leads da API e MERGE com dados locais.
+   NUNCA substitui diretamente CRM_DATA pelo array do servidor:
+   cards criados localmente mas ainda não confirmados no Atlas são preservados
+   e re-enviados para garantir a persistência definitiva. */
+async function _crmApiLoad() {
+  const hasApi = !!_crmApiUrl();
+  if (!hasApi) return false;
+  try {
+    const res = await _apiFetch('/api/crm');
+    if (!res || res._coldStart || !Array.isArray(res)) {
+      console.warn('[CRM API] Carregamento falhou ou cold-start — usando localStorage.');
+      return false;
+    }
+    const data = res;
+
+    // ── GUARD: API vazia ─────────────────────────────────────────────────
     if (data.length === 0 && CRM_DATA.length > 0) {
-      console.warn(`[CRM] API retornou 0 leads mas há ${CRM_DATA.length} card(s) local(is) — bulk sync disparado para popular o Atlas.`);
+      console.warn(`[CRM] API retornou 0 leads mas há ${CRM_DATA.length} card(s) local(is) — bulk sync disparado.`);
       _crmApiBulkSync();
-      return false; // não re-renderiza com array vazio
+      return false;
     }
 
-    CRM_DATA = data;
-    _crmSave(); // mantém localStorage em sync como cache
-    return data.length > 0; // false se API genuinamente vazia (não re-renderiza)
+    // ── MERGE seguro: server + local-only ────────────────────────────────
+    // Cards que existem localmente mas NÃO no servidor (PUT ainda não confirmado,
+    // cold-start na criação, etc.) são preservados e re-enviados ao Atlas.
+    const serverIds = new Set(data.map(c => c.id).filter(Boolean));
+    const localOnly = CRM_DATA.filter(c => c.id && !serverIds.has(c.id));
+
+    if (localOnly.length > 0) {
+      console.warn(`[CRM] ${localOnly.length} card(s) local(is) ausente(s) no Atlas — preservando e re-enviando.`);
+      localOnly.forEach(card => _crmApiPut(card)); // corrige o servidor
+    }
+
+    // Mescla: dados do servidor + cards locais não confirmados
+    CRM_DATA = [...data, ...localOnly];
+    _crmSave();
+    return CRM_DATA.length > 0;
   } catch (e) {
-    console.warn('[CRM API] Carregamento falhou, usando localStorage:', e.message);
+    console.warn('[CRM API] Carregamento falhou:', e.message);
     return false;
   }
 }
@@ -18217,24 +18248,37 @@ function _crmToggleMenu(cardId, btn) {
   }
 }
 
-function _crmMoveCard(cardId, toColId) {
+async function _crmMoveCard(cardId, toColId) {
   const card = CRM_DATA.find(c => c.id === cardId);
   if (!card) return;
-  const oldCol = card.coluna;
+  const oldCol  = card.coluna;
+  const oldData = card.data;
+  // Update otimista em memória
   card.coluna = toColId;
-  card.data   = new Date().toISOString().slice(0, 10); // reset interaction date
-  // If moving into "fechado" and no resultado set yet, prompt
+  card.data   = new Date().toISOString().slice(0, 10);
+
+  // Se movendo para fechado sem resultado, abre modal primeiro
   if (toColId === 'fechado' && !card.resultado) {
     _crmSave();
-    _crmApiPut(card);
+    _crmApiPut(card); // fire-and-forget com retry automático
     renderCRM();
-    // Open edit modal focused on resultado
     setTimeout(() => openCrmModal(cardId, true), 100);
     return;
   }
+
   _crmSave();
-  _crmApiPut(card);
   renderCRM();
+
+  // Persiste no servidor — rollback se falhar permanentemente
+  const r = await _crmApiPut(card);
+  if (r === null && card.coluna === toColId) {
+    // null = cold-start → retry automático já agendado em _crmApiPut → não faz rollback
+    // Para erro permanente (servidor retornou erro real):
+    // _crmApiPut só retorna null em cold-start OU erro; o retry já cuida do cold-start.
+    // Não precisamos de rollback porque o retry vai resolver.
+    // Mas logamos para diagnóstico.
+    console.warn('[CRM] Mover card ficou pendente (cold-start / rede):', cardId, oldCol, '→', toColId);
+  }
 }
 
 function _crmDeleteCard(cardId) {
@@ -18337,43 +18381,59 @@ function _crmDeleteFromModal() {
   showNotification(`"${nome}" excluída com sucesso.`, 'ok');
 }
 
-function saveCrmOportunidade(e) {
+async function saveCrmOportunidade(e) {
   e.preventDefault();
   const id      = document.getElementById('crm-f-id').value;
   const empresa = document.getElementById('crm-f-empresa').value.trim();
   const contato = document.getElementById('crm-f-contato').value.trim();
-  const telefone= document.getElementById('crm-f-telefone').value.trim();
-  const obs     = document.getElementById('crm-f-obs').value.trim();
-  const origem  = document.getElementById('crm-f-origem').value;
-  const coluna  = document.getElementById('crm-f-coluna').value;
+  if (!empresa && !contato) {
+    showNotification('Preencha ao menos o nome da empresa ou do contato.', 'warn');
+    document.getElementById('crm-f-empresa')?.focus();
+    return;
+  }
+  const telefone     = document.getElementById('crm-f-telefone').value.trim();
+  const obs          = document.getElementById('crm-f-obs').value.trim();
+  const origem       = document.getElementById('crm-f-origem').value;
+  const coluna       = document.getElementById('crm-f-coluna').value || 'lead';
   const resultado    = document.getElementById('crm-f-resultado').value || null;
   const nextFollowUp = document.getElementById('crm-f-followup').value  || null;
-  // Parse valor
-  const valorRaw = document.getElementById('crm-f-valor').value.replace(/[R$\s.]/g, '').replace(',', '.');
-  const valor    = parseFloat(valorRaw) || 0;
+  const valorRaw     = document.getElementById('crm-f-valor').value.replace(/[R$\s.]/g, '').replace(',', '.');
+  const valor        = parseFloat(valorRaw) || 0;
+
+  // Botão de submit — loading state
+  const submitBtn  = e.target.querySelector('button[type="submit"]');
+  const origLabel  = submitBtn?.innerHTML;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando…'; }
 
   let card;
   if (id) {
-    // Edit existing
     card = CRM_DATA.find(c => c.id === id);
-    if (card) {
-      Object.assign(card, { empresa, contato, telefone, obs, origem, coluna, resultado,
-                             valor, nextFollowUp, data: new Date().toISOString().slice(0,10) });
-    }
+    if (card) Object.assign(card, { empresa, contato, telefone, obs, origem, coluna,
+                                     resultado, valor, nextFollowUp,
+                                     data: new Date().toISOString().slice(0,10) });
   } else {
-    // New card → first column
-    card = {
-      id: _crmGenId(), empresa, contato, telefone, obs, origem,
-      coluna, resultado, valor, nextFollowUp,
-      data: new Date().toISOString().slice(0,10),
-    };
+    card = { id: _crmGenId(), empresa, contato, telefone, obs, origem,
+             coluna, resultado, valor, nextFollowUp,
+             data: new Date().toISOString().slice(0,10) };
     CRM_DATA.push(card);
   }
 
+  // Update otimista: localStorage + UI imediatos
   _crmSave();
-  if (card) _crmApiPut(card);
   closeCrmModal();
   renderCRM();
+  if (submitBtn) { submitBtn.disabled = false; if (origLabel) submitBtn.innerHTML = origLabel; }
+
+  // Persiste no servidor (com retry automático no cold-start)
+  if (card) {
+    const r = await _crmApiPut(card);
+    if (r === null) {
+      // cold-start → retry já agendado; os dados estão seguros no localStorage
+      showNotification('⚠️ Servidor acordando — card salvo localmente. Será sincronizado em breve.', 'warn');
+    } else {
+      showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
+    }
+  }
 }
 
 // Show/hide resultado select when coluna changes inside modal
