@@ -6878,8 +6878,8 @@ async function loadTasksFromDB() {
   }
 
   // ── Merge com preferência local quando há atualização pendente ─────────────
-  // Se _localUpdatedAt > updatedAt do servidor + 3s, significa que o PUT não
-  // chegou ao banco (cold-start). Usamos a versão local e re-enviamos ao servidor.
+  // Regra 1: _localUpdatedAt > updatedAt do servidor + 3s → local mais recente (PUT não chegou)
+  // Regra 2: timer em andamento localmente com checkpoint mais recente → preserva campos de timer
   const mergedFromServer = fromServer.map(srvTask => {
     const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
     if (localTask?._localUpdatedAt) {
@@ -6897,6 +6897,15 @@ async function loadTasksFromDB() {
           timeSpent:      localTask.timeSpent      || 0,
         });
         return localTask;
+      }
+    }
+    // Regra 2: timer local em andamento — se o checkpoint local for mais novo que o servidor,
+    // preserva timerStartedAt + timeSpent (o restante vem do servidor)
+    if (localTask?.timerStartedAt && normalizeTaskStatus(localTask.status) === 'Em Andamento') {
+      const localAnchor = new Date(localTask.timerStartedAt).getTime();
+      const srvAnchor   = new Date(srvTask.timerStartedAt || 0).getTime();
+      if (localAnchor > srvAnchor + 1000) {
+        return { ...srvTask, timerStartedAt: localTask.timerStartedAt, timeSpent: localTask.timeSpent };
       }
     }
     return srvTask;
@@ -8140,13 +8149,22 @@ async function _pollTasks() {
     const localOnly = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
 
     // Respeita _localUpdatedAt: se o PUT ainda não confirmou, a versão local é
-    // mais nova que o servidor — não sobrescrever (mesmo critério de loadTasksFromDB)
+    // mais nova que o servidor — não sobrescrever (mesmo critério de loadTasksFromDB).
+    // Também preserva checkpoint de timer local mais recente que o servidor.
     const mergedIncoming = incoming.map(srvTask => {
       const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
       if (localTask?._localUpdatedAt) {
         const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
         const localTime = localTask._localUpdatedAt;
         if (localTime > srvTime + 3000) return localTask; // mantém versão local mais nova
+      }
+      // Timer em andamento: preserva checkpoint local se mais recente que o servidor
+      if (localTask?.timerStartedAt && normalizeTaskStatus(localTask.status) === 'Em Andamento') {
+        const localAnchor = new Date(localTask.timerStartedAt).getTime();
+        const srvAnchor   = new Date(srvTask.timerStartedAt || 0).getTime();
+        if (localAnchor > srvAnchor + 1000) {
+          return { ...srvTask, timerStartedAt: localTask.timerStartedAt, timeSpent: localTask.timeSpent };
+        }
       }
       return srvTask;
     });
@@ -17003,8 +17021,10 @@ function openPriorityDD(taskId, el) {
 
 function setMondayStatus(taskId, status) {
   const t = TASKS_DATA.find(x => x.id === taskId); if (!t) return;
-  const prevStatus = normalizeTaskStatus(t.status);
-  const prevGroup  = t.group;
+  const prevStatus         = normalizeTaskStatus(t.status);
+  const prevGroup          = t.group;
+  const prevTimerStartedAt = t.timerStartedAt; // captura antes da mudança para rollback
+  const prevTimeSpent      = t.timeSpent;       // captura antes da mudança para rollback
   t.status = status;
   const patch = { status };
 
@@ -17025,21 +17045,25 @@ function setMondayStatus(taskId, status) {
     patch.timeSpent = t.timeSpent || 0;
     _startTimerTick();
   } else if (status !== 'Em Andamento' && t.timerStartedAt) {
+    // Interrompe o timer: acumula o tempo decorrido desde o último checkpoint
     const elapsed = (Date.now() - new Date(t.timerStartedAt).getTime()) / 1000;
-    t.timeSpent = (t.timeSpent || 0) + elapsed;
+    t.timeSpent      = (t.timeSpent || 0) + elapsed;
     t.timerStartedAt = null;
-    patch.timeSpent = t.timeSpent;
+    patch.timeSpent      = t.timeSpent;
     patch.timerStartedAt = null;
   }
 
   t._localUpdatedAt = Date.now(); // marca atualização local pendente
 
   // Rollback visual: se todas as tentativas no servidor falharem, desfaz a mudança
+  // incluindo o estado do timer (timerStartedAt + timeSpent)
   const _rollback = () => {
     const task = TASKS_DATA.find(x => x.id === taskId);
     if (!task) return;
-    task.status = prevStatus;
-    task.group  = prevGroup;
+    task.status          = prevStatus;
+    task.group           = prevGroup;
+    task.timerStartedAt  = prevTimerStartedAt; // ← reverte timer
+    task.timeSpent       = prevTimeSpent;       // ← reverte tempo acumulado
     delete task._localUpdatedAt;
     saveTasks(); renderTasksGrid(); updateNavBadges();
     showNotification(`❌ Falha ao salvar no servidor — status revertido para "${prevStatus}". Verifique sua conexão.`, 'error');
@@ -17070,7 +17094,8 @@ function deleteTaskRow(taskId) {
   _deleteTask(taskId); // server-first com rollback automático
 }
 /* ── Timer de Produtividade ────────────────────────────────────────── */
-let _tasksTimerTick = null;
+let _tasksTimerTick       = null; // tick a cada 1 s (atualiza display)
+let _timerPersistInterval = null; // checkpoint a cada 15 s (persiste ao servidor)
 
 function _formatTaskTime(secs) {
   secs = Math.floor(secs || 0);
@@ -17095,10 +17120,55 @@ function _startTimerTick() {
       el.className = 'm-timer m-timer-running';
     });
   }, 1000);
+
+  // Checkpoint periódico: a cada 15 s persiste o tempo acumulado ao servidor.
+  // Garante que um F5 durante o timer perca no máximo ~15 s de tempo registrado.
+  if (!_timerPersistInterval) {
+    _timerPersistInterval = setInterval(_persistTimerCheckpoint, 15000);
+  }
 }
 
 function _stopTimerTick() {
-  if (_tasksTimerTick) { clearInterval(_tasksTimerTick); _tasksTimerTick = null; }
+  if (_tasksTimerTick)       { clearInterval(_tasksTimerTick);       _tasksTimerTick       = null; }
+  if (_timerPersistInterval) { clearInterval(_timerPersistInterval); _timerPersistInterval = null; }
+}
+
+/**
+ * Checkpoint periódico do timer.
+ * Acumula o tempo decorrido em timeSpent e reseta o timerStartedAt para "agora",
+ * tanto em memória quanto no servidor (via PATCH /api/tasks/:id/timer).
+ * Estratégia "rolling anchor": display continua correto como (timeSpent + (now - timerStartedAt)).
+ */
+function _persistTimerCheckpoint() {
+  if (!currentUser) return;
+  const now = Date.now();
+  let changed = false;
+  TASKS_DATA.forEach(t => {
+    if (!t.timerStartedAt || normalizeTaskStatus(t.status) !== 'Em Andamento') return;
+    const elapsed    = (now - new Date(t.timerStartedAt).getTime()) / 1000;
+    const totalSpent = (t.timeSpent || 0) + elapsed;
+    const newAnchor  = new Date(now).toISOString();
+    // Move tempo decorrido para timeSpent e reseta âncora para agora
+    t.timeSpent      = totalSpent;
+    t.timerStartedAt = newAnchor;
+    changed = true;
+    // Persiste ao servidor via endpoint leve (PATCH timer)
+    _apiFetch(`/api/tasks/${t.id}/timer`, {
+      method: 'PATCH',
+      body: JSON.stringify({ timeSpent: totalSpent, timerStartedAt: newAnchor }),
+    }).catch(() => {
+      // Fallback: PUT completo se PATCH falhar (Render não respondeu ao deploy ainda)
+      _apiFetch(`/api/tasks/${t.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          timeSpent: totalSpent, timerStartedAt: newAnchor,
+          updated_by: currentUser?.id || '',
+        }),
+      }).catch(() => {});
+    });
+  });
+  // Persiste checkpoint ao localStorage (sobrevive a F5 mesmo sem resposta do servidor)
+  if (changed) localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
 }
 
 function _hasRunningTimers() {
