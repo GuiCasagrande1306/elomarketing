@@ -15079,14 +15079,18 @@ async function carregarContasGads(forceReload = false) {
 
     // ── Erro explícito retornado pelo backend ──────────────────────────────────
     if (data?.error) {
-      const notCfg = data.error.includes('MANAGER_ID') || data.error.toLowerCase().includes('não configurado');
+      const notCfg    = data.error.includes('MANAGER_ID') || data.error.toLowerCase().includes('não configurado');
+      const notApproved = data.error.includes('DEVELOPER_TOKEN_NOT_APPROVED') || data.error.includes('403');
       if (notCfg) {
-        // MCC não configurado — permite digitar o ID manualmente mesmo assim
-        if (hint)   hint.innerHTML = '<span style="color:var(--text3)">MCC não configurado — digite o Customer ID manualmente (ex: 123-456-7890)</span>';
-        if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
+        if (hint)   hint.innerHTML = '<span style="color:var(--text3)">MCC não configurado — use a bandeja <i class="ti ti-list-details"></i> para salvar contas ou digite o ID</span>';
+        if (search) { search.disabled = false; search.placeholder = 'Buscar conta ou digitar Customer ID...'; }
+      } else if (notApproved) {
+        // Token em modo teste — não exibe o erro técnico, orienta o usuário
+        if (hint)   hint.innerHTML = '<span style="color:var(--text3)">Token em avaliação pelo Google — use a bandeja <i class="ti ti-list-details"></i> para salvar e buscar suas contas</span>';
+        if (search) { search.disabled = false; search.placeholder = 'Buscar conta salva ou digitar Customer ID...'; }
       } else {
-        if (hint)   hint.innerHTML = `<span style="color:var(--amber)">⚠️ Erro: ${data.error.slice(0, 80)} — ou digite o ID manualmente</span>`;
-        if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
+        if (hint)   hint.innerHTML = '<span style="color:var(--amber)">⚠️ Erro ao carregar contas — use a bandeja <i class="ti ti-list-details"></i> ou digite o Customer ID</span>';
+        if (search) { search.disabled = false; search.placeholder = 'Buscar conta salva ou digitar Customer ID...'; }
       }
       _resetIcon();
       return;
