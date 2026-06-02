@@ -8942,9 +8942,21 @@ function buildClientCard(c) {
                     background:rgba(255,255,255,0.55);border-radius:1px"></div>
       </div>
       <div style="display:flex;justify-content:space-between">
-        <span style="font-size:9px;color:var(--text3)">Gasto: <span style="color:${statusColor};font-weight:600">${fmtBRL(c.investment)}</span> <span style="color:var(--text3)">(${spendPct}%)</span></span>
+        <span style="font-size:9px;color:var(--text3)">Gasto: <span style="color:${statusColor};font-weight:600">${fmtBRL(pacing.totalGasto)}</span> <span style="color:var(--text3)">(${spendPct}%)</span></span>
         <span style="font-size:9px;color:var(--text3)">Orç: ${fmtBRL(c.budget)} · Dia ${daysPassed}/${daysInMonth}</span>
       </div>
+      ${(pacing.googleGasto > 0) ? `
+      <div style="display:flex;gap:10px;margin-top:5px;padding-top:5px;border-top:1px solid var(--border)">
+        <span style="font-size:8.5px;color:var(--text3);display:flex;align-items:center;gap:3px">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 9.39 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z" fill="#1877F2"/></svg>
+          <b style="color:var(--text2)">${fmtBRL(pacing.metaGasto)}</b>
+        </span>
+        <span style="font-size:8.5px;color:var(--text3)">·</span>
+        <span style="font-size:8.5px;color:var(--text3);display:flex;align-items:center;gap:3px">
+          <svg width="9" height="9" viewBox="0 0 48 48"><path d="M43.6 20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-4z" fill="#4285F4"/></svg>
+          <b style="color:var(--text2)">${fmtBRL(pacing.googleGasto)}</b>
+        </span>
+      </div>` : ''}
     </div>`;
   })();
 
@@ -9017,8 +9029,9 @@ function buildClientCard(c) {
 
   const el = document.createElement('div');
   el.className = 'client-card';
-  el.dataset.owner = c.owner;
-  el.dataset.id    = c.id;
+  el.dataset.owner      = c.owner;
+  el.dataset.id         = c.id;
+  el.dataset.clientId   = c.id;   // usado pelo re-render do Google Ads
   el.onclick = () => openClientDetail(c.id);
   const _catMap = {
     elo_marketing:{ cls:'elo',    label:'🎯 Elo MKT'      },
@@ -10262,9 +10275,31 @@ function _buildDetailGoalPacing(c, goalInfo, isLiveGA4) {
           <div class="pacing-marker" style="left:${timePctDisp}%"></div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:4px">
-          <span>${fmtBRL(c.investment)} investido</span><span>${fmtBRL(c.budget)} orçamento</span>
+          <span>${fmtBRL(p.totalGasto)} investido${p.googleGasto > 0 ? ' (total)' : ''}</span><span>${fmtBRL(c.budget)} orçamento</span>
         </div>
         ${proj ? `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">Projeção ao fim do mês: <span style="font-family:var(--mono);font-weight:700;color:${projOver?'var(--red)':'var(--green)'}">${fmtBRL(proj)}</span> ${projOver?'<span style="color:var(--red)">⚠ acima do orçamento</span>':'<span style="color:var(--green)">✓ dentro do orçamento</span>'}</div>` : ''}
+        ${(c.meta_ad_account_id || c.google_ads_customer_id) ? `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:8px;font-weight:600">Breakdown por Plataforma</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:rgba(24,119,242,0.07);border:1px solid rgba(24,119,242,0.18);border-radius:9px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#1877F2"><path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 9.39 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z"/></svg>
+                Meta Ads
+              </span>
+              <span style="font-size:13px;font-weight:700;color:var(--text);font-family:var(--mono)">${fmtBRL(p.metaGasto)}</span>
+            </div>
+            <div style="background:rgba(66,133,244,0.07);border:1px solid rgba(66,133,244,0.18);border-radius:9px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 48 48"><path d="M43.6 20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-4z" fill="#4285F4"/></svg>
+                Google Ads
+              </span>
+              <span style="font-size:13px;font-weight:700;color:var(--text);font-family:var(--mono)">
+                ${c._gadsLoading ? '<span style="font-size:10px;color:var(--text3)">carregando...</span>' : (p.googleGasto > 0 ? fmtBRL(p.googleGasto) : (c.google_ads_customer_id ? '<span style="font-size:10px;color:var(--text3)">—</span>' : '<span style="font-size:10px;color:var(--text3)">Não vinculado</span>'))}
+              </span>
+            </div>
+          </div>
+        </div>` : ''}
       </div>`;
     })() : '';
 
@@ -10751,24 +10786,43 @@ function openClientDetail(id) {
   document.getElementById('client-detail-overlay').classList.add('open');
 
   // ── GA4 live fetch para Delivery / E-commerce ─────────────────────────────
-  // Dispara após a abertura do painel para não bloquear a renderização inicial.
-  // Quando os dados chegam, recalcula meta + pacing e patcha o container in place.
   const isGA4Seg = c.segment === 'delivery' || c.segment === 'ecommerce';
   if (isGA4Seg && c.ga4_property_id && loadGA4Token()) {
-    // Pulsa a barra de progresso enquanto aguarda
     const gpEl = document.getElementById('cd-goal-pacing');
-    if (gpEl) {
-      const fill = gpEl.querySelector('.cl-progress-fill');
-      if (fill) fill.style.opacity = '0.4';
-    }
+    if (gpEl) { const fill = gpEl.querySelector('.cl-progress-fill'); if (fill) fill.style.opacity = '0.4'; }
     fetchGA4Stats(c).then(ga4Data => {
       if (!ga4Data || ga4Data.error) return;
-      // Sincroniza goal.realized com o valor real do GA4
       syncGA4RevenueToClient(c, ga4Data.purchaseRevenue || 0);
-      // Patcha a seção de meta + pacing com dados atualizados + badge GA4
       const el = document.getElementById('cd-goal-pacing');
       if (el) el.innerHTML = _buildDetailGoalPacing(c, goalInfo, true);
     });
+  }
+
+  // ── Google Ads live fetch — busca gasto do mês corrente ──────────────────
+  // Marca "carregando" → renderiza pacing inicial → após fetch atualiza tudo.
+  if (c.google_ads_customer_id) {
+    c._gadsLoading = true;
+    const _patchPacing = () => {
+      const el = document.getElementById('cd-goal-pacing');
+      if (el) el.innerHTML = _buildDetailGoalPacing(c, goalInfo, isGA4Seg && !!loadGA4Token());
+      // Atualiza o card na esteira se visível
+      const cardEl = document.querySelector(`[data-client-id="${c.id}"]`);
+      if (cardEl) { const fresh = buildClientCard(c); cardEl.outerHTML = fresh; }
+    };
+    _patchPacing(); // mostra "carregando..." no bloco Google
+
+    const today = new Date();
+    const from  = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
+    const to    = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+    _apiFetch(`/api/google-ads/metrics/${encodeURIComponent(c.google_ads_customer_id)}?from=${from}&to=${to}`)
+      .then(gads => {
+        c._gadsLoading = false;
+        c._gadsSpend   = (gads?.ok && typeof gads.spend === 'number') ? gads.spend : 0;
+        console.log(`[ClientDetail] Google Ads gasto ${from}→${to}: R$${c._gadsSpend?.toFixed(2)}`);
+        _patchPacing();
+      })
+      .catch(() => { c._gadsLoading = false; c._gadsSpend = 0; _patchPacing(); });
   }
 }
 
@@ -10794,9 +10848,14 @@ function calcPacing(c) {
   const today       = new Date();
   const daysInMonth = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
   const timePct     = today.getDate() / daysInMonth;
-  const budget      = c.budget     || 0;
-  const investment  = c.investment || 0;
-  const investPct   = budget > 0 ? investment / budget : null;
+  const budget      = c.budget      || 0;
+
+  // Gasto consolidado: Meta + Google Ads (c._gadsSpend preenchido ao abrir o detalhe)
+  const metaGasto   = c.investment  || 0;
+  const googleGasto = c._gadsSpend  || 0;
+  const totalGasto  = metaGasto + googleGasto;
+
+  const investPct   = budget > 0 ? totalGasto / budget : null;
   const investDev   = investPct !== null ? investPct - timePct : null;
   const goalTarget  = c.goal?.target   || 0;
   const goalRealized= c.goal?.realized || 0;
@@ -10804,7 +10863,8 @@ function calcPacing(c) {
   const resultDev   = resultPct  !== null ? resultPct - timePct : null;
   const projectedResult = (resultPct !== null && timePct > 0) ? Math.round(resultPct / timePct * 100) : null;
   const projectedSpend  = (investPct !== null && timePct > 0) ? Math.round(budget * investPct / timePct) : null;
-  return { timePct, investPct, investDev, resultPct, resultDev, projectedResult, projectedSpend };
+  return { timePct, investPct, investDev, resultPct, resultDev, projectedResult, projectedSpend,
+           metaGasto, googleGasto, totalGasto };
 }
 
 function pacingBadgeClass(dev) {
