@@ -13678,13 +13678,15 @@ async function renderBalanceMonitor() {
 
       // ── Faturamento para delivery / e-commerce ────────────────────────────
       // Prioridade: Meta Ads action_values (pixel purchase) > GA4 purchaseRevenue
+      // IMPORTANTE: synca MESMO quando faturamentoMetaAds = 0 (início do mês sem vendas).
+      // O guard `faturamentoMetaAds > 0` foi removido para garantir reset automático mensal.
       const isEntregaSeg = c.segment === 'delivery' || c.segment === 'ecommerce';
-      if (isEntregaSeg && metaData?.faturamentoMetaAds > 0) {
-        // Meta Ads tem dados — sincroniza e marca a fonte
-        syncMetaRevenueToClient(c, metaData.faturamentoMetaAds, {
+      if (isEntregaSeg && metaData !== null && metaData !== undefined) {
+        // Synca com o valor real da API (pode ser 0 no início do mês — isso é correto)
+        syncMetaRevenueToClient(c, metaData.faturamentoMetaAds || 0, {
           purchaseCount:    metaData.purchaseCount    || 0,
           addToCartCount:   metaData.addToCartCount   || 0,
-          landingPageViews: metaData.landingPageViews || 0,  // landing_page_view → metaSessoes
+          landingPageViews: metaData.landingPageViews || 0,
         });
       } else if (ga4Data && !ga4Data.error) {
         syncGA4RevenueToClient(c, ga4Data.purchaseRevenue || 0);
@@ -14286,13 +14288,67 @@ function evalGA4Status(ga4Data, client) {
 //
 // ── Sincroniza faturamento vindo do Meta Ads Pixel (action_values) ───────────
 // Tem prioridade máxima sobre GA4. Salva faturamentoMetaAds + goal.realized.
+// ── Controle de Mês para goal.realized ──────────────────────────────────────
+// Evita que faturamento/leads de meses anteriores persistam após virada do mês.
+// Armazena no localStorage { clientId: 'YYYY-MM' } quando um valor é sincronizado.
+// Na próxima carga, se o mês armazenado for diferente do mês atual, o valor é zerado.
+
+function _goalCurrentMonth() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+}
+function _goalMonthCache() {
+  try { return JSON.parse(localStorage.getItem('tp_goal_months') || '{}'); } catch { return {}; }
+}
+function _setGoalMonthForClient(clientId) {
+  const cache = _goalMonthCache();
+  cache[clientId] = _goalCurrentMonth();
+  localStorage.setItem('tp_goal_months', JSON.stringify(cache));
+}
+
+/* Chamado após loadClients() para zerar goal.realized de clientes delivery/ecommerce
+   cujo valor foi sincronizado num mês anterior.
+   Garante que no dia 1 o painel inicie com R$ 0 realizado sem precisar de schema novo. */
+function _resetStaleGoalRealized() {
+  const currentMonth = _goalCurrentMonth();
+  const cache = _goalMonthCache();
+  let resetCount = 0;
+
+  CLIENTS.list.forEach(c => {
+    if (!['delivery','ecommerce'].includes(c.segment)) return;
+    const storedMonth = cache[c.id];
+    // Só age quando há um mês registrado E ele é diferente do atual
+    if (storedMonth && storedMonth !== currentMonth) {
+      const hadValue = (c.goal?.realized || 0) > 0 || (c.faturamentoMetaAds || 0) > 0;
+      if (hadValue) {
+        if (c.goal) c.goal.realized = 0;
+        c.faturamentoMetaAds = 0;
+        c.metaCompras        = 0;
+        c.metaAddToCart      = 0;
+        c.metaSessoes        = 0;
+        resetCount++;
+        console.log(`%c[MonthReset] ${c.name}: goal.realized zerado (${storedMonth} → ${currentMonth})`, 'color:#F59E0B;font-weight:bold');
+      }
+    }
+  });
+
+  if (resetCount > 0) {
+    saveClients(); // persiste zeros no Supabase
+    renderClients();
+    renderGoalAlerts();
+    renderDashboard();
+    console.log(`[MonthReset] ${resetCount} cliente(s) resetado(s) para o mês ${currentMonth}`);
+  }
+}
+
 function syncMetaRevenueToClient(client, faturamentoMetaAds, extras = {}) {
   const seg = client.segment;
   /* ISOLAMENTO CRÍTICO: esta função NUNCA deve rodar para clientes leads/infoproduto.
      faturamentoMetaAds (valor monetário) não pode ser gravado em goal.realized
      de um cliente cujo goal.realized representa contagem de leads. */
   if (!['delivery','ecommerce'].includes(seg)) return;
-  if (!(faturamentoMetaAds > 0)) return;
+  // REMOVIDO: guard `faturamentoMetaAds > 0` — precisamos gravar 0 no início do mês
+  // para limpar o valor do mês anterior. O reset mensal depende disso.
 
   const idx = CLIENTS.list.findIndex(c => c.id === client.id);
   if (idx >= 0) {
@@ -14315,8 +14371,9 @@ function syncMetaRevenueToClient(client, faturamentoMetaAds, extras = {}) {
     if (extras.addToCartCount > 0) client.metaAddToCart = extras.addToCartCount;
     if (lpv >= 0) client.metaSessoes = lpv;
 
+    _setGoalMonthForClient(client.id); // marca mês corrente → detecta reset na próxima virada
     saveClients();
-    console.log(`%c[syncMetaRevenue] ${client.name}: fat→ R$ ${faturamentoMetaAds.toFixed(2)} | compras→${extras.purchaseCount||'—'} | carrinho→${extras.addToCartCount||'—'} | lpv→${lpv >= 0 ? lpv : '—'}`, 'color:#6C63FF;font-weight:bold');
+    console.log(`%c[syncMetaRevenue] ${client.name}: fat→ R$ ${faturamentoMetaAds.toFixed(2)} | compras→${extras.purchaseCount||'—'} | carrinho→${extras.addToCartCount||'—'} | lpv→${lpv >= 0 ? lpv : '—'} | mês→${_goalCurrentMonth()}`, 'color:#6C63FF;font-weight:bold');
   }
 }
 
@@ -14362,8 +14419,9 @@ function syncGA4RevenueToClient(client, purchaseRevenue) {
     // Espelha na referência local usada pelo loop de renderBalanceMonitor
     if (!client.goal) client.goal = { target: 0, realized: 0 };
     client.goal.realized = realizadoFinal;
+    _setGoalMonthForClient(client.id); // marca mês corrente → detecta reset na próxima virada
     saveClients();
-    console.log(`[syncGA4Revenue] ${client.name}: goal.realized salvo → R$ ${realizadoFinal.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+    console.log(`[syncGA4Revenue] ${client.name}: goal.realized salvo → R$ ${realizadoFinal.toLocaleString('pt-BR',{minimumFractionDigits:2})} | mês→${_goalCurrentMonth()}`);
 
     // Re-renderiza o painel de clientes se estiver visível
     const clPage = document.getElementById('page-clientes');
@@ -18101,6 +18159,13 @@ async function loadClients() {
 
   localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
   localStorage.setItem('tp_clients_next_id', String(CLIENTS.nextId));
+
+  // ── Reset mensal automático ────────────────────────────────────────────────
+  // Verifica se goal.realized de clientes delivery/ecommerce pertence ao mês atual.
+  // Se o mês armazenado no cache for diferente do mês corrente, zera o valor.
+  // Isso garante que na virada do mês o painel inicia em R$ 0 realizado.
+  _resetStaleGoalRealized();
+
   // Aplica patches novamente após API (garante que dados do MongoDB não sobrescrevam os auditados)
   const patched = _applyClientDataPatches();
   if (patched) {
