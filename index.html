@@ -2931,6 +2931,19 @@
   .esteira-board { overflow-x: auto; flex-wrap: nowrap !important; }
   .esteira-col   { min-width: 260px; flex-shrink: 0; }
 
+  /* ── Template Editor ── */
+  .tpl-ph-tag { display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:rgba(222,255,154,0.10);border:1px solid rgba(222,255,154,0.25);border-radius:6px;font-size:10px;font-weight:600;color:#DEFF9A;cursor:pointer;transition:background 0.15s;font-family:var(--mono); }
+  .tpl-ph-tag:hover { background:rgba(222,255,154,0.20); }
+  /* ── KPI Switches na página de Relatórios ── */
+  .rep-kpi-switch-row { display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;background:var(--bg3);margin-bottom:5px; }
+  .rep-kpi-switch-label { font-size:11.5px;color:var(--text2);display:flex;align-items:center;gap:6px; }
+  .rep-kpi-switch { position:relative;width:32px;height:18px;flex-shrink:0; }
+  .rep-kpi-switch input { opacity:0;width:0;height:0; }
+  .rep-kpi-switch-track { position:absolute;inset:0;background:var(--bg4);border-radius:9px;transition:background 0.2s;cursor:pointer; }
+  .rep-kpi-switch-track::after { content:'';position:absolute;left:2px;top:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform 0.2s; }
+  .rep-kpi-switch input:checked + .rep-kpi-switch-track { background:var(--accent2); }
+  .rep-kpi-switch input:checked + .rep-kpi-switch-track::after { transform:translateX(14px); }
+
   /* ── Fontes de dados — badges Meta / Google Ads na página de Relatórios ── */
   .rep-datasources { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px }
   .rep-ds-badge {
@@ -3725,6 +3738,14 @@
               <select class="form-select" id="rep-template" onchange="updateReportPreview()">
                 <option value="">Selecione um template...</option>
               </select>
+            </div>
+
+            <!-- ── KPI Switches — ligam/desligam métricas da prévia ── -->
+            <div id="rep-kpi-area" style="display:none;margin-bottom:12px">
+              <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">
+                <i class="ti ti-sliders" style="margin-right:4px"></i>KPIs ativos
+              </div>
+              <div id="rep-kpi-switches-list"></div>
             </div>
 
             <!-- ── Fontes de dados ativas para o cliente selecionado ── -->
@@ -4963,6 +4984,25 @@
       <div id="tpl-metricas-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:7px"></div>
     </div>
 
+    <!-- Estrutura de Texto com Placeholders -->
+    <div id="tpl-texto-section" style="display:none;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:5px">
+          <i class="ti ti-message-code" style="color:#DEFF9A;font-size:13px"></i>Esqueleto da Mensagem
+          <span style="font-size:10px;font-weight:400;color:var(--text3)">— use {{variavel}} para dados dinâmicos</span>
+        </div>
+        <button type="button" onclick="tplResetTexto()" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:2px 6px;border-radius:4px;transition:color 0.15s" title="Restaurar padrão">↺ Padrão</button>
+      </div>
+      <textarea id="tpl-body" class="form-input" rows="8"
+        placeholder="Ex: Olá! 👋 Segue o resumo de *{{periodo}}*:&#10;&#10;💰 *Gasto Total:* R$ {{gasto_total}}&#10;📱 *Leads:* {{leads}}&#10;🎯 *CPL:* R$ {{cpl}}"
+        style="resize:vertical;font-family:var(--mono);font-size:11.5px;line-height:1.7"
+        oninput="tplPreviewUpdate()"></textarea>
+      <!-- Tags de placeholder clicáveis -->
+      <div id="tpl-placeholder-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px"></div>
+      <!-- Mini preview -->
+      <div id="tpl-preview-box" style="display:none;margin-top:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--text2);line-height:1.8;white-space:pre-wrap;max-height:160px;overflow-y:auto"></div>
+    </div>
+
     <div style="height:1px;background:var(--border);margin:4px 0 18px"></div>
 
     <!-- Toggle IA -->
@@ -5512,6 +5552,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initGA4Config();
   renderDashboard(); // Popula Dashboard com dados reais na carga inicial
   renderTemplatesPage(); // Popula página de templates (builtins + localStorage)
+  _loadTemplatesFromAPI(); // Sincroniza templates do servidor (Supabase)
   // Sync async: atualiza fotos e nomes na tela de login sem bloquear o carregamento
   loadUserProfilesFromAPI();
 
@@ -6425,6 +6466,12 @@ function openTemplateModal(editId) {
     document.getElementById('tpl-ch-pdf').classList.toggle('active',      !!(tpl.canais?.includes('pdf')));
     document.querySelectorAll('.tpl-freq-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.freq === (tpl.freq || 'semanal')));
+    const bodyEl = document.getElementById('tpl-body');
+    if (bodyEl) {
+      bodyEl.value = tpl.estruturaTexto || TPL_DEFAULT_TEXTO[tpl.seg] || '';
+      tplPreviewUpdate();
+    }
+    _tplRenderPlaceholderTags(tpl.seg);
 
     /* Renderiza checkboxes do segmento e marca as salvas */
     if (tpl.seg && TPL_METRICAS[tpl.seg]) {
@@ -6433,6 +6480,11 @@ function openTemplateModal(editId) {
         document.querySelectorAll('input[name="tpl-metric"]').forEach(cb => {
           cb.checked = tpl.metricas?.length ? tpl.metricas.includes(cb.value) : true;
         });
+        // Restaura o texto do template após onTemplateSegmentChange (que pode ter sobrescrito com padrão)
+        if (bodyEl && tpl.estruturaTexto) {
+          bodyEl.value = tpl.estruturaTexto;
+          tplPreviewUpdate();
+        }
       });
     } else {
       document.getElementById('tpl-metricas-section').style.display = 'none';
@@ -6450,6 +6502,10 @@ function openTemplateModal(editId) {
     document.getElementById('tpl-ch-pdf').classList.remove('active');
     document.querySelectorAll('.tpl-freq-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.freq === 'semanal'));
+    const bodyElNew = document.getElementById('tpl-body');
+    if (bodyElNew) { bodyElNew.value = ''; tplPreviewUpdate(); }
+    const textoSec = document.getElementById('tpl-texto-section');
+    if (textoSec) textoSec.style.display = 'none';
   }
 
   document.getElementById('modal-template-overlay').classList.add('open');
@@ -6467,10 +6523,12 @@ function onTemplateSegmentChange() {
   const seg     = document.getElementById('tpl-segmento').value;
   const section = document.getElementById('tpl-metricas-section');
   const grid    = document.getElementById('tpl-metricas-grid');
+  const textoSection = document.getElementById('tpl-texto-section');
 
   if (!seg || !TPL_METRICAS[seg]) {
     section.style.display = 'none';
     grid.innerHTML = '';
+    if (textoSection) textoSection.style.display = 'none';
     return;
   }
 
@@ -6480,6 +6538,14 @@ function onTemplateSegmentChange() {
       <i class="ti ${m.icon}" style="font-size:13px;color:#DEFF9A;flex-shrink:0"></i>
       <span>${m.label}</span>
     </label>`).join('');
+
+  _tplRenderPlaceholderTags(seg);
+  // Se textarea vazio, preenche com padrão do segmento
+  const bodyEl = document.getElementById('tpl-body');
+  if (bodyEl && !bodyEl.value && TPL_DEFAULT_TEXTO[seg]) {
+    bodyEl.value = TPL_DEFAULT_TEXTO[seg];
+    tplPreviewUpdate();
+  }
 
   section.style.display = '';
   section.style.opacity = '0';
@@ -6504,6 +6570,7 @@ function salvarTemplate() {
   const seg  = document.getElementById('tpl-segmento').value;
   if (!seg)  { showNotification('Selecione o segmento do template.','warn'); return; }
 
+  const estruturaTexto = document.getElementById('tpl-body')?.value?.trim() || '';
   const metricas  = [...document.querySelectorAll('input[name="tpl-metric"]:checked')].map(i => i.value);
   const ia        = document.getElementById('tpl-ia-toggle').checked;
   const canais    = [];
@@ -6517,15 +6584,31 @@ function salvarTemplate() {
 
   if (isUserEdit) {
     const idx = TEMPLATES_LIST.findIndex(t => t.id === _tplEditId);
-    TEMPLATES_LIST[idx] = { ...TEMPLATES_LIST[idx], nome, seg, descricao, metricas, ia, canais, freq };
+    TEMPLATES_LIST[idx] = { ...TEMPLATES_LIST[idx], nome, seg, descricao, metricas, estruturaTexto, ia, canais, freq };
     showNotification(`Template "${nome}" atualizado! ✅`, 'ok');
   } else {
     /* Criação (incluindo "Salvar como novo" para builtins) */
-    TEMPLATES_LIST.push({ id: 'tpl-' + Date.now(), nome, seg, descricao, metricas, ia, canais, freq });
+    TEMPLATES_LIST.push({ id: 'tpl-' + Date.now(), nome, seg, descricao, metricas, estruturaTexto, ia, canais, freq });
     showNotification(`Template "${nome}" criado com sucesso! ✅`, 'ok');
   }
 
   _saveTemplatesLS();
+
+  // Sincroniza com backend
+  const tplData = isUserEdit
+    ? TEMPLATES_LIST.find(t => t.id === _tplEditId)
+    : TEMPLATES_LIST[TEMPLATES_LIST.length - 1];
+  if (tplData) {
+    const body = { nome: tplData.nome, seg: tplData.seg, descricao: tplData.descricao, estruturaTexto: tplData.estruturaTexto, metricas: tplData.metricas, ia: tplData.ia, canais: tplData.canais, freq: tplData.freq };
+    if (isUserEdit && tplData._serverId) {
+      _apiFetch(`/api/templates/${tplData._serverId}`, { method: 'PUT', body: JSON.stringify(body) }).catch(() => {});
+    } else {
+      _apiFetch('/api/templates', { method: 'POST', body: JSON.stringify(body) })
+        .then(r => { if (r?.id) { tplData._serverId = r.id; _saveTemplatesLS(); } })
+        .catch(() => {});
+    }
+  }
+
   closeTemplateModal();
   renderTemplatesPage();
   /* Atualiza o dropdown de templates na página de Relatórios em tempo real */
@@ -11512,7 +11595,296 @@ function _repClientSelect(id, name) {
     display.style.color = id ? 'var(--text)' : 'var(--text3)';
   }
   _repClientClose();
+  // Reseta template e KPI switches para o novo cliente
+  const tplSel = document.getElementById('rep-template');
+  if (tplSel) tplSel.value = '';
+  const kpiArea = document.getElementById('rep-kpi-area');
+  if (kpiArea) kpiArea.style.display = 'none';
+  _repKpiState = {};
+  // Auto-seleciona template pelo segmento do cliente
+  const client = CLIENTS.list.find(c => c.id === id);
+  if (client) _tplAutoSelectBySeg(client);
   updateReportPreview();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TEMPLATE ENGINE — estruturaTexto com placeholders {{variavel}}
+// ═══════════════════════════════════════════════════════════════
+
+/* Textos padrão por segmento (fallback quando template não tem estruturaTexto) */
+const TPL_DEFAULT_TEXTO = {
+  delivery: `Olá! 👋 Segue o resumo de *{{periodo}}*:
+
+💰 *Valor Usado:* R$ {{gasto_total}}
+👥 *Sessões:* {{sessoes}}
+🛒 *Carrinhos:* {{carrinho}}
+🍕 *Compras:* {{compras}}
+🏷️ *Custo por Compra:* R$ {{custo_compra}}
+💳 *Ticket Médio:* R$ {{ticket_medio}}
+📈 *Faturamento:* R$ {{faturamento}}
+🚀 *ROAS:* {{roas}}x
+
+_Relatório completo em anexo!_ 📎`,
+
+  leads: `Olá! 👋 Segue o resumo de *{{periodo}}*:
+
+✅ *Investimento:* R$ {{gasto_total}}
+📱 *Leads gerados:* {{leads}}
+🎯 *Custo por lead:* R$ {{cpl}}
+📈 *Meta:* {{leads}}/{{meta}} ({{pct_meta}}%)
+
+_Relatório completo em anexo!_ 📎`,
+
+  ecommerce: `Olá! 👋 Segue o resumo de *{{periodo}}*:
+
+💰 *Investimento:* R$ {{gasto_total}}
+📈 *Faturamento:* R$ {{faturamento}}
+🚀 *ROAS:* {{roas}}x
+🛒 *Carrinhos Abandonados:* {{carrinhos}}
+
+_Relatório completo em anexo!_ 📎`,
+
+  _default: `Olá! 👋 Segue o resumo de *{{periodo}}*:
+
+💰 *Investimento:* R$ {{gasto_total}}
+
+_Relatório completo em anexo!_ 📎`,
+};
+
+/* Tags de placeholders visíveis no modal por segmento */
+const TPL_PLACEHOLDER_TAGS = {
+  delivery:  ['{{nome}}','{{periodo}}','{{gasto_total}}','{{gasto_meta}}','{{gasto_google}}','{{sessoes}}','{{carrinho}}','{{compras}}','{{custo_compra}}','{{ticket_medio}}','{{faturamento}}','{{roas}}'],
+  leads:     ['{{nome}}','{{periodo}}','{{gasto_total}}','{{gasto_meta}}','{{gasto_google}}','{{leads}}','{{cpl}}','{{meta}}','{{pct_meta}}'],
+  ecommerce: ['{{nome}}','{{periodo}}','{{gasto_total}}','{{gasto_meta}}','{{faturamento}}','{{roas}}','{{carrinhos}}'],
+};
+
+/* Resolve um placeholder para o valor real do cliente/snapshot */
+function _tplResolvePlaceholder(key, client, snapshot, periodStr) {
+  const fmtBRL2 = n => (n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtN    = n => Math.round(n||0).toLocaleString('pt-BR');
+  const p = calcPacing(client);
+  const inv     = snapshot?.inv     ?? client.investment ?? 0;
+  const fat     = snapshot?.fat     ?? client.faturamentoMetaAds ?? client.goal?.realized ?? 0;
+  const compras = snapshot?.compras ?? client.metaCompras ?? 0;
+  const cart    = snapshot?.cart    ?? client.metaAddToCart ?? 0;
+  const sess    = snapshot?.sessoes ?? client.metaSessoes ?? 0;
+  const leads   = snapshot?.leads   ?? (client.goal?.realized || 0);
+  const meta    = client.goal?.target || 0;
+  const metaGasto  = p.metaGasto   || inv;
+  const gadsGasto  = p.googleGasto || 0;
+  const totalInv   = p.totalGasto  || inv;
+  const cpl        = leads > 0 && totalInv > 0 ? totalInv / leads : 0;
+  const custo_comp = compras > 0 ? totalInv / compras : 0;
+  const ticket     = compras > 0 && fat > 0 ? fat / compras : 0;
+  const roas       = totalInv > 0 && fat > 0 ? fat / totalInv : 0;
+  const pct_meta   = meta > 0 ? Math.round((leads / meta) * 100) : 0;
+  switch(key) {
+    case '{{nome}}':        return client.name || '—';
+    case '{{periodo}}':     return periodStr || 'este mês';
+    case '{{gasto_total}}': return fmtBRL2(totalInv);
+    case '{{gasto_meta}}':  return fmtBRL2(metaGasto);
+    case '{{gasto_google}}':return fmtBRL2(gadsGasto);
+    case '{{sessoes}}':     return fmtN(sess);
+    case '{{carrinho}}':    return fmtN(cart);
+    case '{{carrinhos}}':   return fmtN(cart);
+    case '{{compras}}':     return fmtN(compras);
+    case '{{custo_compra}}':return fmtBRL2(custo_comp);
+    case '{{ticket_medio}}':return fmtBRL2(ticket);
+    case '{{faturamento}}': return fmtBRL2(fat);
+    case '{{roas}}':        return roas > 0 ? roas.toFixed(2).replace('.',',') : '0,00';
+    case '{{leads}}':       return fmtN(leads);
+    case '{{cpl}}':         return fmtBRL2(cpl);
+    case '{{meta}}':        return fmtN(meta);
+    case '{{pct_meta}}':    return String(pct_meta);
+    default:                return key; // não substituído
+  }
+}
+
+/* Constrói a mensagem final a partir do esqueleto e dos dados reais */
+function _buildMsgFromTemplate(tpl, client, snapshot, periodStr, activeKpis) {
+  // Obtém o esqueleto: prefere estruturaTexto do template, senão usa padrão do segmento
+  let skeleton = tpl?.estruturaTexto || TPL_DEFAULT_TEXTO[client.segment] || TPL_DEFAULT_TEXTO._default;
+
+  // Se activeKpis definido, filtra linhas que contêm KPIs desativados
+  if (activeKpis && Array.isArray(activeKpis)) {
+    skeleton = skeleton.split('\n').filter(line => {
+      // Encontra todos os placeholders na linha
+      const lineTags = (line.match(/\{\{[^}]+\}\}/g) || []);
+      if (lineTags.length === 0) return true; // linha sem placeholder → sempre mantém
+      // Remove linha se QUALQUER placeholder desta linha não está em activeKpis
+      return lineTags.every(tag => {
+        const kpiKey = tag.replace(/[{}]/g,''); // ex: 'gasto_total'
+        return activeKpis.includes(kpiKey);
+      });
+    }).join('\n');
+  }
+
+  // Substitui todos os placeholders
+  return skeleton.replace(/\{\{[^}]+\}\}/g, match =>
+    _tplResolvePlaceholder(match, client, snapshot, periodStr)
+  );
+}
+
+// ── Carrega templates da API e mescla com localStorage ────────────────────
+async function _loadTemplatesFromAPI() {
+  try {
+    const data = await _apiFetch('/api/templates');
+    if (!Array.isArray(data) || data.length === 0) return;
+    // Mescla: mantém IDs do servidor + preserva os locais sem ID de servidor
+    const serverIds = new Set(data.map(t => t.id));
+    const localOnly = TEMPLATES_LIST.filter(t => !t._serverId && !serverIds.has(t._serverId));
+    TEMPLATES_LIST = [
+      ...data.map(t => ({
+        id:              t.id,
+        _serverId:       t.id,
+        nome:            t.nome,
+        seg:             t.seg,
+        descricao:       t.descricao || '',
+        estruturaTexto:  t.estrutura_texto || '',
+        metricas:        t.metricas || [],
+        kpisAtivos:      t.kpis_ativos || [],
+        ia:              t.ia,
+        canais:          t.canais || ['whatsapp'],
+        freq:            t.freq || 'semanal',
+      })),
+      ...localOnly,
+    ];
+    _saveTemplatesLS();
+    renderTemplatesPage();
+    populateReportSelects();
+  } catch(e) {
+    console.warn('[Templates] loadFromAPI:', e.message);
+  }
+}
+
+// ── Auto-seleciona template pelo segmento do cliente ─────────────────────
+function _tplAutoSelectBySeg(client) {
+  if (!client) return;
+  const tplSel = document.getElementById('rep-template');
+  if (!tplSel) return;
+
+  // Já tem template selecionado manualmente? Não sobrescreve
+  if (tplSel.value) return;
+
+  const allTpls = [...BUILTIN_TEMPLATES, ...TEMPLATES_LIST];
+  const seg = client.segment || '';
+
+  // Procura template do usuário para este segmento
+  const userTpl = TEMPLATES_LIST.find(t => t.seg === seg);
+  if (userTpl) {
+    tplSel.value = userTpl.id;
+    _renderRepKpiSwitches(client, userTpl);
+    return;
+  }
+
+  // Fallback: builtins que combinam com o segmento
+  const builtinMatch = BUILTIN_TEMPLATES.find(t => t.seg === seg);
+  if (builtinMatch) {
+    tplSel.value = builtinMatch.id;
+  }
+
+  _renderRepKpiSwitches(client, userTpl || builtinMatch || null);
+}
+
+// ── KPI Switches na página de Relatórios ─────────────────────────────────
+let _repKpiState = {}; // { kpiKey: true/false }
+
+function _renderRepKpiSwitches(client, tpl) {
+  const area = document.getElementById('rep-kpi-area');
+  const list = document.getElementById('rep-kpi-switches-list');
+  if (!area || !list) return;
+
+  const seg = client?.segment || '';
+  const kpis = (tpl?.metricas?.length ? tpl.metricas : null) || TPL_METRICAS[seg]?.map(m => m.key) || [];
+
+  if (!kpis.length) { area.style.display = 'none'; return; }
+
+  // Inicializa estado: todos ativos por padrão
+  _repKpiState = {};
+  kpis.forEach(k => { _repKpiState[k] = true; });
+
+  const allMetricas = Object.values(TPL_METRICAS).flat();
+  list.innerHTML = kpis.map(key => {
+    const meta = allMetricas.find(m => m.key === key) || { key, label: key, icon: 'ti-chart-bar' };
+    return `
+    <div class="rep-kpi-switch-row">
+      <span class="rep-kpi-switch-label">
+        <i class="ti ${meta.icon}" style="font-size:12px;color:var(--accent2)"></i>
+        ${meta.label}
+      </span>
+      <label class="rep-kpi-switch">
+        <input type="checkbox" checked onchange="_repKpiToggle('${key}', this.checked)">
+        <span class="rep-kpi-switch-track"></span>
+      </label>
+    </div>`;
+  }).join('');
+
+  area.style.display = 'block';
+}
+
+function _repKpiToggle(key, checked) {
+  _repKpiState[key] = checked;
+  // Rebuilds preview immediately with filtered KPIs
+  const clientId = document.getElementById('rep-client')?.value;
+  const client   = CLIENTS.list.find(c => c.id === clientId);
+  if (!client) return;
+  const tplId    = document.getElementById('rep-template')?.value;
+  const allTpls  = [...BUILTIN_TEMPLATES, ...TEMPLATES_LIST];
+  const tpl      = tplId ? allTpls.find(t => t.id === tplId) : null;
+  if (!tpl?.estruturaTexto && !TPL_DEFAULT_TEXTO[client.segment]) return;
+  const activeKpis = Object.entries(_repKpiState).filter(([,v]) => v).map(([k]) => k);
+  const msgEl = document.getElementById('rep-wa-msg');
+  if (!msgEl) return;
+  const periodStr = _repPeriodStr?.() || 'este mês';
+  const snapshot  = REPORT_STATE.current;
+  const msg = _buildMsgFromTemplate(tpl, client, snapshot, periodStr, activeKpis);
+  if (msgEl.tagName === 'TEXTAREA') { msgEl.value = msg; }
+  else { msgEl.textContent = msg; }
+}
+
+// ── Preview em tempo real no modal de template ────────────────────────────
+function tplPreviewUpdate() {
+  const box  = document.getElementById('tpl-preview-box');
+  const body = document.getElementById('tpl-body')?.value || '';
+  if (!box) return;
+  if (!body.trim()) { box.style.display = 'none'; return; }
+  box.textContent = body
+    .replace(/\*([^*]+)\*/g, '$1')         // bold
+    .replace(/_([^_]+)_/g,  '$1');         // italic
+  box.style.display = 'block';
+}
+
+function tplResetTexto() {
+  const seg  = document.getElementById('tpl-segmento')?.value;
+  const body = document.getElementById('tpl-body');
+  if (body && seg && TPL_DEFAULT_TEXTO[seg]) {
+    body.value = TPL_DEFAULT_TEXTO[seg];
+    tplPreviewUpdate();
+  }
+}
+
+function tplInsertTag(tag) {
+  const el = document.getElementById('tpl-body');
+  if (!el) return;
+  const start = el.selectionStart, end = el.selectionEnd;
+  el.value = el.value.slice(0, start) + tag + el.value.slice(end);
+  el.selectionStart = el.selectionEnd = start + tag.length;
+  el.focus();
+  tplPreviewUpdate();
+}
+
+// ── Renderiza tags de placeholder clicáveis ───────────────────────────────
+function _tplRenderPlaceholderTags(seg) {
+  const container = document.getElementById('tpl-placeholder-tags');
+  const section   = document.getElementById('tpl-texto-section');
+  if (!container) return;
+
+  const tags = TPL_PLACEHOLDER_TAGS[seg] || ['{{nome}}','{{periodo}}','{{gasto_total}}'];
+  container.innerHTML = tags.map(tag => `
+    <span class="tpl-ph-tag" onclick="tplInsertTag('${tag}')" title="Clique para inserir">${tag}</span>`
+  ).join('');
+
+  if (section) section.style.display = '';
 }
 
 function populateReportSelects() {
@@ -11945,7 +12317,14 @@ async function updateReportPreview() {
 function _applyReportSnapshot(client, snapshot, periodStr, seg, msgEl, tpl) {
   /* Texto para o cliente */
   let lines;
-  if (seg === 'delivery' || seg === 'ecommerce') {
+  // Se template tem estruturaTexto personalizado, usa a engine de placeholders
+  if (tpl?.estruturaTexto) {
+    const activeKpis = Object.keys(_repKpiState).length > 0
+      ? Object.entries(_repKpiState).filter(([,v]) => v).map(([k]) => k)
+      : null; // null = sem filtro de KPI
+    const msg = _buildMsgFromTemplate(tpl, client, snapshot, periodStr, activeKpis);
+    lines = msg.split('\n');
+  } else if (seg === 'delivery' || seg === 'ecommerce') {
     lines = snapshot
       ? _buildMsgDeliveryFromData(snapshot, periodStr)
       : _buildMsgDelivery(client, periodStr);
