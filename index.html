@@ -6959,42 +6959,43 @@ async function loadTasksFromDB() {
   }
 
   // ── Merge com preferência local quando há atualização pendente ─────────────
-  // Regra 1: _localUpdatedAt > updatedAt do servidor + 3s → local mais recente (PUT não chegou)
+  // Regra 1: _localUpdatedAt set → mudança pendente de confirmação → local sempre vence
+  //   BUG CORRIGIDO: o antigo check "localTime > srvTime + 3s" falhava quando um
+  //   checkpoint de timer atualizou updated_at no servidor 1-2s antes do usuário
+  //   marcar Pronto — a janela de 3s não cobria esse caso.
   // Regra 2: Pronto local vs servidor stale → imutabilidade de conclusão
+  //   BUG CORRIGIDO: o antigo "!_localUpdatedAt" excluía exatamente o caso crítico
+  //   onde _localUpdatedAt estava set (mudança pendente) E status era Pronto.
   // Regra 3: timer em andamento localmente com checkpoint mais recente → preserva timer
   const mergedFromServer = fromServer.map(srvTask => {
     const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
-    // Regra 1 — mudança local pendente (janela 3s após PUT)
+
+    // Regra 1 — _localUpdatedAt set = PUT ainda não confirmado → usa local SEMPRE
     if (localTask?._localUpdatedAt) {
-      const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
-      const localTime = localTask._localUpdatedAt;
-      if (localTime > srvTime + 3000) {
-        // Local é mais recente que o servidor — re-envia em background e usa local
-        console.warn(`[Tasks] merge: versão local mais nova para "${srvTask.title}" — re-enviando ao servidor`);
-        updateTaskInDB(srvTask.id, {
-          status:         localTask.status,
-          group:          localTask.group,
-          priority:       localTask.priority,
-          completed_at:   localTask.completed_at  || null,
-          timerStartedAt: localTask.timerStartedAt || null,
-          timeSpent:      localTask.timeSpent      || 0,
-        });
-        return localTask;
-      }
+      console.warn(`[Tasks] merge loadDB: _localUpdatedAt pendente para "${srvTask.title || srvTask.id}" → usando local, re-enviando`);
+      updateTaskInDB(srvTask.id, {
+        status:         localTask.status,
+        group:          localTask.group,
+        priority:       localTask.priority,
+        completed_at:   localTask.completed_at  || null,
+        timerStartedAt: localTask.timerStartedAt || null,
+        timeSpent:      localTask.timeSpent      || 0,
+      });
+      return localTask;
     }
-    // Regra 2 — Pronto local vs servidor stale (dado velho / PUT em cold-start):
-    // Uma tarefa marcada como Pronto nunca deve ser revertida por sync automático.
-    // Apenas ações explícitas do usuário (com _localUpdatedAt) podem desfazer Pronto.
+
+    // Regra 2 — Pronto local vs servidor stale:
+    // Se o local está Pronto e o servidor não, NUNCA reverte (sync automático não pode
+    // desfazer uma conclusão). Nota: _localUpdatedAt=falsy aqui (Regra 1 não disparou),
+    // então não há conflito com undo explícito do usuário.
     if (localTask
         && normalizeTaskStatus(localTask.status) === 'Pronto'
-        && normalizeTaskStatus(srvTask.status)   !== 'Pronto'
-        && !localTask._localUpdatedAt) {
+        && normalizeTaskStatus(srvTask.status)   !== 'Pronto') {
       console.warn(`[Tasks] merge loadDB: PRONTO protegido para "${srvTask.title || srvTask.id}" — servidor tem "${srvTask.status}" (stale). Re-enviando.`);
-      // Corrige o servidor com o status correto
       if (currentUser) updateTaskInDB(srvTask.id, {
-        status:       'Pronto',
-        group:        'concluidos',
-        completed_at: localTask.completed_at || new Date().toISOString(),
+        status:         'Pronto',
+        group:          'concluidos',
+        completed_at:   localTask.completed_at || new Date().toISOString(),
         timerStartedAt: null,
       });
       return localTask;
@@ -8262,20 +8263,19 @@ async function _pollTasks() {
     const serverIds = new Set(incoming.map(t => t.id).filter(Boolean));
     const localOnly = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
 
-    // Merge: mesmo conjunto de regras de loadTasksFromDB.
+    // Merge: mesmo conjunto de regras corrigidas de loadTasksFromDB.
     const mergedIncoming = incoming.map(srvTask => {
       const localTask = TASKS_DATA.find(t => t.id === srvTask.id);
-      // Regra 1 — _localUpdatedAt: PUT local ainda não confirmado pelo servidor
+
+      // Regra 1 — _localUpdatedAt set = PUT pendente → local sempre vence (sem check de tempo)
       if (localTask?._localUpdatedAt) {
-        const srvTime   = new Date(srvTask.updatedAt || srvTask.createdAt || 0).getTime();
-        const localTime = localTask._localUpdatedAt;
-        if (localTime > srvTime + 3000) return localTask; // mantém versão local mais nova
+        return localTask;
       }
-      // Regra 2 — Pronto local nunca é revertido por polling com dado stale
+
+      // Regra 2 — Pronto local nunca é revertido por polling (independente de _localUpdatedAt)
       if (localTask
           && normalizeTaskStatus(localTask.status) === 'Pronto'
-          && normalizeTaskStatus(srvTask.status)   !== 'Pronto'
-          && !localTask._localUpdatedAt) {
+          && normalizeTaskStatus(srvTask.status)   !== 'Pronto') {
         console.warn(`[Tasks] merge poll: PRONTO protegido para "${srvTask.title || srvTask.id}" — servidor tem "${srvTask.status}" (stale). Re-enviando.`);
         if (currentUser) updateTaskInDB(srvTask.id, {
           status: 'Pronto', group: 'concluidos',
