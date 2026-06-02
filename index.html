@@ -4711,18 +4711,18 @@
           <input type="hidden" id="cl-form-gads-customer-id">
           <div id="gads-dd-list" class="gads-dd-list"></div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
-          <div id="cl-gads-account-hint" style="font-size:10px;color:var(--text3)"></div>
-          <button type="button" onclick="gadsManualTrayToggle()"
-            style="flex-shrink:0;display:flex;align-items:center;gap:5px;padding:4px 10px;
-                   background:rgba(66,133,244,0.08);border:1.5px solid rgba(66,133,244,0.25);
-                   border-radius:7px;color:#4285F4;font-size:11px;font-weight:600;cursor:pointer;
-                   white-space:nowrap;transition:background 0.15s;margin-left:8px"
-            onmouseover="this.style.background='rgba(66,133,244,0.16)'"
-            onmouseout="this.style.background='rgba(66,133,244,0.08)'">
-            <i class="ti ti-list-details" style="font-size:12px"></i> Minhas contas
-          </button>
-        </div>
+        <div id="cl-gads-account-hint" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
+        <button type="button" onclick="gadsManualTrayToggle()"
+          style="margin-top:8px;width:100%;display:flex;align-items:center;justify-content:center;
+                 gap:6px;padding:8px 12px;
+                 background:rgba(66,133,244,0.08);border:1.5px solid rgba(66,133,244,0.28);
+                 border-radius:8px;color:#4285F4;font-size:12px;font-weight:600;cursor:pointer;
+                 transition:background 0.15s"
+          onmouseover="this.style.background='rgba(66,133,244,0.16)'"
+          onmouseout="this.style.background='rgba(66,133,244,0.08)'">
+          <i class="ti ti-list-details" style="font-size:14px"></i>
+          Minhas contas Google Ads
+        </button>
 
         <!-- ── Bandeja de contas Google Ads salvas manualmente ── -->
         <div id="gads-manual-tray" style="display:none;margin-top:10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;overflow:hidden">
