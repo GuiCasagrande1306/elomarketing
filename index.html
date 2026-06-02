@@ -4691,7 +4691,12 @@
           </label>
           <div style="display:flex;align-items:center;gap:6px">
             <span id="gads-form-badge" style="display:none;font-size:10px;font-weight:600;color:#4285F4;background:rgba(66,133,244,0.10);border:1px solid rgba(66,133,244,0.35);padding:2px 8px;border-radius:20px">✓ Vinculado</span>
-            <button type="button" onclick="carregarContasGads(true)" title="Recarregar contas"
+            <button type="button" onclick="gadsManualTrayToggle()" title="Gerenciar contas salvas"
+              style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;display:flex;align-items:center;gap:4px;transition:color 0.15s"
+              id="gads-tray-btn">
+              <i class="ti ti-list-details"></i>
+            </button>
+            <button type="button" onclick="carregarContasGads(true)" title="Recarregar contas do MCC"
               style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;display:flex;align-items:center;gap:4px;transition:color 0.15s">
               <i class="ti ti-refresh" id="gads-reload-icon"></i>
             </button>
@@ -4699,7 +4704,7 @@
         </div>
         <div style="position:relative" id="gads-account-wrap">
           <input type="text" id="cl-form-gads-account-search" class="form-input"
-            placeholder="Clique para ver as contas do MCC..."
+            placeholder="Buscar conta ou digitar Customer ID..."
             autocomplete="off"
             style="padding-right:28px"
             oninput="gadsDdFilter(this.value)"
@@ -4712,6 +4717,35 @@
           <div id="gads-dd-list" class="gads-dd-list"></div>
         </div>
         <div id="cl-gads-account-hint" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
+
+        <!-- ── Bandeja de contas Google Ads salvas manualmente ── -->
+        <div id="gads-manual-tray" style="display:none;margin-top:10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;overflow:hidden">
+          <div style="padding:10px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px">
+              <svg width="11" height="11" viewBox="0 0 512 512" style="margin-right:4px;vertical-align:-1px" fill="#4285F4"><path d="M256 48C141.12 48 48 141.12 48 256s93.12 208 208 208 208-93.12 208-208S370.88 48 256 48zm-32 304l-80-80 22.4-22.4 57.6 57.6 121.6-121.6 22.4 22.4-144 144z"/></svg>
+              Contas salvas
+            </span>
+            <button type="button" onclick="gadsManualTrayToggle()"
+              style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0;line-height:1">
+              <i class="ti ti-x"></i>
+            </button>
+          </div>
+
+          <!-- Lista de contas salvas -->
+          <div id="gads-manual-list" style="max-height:180px;overflow-y:auto;padding:6px 0"></div>
+
+          <!-- Formulário para adicionar nova conta -->
+          <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px">
+            <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px">Adicionar nova conta</div>
+            <div style="display:flex;gap:7px">
+              <input type="text" id="gads-new-name" class="form-input" placeholder="Nome da conta (ex: Burgo)" style="flex:1;font-size:12px;height:32px">
+              <input type="text" id="gads-new-id" class="form-input" placeholder="ID (ex: 123-456-7890)" style="width:140px;font-size:12px;height:32px;font-family:var(--mono)">
+              <button type="button" onclick="gadsManualAdd()" style="height:32px;padding:0 12px;background:rgba(66,133,244,0.12);border:1.5px solid rgba(66,133,244,0.35);border-radius:7px;color:#4285F4;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                <i class="ti ti-plus"></i> Salvar
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ── Conexão de Mídias Sociais ─────────────────────────────── -->
@@ -9233,7 +9267,11 @@ function openNewClientModal(id) {
   const ga4Badge = document.getElementById('ga4-form-badge');
   if (ga4Badge) ga4Badge.style.display = 'none';
   gadsDdSetValue('');
+  _gadsMergeManual();  // carrega contas salvas manualmente antes do MCC
   carregarContasGads();
+  // Garante bandeja fechada ao abrir novo formulário
+  const _gadsTray = document.getElementById('gads-manual-tray');
+  if (_gadsTray) _gadsTray.style.display = 'none';
   metaDdSetValue('');
   carregarContasMeta();
   // Controle de acesso: somente admins podem editar IDs de conta
@@ -14773,6 +14811,105 @@ async function renderConsolidatedReport(force = false) {
 /* ========== GOOGLE ADS — ACCOUNT DROPDOWN ========== */
 let GADS_ACCOUNTS   = [];
 let _gadsDdHoverIdx = -1;
+
+// ── Bandeja de contas Google Ads salvas manualmente ────────────────────────
+// Persiste em localStorage; mesclada com contas do MCC no dropdown.
+const GADS_MANUAL_KEY = 'tp_gads_manual_accounts';
+
+function _gadsManualLoad() {
+  try { return JSON.parse(localStorage.getItem(GADS_MANUAL_KEY) || '[]'); } catch { return []; }
+}
+function _gadsManualSave(list) {
+  localStorage.setItem(GADS_MANUAL_KEY, JSON.stringify(list));
+}
+// Mescla contas manuais no array GADS_ACCOUNTS (evita duplicatas por id)
+function _gadsMergeManual() {
+  const manual = _gadsManualLoad();
+  manual.forEach(m => {
+    const clean = m.id.replace(/-/g,'');
+    if (!GADS_ACCOUNTS.find(a => a.id === clean)) {
+      GADS_ACCOUNTS.push({ id: clean, name: m.name, _manual: true });
+    }
+  });
+}
+
+function gadsManualTrayToggle() {
+  const tray = document.getElementById('gads-manual-tray');
+  if (!tray) return;
+  const open = tray.style.display !== 'none';
+  tray.style.display = open ? 'none' : 'block';
+  if (!open) _gadsManualRenderList();
+}
+
+function _gadsManualRenderList() {
+  const container = document.getElementById('gads-manual-list');
+  if (!container) return;
+  const list = _gadsManualLoad();
+  if (!list.length) {
+    container.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--text3)">Nenhuma conta salva ainda. Adicione abaixo.</div>';
+    return;
+  }
+  container.innerHTML = list.map((a, i) => {
+    const fmtId = a.id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);transition:background 0.1s"
+         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">${fmtId}</div>
+      </div>
+      <button type="button" onclick="gadsManualSelect('${a.id.replace(/-/g,'')}','${a.name.replace(/'/g,"\\'")}')"
+        style="flex-shrink:0;padding:4px 10px;background:rgba(66,133,244,0.10);border:1.5px solid rgba(66,133,244,0.30);border-radius:6px;color:#4285F4;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">
+        Selecionar
+      </button>
+      <button type="button" onclick="gadsManualDelete(${i})"
+        style="flex-shrink:0;padding:4px 6px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px" title="Remover">
+        <i class="ti ti-trash"></i>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function gadsManualAdd() {
+  const nameEl = document.getElementById('gads-new-name');
+  const idEl   = document.getElementById('gads-new-id');
+  if (!nameEl || !idEl) return;
+  const name  = nameEl.value.trim();
+  const rawId = idEl.value.trim().replace(/[^0-9]/g, '');
+  if (!name)          { nameEl.focus(); showNotification('Digite o nome da conta.', 'warn'); return; }
+  if (rawId.length < 9) { idEl.focus(); showNotification('Customer ID inválido — mínimo 9 dígitos.', 'warn'); return; }
+  const list = _gadsManualLoad();
+  // Evita duplicatas por ID
+  if (list.find(a => a.id.replace(/-/g,'') === rawId)) {
+    showNotification('Esta conta já está salva.', 'warn'); return;
+  }
+  list.push({ name, id: rawId });
+  _gadsManualSave(list);
+  // Adiciona ao array em memória se ainda não estiver
+  if (!GADS_ACCOUNTS.find(a => a.id === rawId)) {
+    GADS_ACCOUNTS.push({ id: rawId, name, _manual: true });
+  }
+  nameEl.value = '';
+  idEl.value   = '';
+  _gadsManualRenderList();
+  showNotification(`Conta "${name}" salva com sucesso!`, 'success');
+}
+
+function gadsManualDelete(idx) {
+  const list = _gadsManualLoad();
+  const removed = list.splice(idx, 1)[0];
+  _gadsManualSave(list);
+  // Remove do array em memória se era manual
+  if (removed) GADS_ACCOUNTS = GADS_ACCOUNTS.filter(a => !(a._manual && a.id === removed.id.replace(/-/g,'')));
+  _gadsManualRenderList();
+}
+
+function gadsManualSelect(id, name) {
+  gadsDdSelect(id, name);
+  // Fecha a bandeja após selecionar
+  const tray = document.getElementById('gads-manual-tray');
+  if (tray) tray.style.display = 'none';
+}
 
 function gadsDdRender(query) {
   const list    = document.getElementById('gads-dd-list');
