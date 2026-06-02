@@ -2931,6 +2931,20 @@
   .esteira-board { overflow-x: auto; flex-wrap: nowrap !important; }
   .esteira-col   { min-width: 260px; flex-shrink: 0; }
 
+  /* ── Fontes de dados — badges Meta / Google Ads na página de Relatórios ── */
+  .rep-datasources { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px }
+  .rep-ds-badge {
+    display:inline-flex;align-items:center;gap:5px;
+    padding:4px 10px;border-radius:20px;
+    font-size:11px;font-weight:600;
+    border:1.5px solid transparent;
+    transition:opacity 0.2s;
+  }
+  .rep-ds-badge.meta  { background:rgba(24,119,242,0.10);color:#1877F2;border-color:rgba(24,119,242,0.30); }
+  .rep-ds-badge.gads  { background:rgba(66,133,244,0.10);color:#4285F4;border-color:rgba(66,133,244,0.30); }
+  .rep-ds-badge.inactive { opacity:0.3; }
+  .rep-ds-label { font-size:11px;color:var(--text3);font-weight:500; }
+
   /* ── Relatórios: ajustes ─────────────────────────────────────── */
   .repcon-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .repcon-table      { min-width: 480px; }
@@ -3712,6 +3726,20 @@
                 <option value="">Selecione um template...</option>
               </select>
             </div>
+
+            <!-- ── Fontes de dados ativas para o cliente selecionado ── -->
+            <div id="rep-datasources" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+              <span class="rep-ds-label">Fontes:</span>
+              <span id="rep-ds-meta" class="rep-ds-badge meta inactive" title="Meta Ads">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 9.39 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z"/></svg>
+                Meta Ads
+              </span>
+              <span id="rep-ds-gads" class="rep-ds-badge gads inactive" title="Google Ads">
+                <svg width="11" height="11" viewBox="0 0 48 48" fill="none"><path d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" fill="#FFC107"/><path d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" fill="#FF3D00"/><path d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" fill="#4CAF50"/><path d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" fill="#1976D2"/></svg>
+                Google Ads
+              </span>
+            </div>
+
             <div style="display:flex;gap:8px">
               <button id="rep-ia-btn" class="btn btn-ghost btn-sm" style="flex:1" onclick="gerarAnaliseIA()">
                 <i class="ti ti-sparkles"></i> Gerar análise IA
@@ -11632,6 +11660,7 @@ async function updateReportPreview() {
   if (!client) {
     if (msgEl) { if (msgEl.tagName === 'TEXTAREA') { msgEl.value = ''; msgEl.placeholder = 'Selecione um cliente e um template para gerar a mensagem.'; } else { msgEl.innerHTML = '<span style="color:var(--text3)">Selecione um cliente e um template para gerar a mensagem.</span>'; } }
     REPORT_STATE.clientId = null;
+    _updateRepDataSources(null);
     return;
   }
 
@@ -11663,11 +11692,15 @@ async function updateReportPreview() {
   /* Render inicial — usa segmento real do cliente para não exibir delivery num leads */
   _applyReportSnapshot(client, immediateSnapshot, periodStr, dataSeg, msgEl, tpl);
 
-  /* ── 2. Fetch período real — SOMENTE para delivery/ecommerce com conta Meta ─
+  /* Atualiza badges de fontes de dados (Meta / Google Ads) */
+  _updateRepDataSources(client);
+
+  /* ── 2. Fetch período real — delivery/ecommerce com Meta Ads e/ou Google Ads ─
      dataSeg garante que nunca fazemos fetch delivery para um cliente leads.
-     O meta_ad_account_id usado é SEMPRE o do cliente selecionado (nunca fixo).
+     Agora suporta clientes com Meta, Google Ads ou ambos — _fetchPeriodMetrics
+     busca as duas APIs em paralelo e consolida o gasto total.
   ── */
-  if ((['delivery','ecommerce'].includes(dataSeg)) && client.meta_ad_account_id) {
+  if ((['delivery','ecommerce'].includes(dataSeg)) && (client.meta_ad_account_id || client.google_ads_customer_id)) {
     /* cacheKey inclui clientId — nunca reutiliza cache de outro cliente */
     const cacheKey = `${clientId}|${_toISO(DR.from)}|${_toISO(DR.to)}`;
 
@@ -11709,13 +11742,16 @@ async function updateReportPreview() {
     return;  // já chamou _applyReportSnapshot — não repete abaixo
   }
 
-  /* ── 3. Segmento leads COM conta Meta configurada — busca action_type=lead ─
+  /* ── 3. Segmento leads COM conta Meta e/ou Google Ads ───────────────────────
      REGRA: para clientes de captação de leads NUNCA lemos goal.realized quando
-     há uma conta Meta configurada — usamos sempre o valor direto da API.
-     Isso elimina o bug de contaminação onde goal.realized pode conter um valor
-     monetário de um cliente delivery (ex: R$8002.78 exibido como "8003 leads").
+     há conta de anúncios — usamos sempre o valor direto das APIs.
+     Isso elimina o bug de contaminação onde goal.realized pode conter valor
+     monetário de cliente delivery (ex: R$8002.78 exibido como "8003 leads").
+     Quando ambas as plataformas estão configuradas:
+       - Gasto Total = Meta spend + Google Ads spend
+       - Leads Total = Meta leadsCount + Google Ads conversions
   ── */
-  if (dataSeg === 'leads' && client.meta_ad_account_id) {
+  if (dataSeg === 'leads' && (client.meta_ad_account_id || client.google_ads_customer_id)) {
     const cacheKey = `${clientId}|leads|${_toISO(DR.from)}|${_toISO(DR.to)}`;
 
     /* Reutiliza cache se período e cliente são idênticos */
@@ -11726,14 +11762,21 @@ async function updateReportPreview() {
       return;
     }
 
-    /* Novo fetch */
+    /* Novo fetch — Meta + Google Ads em paralelo */
     REPORT_STATE.fetching = true;
     REPORT_STATE.cacheKey = cacheKey;
     REPORT_STATE.clientId = clientId;
     REPORT_STATE.current  = null;
     _setRepCoverLoading(true);
 
-    const meta = await fetchMetaInsightsForReport(client, DR.from, DR.to).catch(() => null);
+    const [meta, gads] = await Promise.all([
+      client.meta_ad_account_id
+        ? fetchMetaInsightsForReport(client, DR.from, DR.to).catch(() => null)
+        : Promise.resolve(null),
+      client.google_ads_customer_id
+        ? _fetchGadsMetricsForReport(client, DR.from, DR.to).catch(() => null)
+        : Promise.resolve(null),
+    ]);
 
     /* Race condition guard — usuário pode ter trocado de cliente durante o fetch */
     const currentClientIdLeads = document.getElementById('rep-client')?.value;
@@ -11742,11 +11785,31 @@ async function updateReportPreview() {
       return;
     }
 
-    /* Snapshot de leads: spend (investimento real do período) + leadsCount (da API) */
+    /* Consolida spend: Meta + Google Ads; fallback para investment armazenado */
+    const metaSpend  = meta?.spend       ?? 0;
+    const gadsSpend  = gads?.spend       ?? 0;
+    const totalSpend = (metaSpend + gadsSpend) > 0
+      ? (metaSpend + gadsSpend)
+      : (client.investment || 0);
+
+    /* Consolida leads/conversões: Meta leadsCount + Google Ads conversions */
+    const metaLeads  = meta  ? (meta.leadsCount ?? 0)   : null;
+    const gadsConv   = gads  ? (gads.conversions ?? 0)  : null;
+    let combinedLeads = null;
+    if (metaLeads !== null || gadsConv !== null) {
+      combinedLeads = (metaLeads || 0) + (gadsConv || 0);
+    }
+
+    /* Snapshot de leads consolidado */
     const leadsSnapshot = {
-      inv:    (meta?.spend > 0) ? meta.spend : (client.investment || 0),
-      leads:  meta ? meta.leadsCount : null,   // null → fallback para goal.realized em _buildMsgLeads
+      inv:   totalSpend,
+      leads: combinedLeads, // null → fallback para goal.realized em _buildMsgLeads
+      gads,  // preserva para display de dados Google Ads
     };
+
+    if (meta || gads) {
+      console.log(`[updateReportPreview leads] meta.spend=${metaSpend?.toFixed(2)} gads.spend=${gadsSpend?.toFixed(2)} total=${totalSpend?.toFixed(2)} | metaLeads=${metaLeads} gadsConv=${gadsConv} combinado=${combinedLeads}`);
+    }
 
     REPORT_STATE.fetching  = false;
     REPORT_STATE.current   = leadsSnapshot;
@@ -12098,10 +12161,53 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
   }
 }
 
+/* ── Busca métricas do Google Ads para um período (leve, read-only) ──────────
+   Chama GET /api/google-ads/metrics/:customerId?from=...&to=...
+   Retorna { spend, clicks, impressions, conversions } ou null em caso de falha.
+   Falha silenciosa: nunca derruba a tela — relatório exibe Meta normalmente.
+── */
+async function _fetchGadsMetricsForReport(client, fromDate, toDate) {
+  if (!client.google_ads_customer_id) return null;
+  const from = _toISO(fromDate || DR.from);
+  const to   = _toISO(toDate   || DR.to);
+  if (!from || !to) return null;
+  try {
+    const r = await _apiFetch(
+      `/api/google-ads/metrics/${encodeURIComponent(client.google_ads_customer_id)}?from=${from}&to=${to}`
+    );
+    if (!r || !r.ok) return null;
+    console.log(`[fetchGadsReport] ${client.name} | spend:${r.spend?.toFixed(2)} clicks:${r.clicks} imp:${r.impressions} conv:${r.conversions}`);
+    return r; // { spend, clicks, impressions, conversions }
+  } catch(e) {
+    console.warn('[fetchGadsMetricsForReport]', e.message);
+    return null;
+  }
+}
+
+/* ── Atualiza badges de fontes de dados na página de Relatórios ──────────────
+   Exibe Meta e/ou Google Ads com opacidade cheia quando configurados,
+   esmaecidos quando ausentes. Chamada a cada troca de cliente.
+── */
+function _updateRepDataSources(client) {
+  const wrap    = document.getElementById('rep-datasources');
+  const metaBdg = document.getElementById('rep-ds-meta');
+  const gadsBdg = document.getElementById('rep-ds-gads');
+  if (!wrap) return;
+
+  const hasMeta = !!(client && client.meta_ad_account_id);
+  const hasGads = !!(client && client.google_ads_customer_id);
+
+  // Só exibe o bloco se o cliente estiver selecionado
+  wrap.style.display = client ? 'flex' : 'none';
+
+  if (metaBdg) metaBdg.classList.toggle('inactive', !hasMeta);
+  if (gadsBdg) gadsBdg.classList.toggle('inactive', !hasGads);
+}
+
 /* ── Busca métricas para um período e retorna snapshot padronizado ────────────
    1. Base: campos do cliente (sincronizados pelo balance monitor)
-   2. Enriquece com Meta Ads API para o período específico (read-only)
-   3. Enriquece sessions via GA4 se disponível
+   2. Enriquece com Meta Ads + Google Ads em paralelo (read-only)
+   3. Consolida: Gasto Total = Meta + Google Ads; demais campos do Meta
    NUNCA escreve em client.* — retorna objeto efêmero.
 ── */
 async function _fetchPeriodMetrics(client, fromDate, toDate) {
@@ -12115,22 +12221,38 @@ async function _fetchPeriodMetrics(client, fromDate, toDate) {
     sessoes: base.sessoes,
   };
 
+  /* Busca Meta Ads + Google Ads em paralelo — falha individual não derruba a outra */
+  const [meta, gads] = await Promise.all([
+    client.meta_ad_account_id
+      ? fetchMetaInsightsForReport(client, fromDate, toDate).catch(() => null)
+      : Promise.resolve(null),
+    client.google_ads_customer_id
+      ? _fetchGadsMetricsForReport(client, fromDate, toDate).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
   /* Enriquece com Meta Ads para o período exato */
-  if (client.meta_ad_account_id) {
-    const meta = await fetchMetaInsightsForReport(client, fromDate, toDate).catch(() => null);
-    if (meta) {
-      if (meta.spend              > 0) snapshot.inv     = meta.spend;
-      if (meta.faturamentoMetaAds > 0) snapshot.fat     = meta.faturamentoMetaAds;
-      if (meta.purchaseCount      > 0) snapshot.compras = meta.purchaseCount;
-      if (meta.addToCartCount     > 0) snapshot.cart    = meta.addToCartCount;
-      // Sessões = landing_page_view do Meta — atualiza com o período exato
-      // landing_page_view = 0 é válido (zero visitas no período) — só mantém baseline se API falhar
-      if (meta !== null) snapshot.sessoes = meta.landingPageViews;
-    }
+  if (meta) {
+    if (meta.spend              > 0) snapshot.inv     = meta.spend;
+    if (meta.faturamentoMetaAds > 0) snapshot.fat     = meta.faturamentoMetaAds;
+    if (meta.purchaseCount      > 0) snapshot.compras = meta.purchaseCount;
+    if (meta.addToCartCount     > 0) snapshot.cart    = meta.addToCartCount;
+    // Sessões = landing_page_view do Meta — atualiza com o período exato
+    if (meta !== null) snapshot.sessoes = meta.landingPageViews;
   }
 
-  /* GA4 removido intencionalmente: landing_page_view (Meta) é a fonte oficial de Sessões.
-     GA4 não suporta ranges de data por período arbitrário via API simples. */
+  /* Consolida Google Ads: soma gasto ao Meta; preserva conversões para display */
+  if (gads) {
+    if (gads.spend > 0) {
+      // Se Meta não retornou spend (não tem conta ou falhou), usa apenas o do Gads
+      // Se Meta retornou, soma os dois para o gasto total consolidado
+      snapshot.inv = (snapshot.inv || 0) + gads.spend;
+    }
+    snapshot.gads = gads; // { spend, clicks, impressions, conversions } — para display na cover
+    console.log(`[_fetchPeriodMetrics] Google Ads adicionado: +R$${gads.spend?.toFixed(2)} (conv:${gads.conversions}) → inv total: R$${snapshot.inv?.toFixed(2)}`);
+  }
+
+  /* GA4 removido intencionalmente: landing_page_view (Meta) é a fonte oficial de Sessões. */
 
   return snapshot;
 }
@@ -14822,8 +14944,9 @@ async function carregarContasGads(forceReload = false) {
     if (data?.error) {
       const notCfg = data.error.includes('MANAGER_ID') || data.error.toLowerCase().includes('não configurado');
       if (notCfg) {
-        if (hint)   hint.innerHTML = '<span style="color:var(--text3)">Configure as variáveis GADS_* no painel do Render para ativar o MCC</span>';
-        if (search) { search.disabled = true; search.placeholder = 'Integração não configurada'; }
+        // MCC não configurado — permite digitar o ID manualmente mesmo assim
+        if (hint)   hint.innerHTML = '<span style="color:var(--text3)">MCC não configurado — digite o Customer ID manualmente (ex: 123-456-7890)</span>';
+        if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
       } else {
         if (hint)   hint.innerHTML = `<span style="color:var(--amber)">⚠️ Erro: ${data.error.slice(0, 80)} — ou digite o ID manualmente</span>`;
         if (search) { search.disabled = false; search.placeholder = 'Digite o Customer ID (ex: 123-456-7890)'; }
