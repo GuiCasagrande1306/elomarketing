@@ -12706,10 +12706,11 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     : `&date_preset=this_month`;
 
   const enc = encodeURIComponent(token);
-  // Campos expandidos: spend/actions + reach, impressions, clicks,
-  // inline_link_clicks, frequency e outbound_clicks (fallback visitas ao perfil).
+  // Campos: spend/actions (contém profile_visits/followers) + reach, impressions,
+  // clicks, inline_link_clicks, frequency. O nó 'actions' é obrigatório — sem ele
+  // o Meta não devolve as métricas de perfil (seguidores/visitas).
   const url = `https://graph.facebook.com/v19.0/${acctId}/insights` +
-              `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency,outbound_clicks&level=account${dateParam}` +
+              `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency&level=account${dateParam}` +
               `&access_token=${enc}`;
 
   try {
@@ -12750,35 +12751,22 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
       'onsite_conversion.total_messaging_connection',
     ], parseInt);
 
-    // Visitas ao perfil (Instagram/página) — aliases conhecidos + outbound_clicks fallback
-    let visitasPerfil = _pickMetricByPriority(acts, [
-      'onsite_conversion.ig_profile_visit',
-      'profile_visit',
-      'instagram_profile_visits',
-      'page_engagement',
-    ], parseInt);
-    // Fallback: outbound_clicks (campo separado da API, fora de actions)
-    if (!(visitasPerfil > 0) && Array.isArray(d.outbound_clicks)) {
-      visitasPerfil = parseInt(d.outbound_clicks[0]?.value || '0');
-    }
-
     // ── DEBUG: lista exata de actions que o Meta devolveu para este cliente ──
     // Abra o Console do navegador (F12 → Console) para ver as chaves reais.
-    // É AQUI que você descobre o action_type correto de "novos seguidores".
     console.log('[DEBUG META ACTIONS]:', JSON.stringify(acts));
 
-    // ── Novos seguidores — varredura por aliases CONFIÁVEIS de follow ──────────
-    // Estes representam SOMENTE o evento de novo seguidor (não inflam o número).
-    // O nome interno muda entre v17/v18/v19 — tentamos todos em ordem.
-    const novosSeguidores = _pickMetricByPriority(acts, [
-      'instagram_profile_followers',   // termo oficial v18+ (coluna do Gerenciador)
-      'onsite_conversion.ig_follow',
-      'ig_follow',
-      'follow',
-      'onsite_conversion.follow',
-      'instagram_follow',
-      'onsite_conversion.instagram_profile_followers',
-    ], parseInt);
+    // ── Visitas ao perfil — chave OFICIAL EXATA do Gerenciador ────────────────
+    // Lê estritamente 'instagram_profile_visits'. NÃO usa page_engagement nem
+    // outbound_clicks como fallback (esses inflavam o valor para ~44.001).
+    // Quando o Meta não devolve essa action (depende do tipo de campanha),
+    // o valor fica 0 → exibido como "—" (honesto, nunca um número errado).
+    const visitasArray  = acts.find(a => a.action_type === 'instagram_profile_visits');
+    const visitasPerfil = visitasArray ? Number(visitasArray.value) : 0;
+
+    // ── Novos seguidores — chave OFICIAL EXATA do Gerenciador ─────────────────
+    // Lê estritamente 'instagram_profile_followers' (coluna do Gerenciador).
+    const seguidoresArray = acts.find(a => a.action_type === 'instagram_profile_followers');
+    const novosSeguidores = seguidoresArray ? Number(seguidoresArray.value) : 0;
 
     console.log(`[fetchMetaReport] ${client.name} | conversas:${conversas} | seguidores:${novosSeguidores} | visitasPerfil:${visitasPerfil} | reach:${reach} | impr:${impressions} | clicks:${clicks} | freq:${frequency.toFixed(2)} | leads:${leadsCount}`);
     if (acts.length > 0) {
