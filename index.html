@@ -12043,6 +12043,78 @@ function _buildMsgLeads(client, periodStr, snapshot) {
   ];
 }
 
+/* ════════════════════════════════════════════════════════════════
+   _buildMsgRelatorioSemanal — template estruturado de tráfego pago
+   ──────────────────────────────────────────────────────────────
+   Monta o relatório semanal padrão com dados reais consolidados de
+   Meta Ads + Google Ads. Campos sem dado exibem "—" graciosamente.
+   snapshot esperado: {
+     inv, conversas, visitasPerfil, novosSeguidores, reach,
+     impressions, frequency, clicks, gads
+   }
+════════════════════════════════════════════════════════════════ */
+function _buildMsgRelatorioSemanal(client, snapshot) {
+  const fmtN    = n => (n != null && n > 0) ? Math.round(n).toLocaleString('pt-BR') : '—';
+  const fmtBRL  = n => (n != null) ? (n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '0,00';
+
+  // Datas do período (formato dd/mm/yyyy)
+  const _fmtData = d => d
+    ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+    : '—';
+  const dataInicio = _fmtData(DR.from);
+  const dataFim    = _fmtData(DR.to);
+
+  // Objetivo: descrição do cliente > default por segmento
+  const objetivo = (client.objective && client.objective.trim())
+    ? client.objective.trim()
+    : (CL_SEGMENT_DEFAULT_OBJECTIVES[client.segment] || 'Captação de Leads e Visibilidade');
+
+  // ── Consolida métricas (Meta + Google Ads) ────────────────────────────────
+  const metaSpend = snapshot?.metaSpend ?? 0;
+  const gadsSpend = snapshot?.gads?.spend ?? 0;
+  const investimentoTotal = (metaSpend + gadsSpend) > 0
+    ? (metaSpend + gadsSpend)
+    : (snapshot?.inv ?? client.investment ?? 0);
+
+  // Conversas: Meta (mensagens iniciadas). Google não tem "conversas" — mantém Meta.
+  const totalConversas = snapshot?.conversas ?? 0;
+  const cpl = totalConversas > 0 && investimentoTotal > 0
+    ? (investimentoTotal / totalConversas)
+    : null;
+
+  const visitasPerfil   = snapshot?.visitasPerfil ?? 0;
+  const novosSeguidores = snapshot?.novosSeguidores ?? null; // métrica orgânica — geralmente indisponível via Ads API
+
+  // Alcance / impressões: Meta + Google (impressões do Google somam)
+  const reach       = snapshot?.reach ?? 0;
+  const gadsImpr    = snapshot?.gads?.impressions ?? 0;
+  const impressoes  = (snapshot?.impressions ?? 0) + gadsImpr;
+  const frequencia  = snapshot?.frequency ?? 0;
+
+  // Cliques: Meta inline_link_clicks (ou clicks) + Google clicks
+  const metaClicks  = snapshot?.inlineLinkClicks > 0 ? snapshot.inlineLinkClicks : (snapshot?.clicks ?? 0);
+  const gadsClicks  = snapshot?.gads?.clicks ?? 0;
+  const cliques     = metaClicks + gadsClicks;
+
+  return [
+    `📈 *RELATÓRIO DE TRÁFEGO PAGO – SEMANAL*`,
+    `Cliente: ${client.name}`,
+    `Período: ${dataInicio} a ${dataFim}`,
+    `Objetivo: ${objetivo}`,
+    ``,
+    `🔢 *RESULTADOS GERAIS*`,
+    `💰 Investimento total: R$ ${fmtBRL(investimentoTotal)}`,
+    `💬 Total de conversas geradas: ${totalConversas > 0 ? totalConversas : '—'}`,
+    `📉 Custo por conversa: ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`,
+    `📲 Visitas ao perfil Instagram: ${visitasPerfil > 0 ? fmtN(visitasPerfil) : '—'}`,
+    `👤 Novos seguidores (no período): ${novosSeguidores != null && novosSeguidores > 0 ? fmtN(novosSeguidores) : '—'}`,
+    `👥 Alcance: ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
+    `👀 Impressões: ${impressoes > 0 ? fmtN(impressoes) : '—'}`,
+    `🔁 Frequência média: ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`,
+    `🔗 Cliques totais: ${cliques > 0 ? fmtN(cliques) : '—'}`,
+  ];
+}
+
 function _buildMsgEcommerce(client, periodStr) {
   const inv = client.investment || 0;
   const fat = client.faturamentoMetaAds || client.goal?.realized || 0;
@@ -12286,11 +12358,21 @@ async function updateReportPreview() {
       combinedLeads = (metaLeads || 0) + (gadsConv || 0);
     }
 
-    /* Snapshot de leads consolidado */
+    /* Snapshot de leads consolidado + métricas de mídia para o Relatório Semanal */
     const leadsSnapshot = {
       inv:   totalSpend,
       leads: combinedLeads, // null → fallback para goal.realized em _buildMsgLeads
       gads,  // preserva para display de dados Google Ads
+      // ── Campos para _buildMsgRelatorioSemanal ──
+      metaSpend:        metaSpend,
+      conversas:        meta?.conversas        ?? 0,
+      visitasPerfil:    meta?.visitasPerfil    ?? 0,
+      reach:            meta?.reach            ?? 0,
+      impressions:      meta?.impressions      ?? 0,
+      clicks:           meta?.clicks           ?? 0,
+      inlineLinkClicks: meta?.inlineLinkClicks ?? 0,
+      frequency:        meta?.frequency        ?? 0,
+      novosSeguidores:  null, // métrica orgânica — não disponível via Ads API
     };
 
     if (meta || gads) {
@@ -12317,7 +12399,7 @@ async function updateReportPreview() {
 function _applyReportSnapshot(client, snapshot, periodStr, seg, msgEl, tpl) {
   /* Texto para o cliente */
   let lines;
-  // Se template tem estruturaTexto personalizado, usa a engine de placeholders
+  // Prioridade 1: template com estruturaTexto personalizado → engine de placeholders
   if (tpl?.estruturaTexto) {
     const activeKpis = Object.keys(_repKpiState).length > 0
       ? Object.entries(_repKpiState).filter(([,v]) => v).map(([k]) => k)
@@ -12329,7 +12411,9 @@ function _applyReportSnapshot(client, snapshot, periodStr, seg, msgEl, tpl) {
       ? _buildMsgDeliveryFromData(snapshot, periodStr)
       : _buildMsgDelivery(client, periodStr);
   } else {
-    lines = _buildMsgLeads(client, periodStr, snapshot);
+    // Clientes de captação (leads / negócio-local / infoproduto):
+    // Relatório Semanal estruturado de tráfego pago com Meta + Google Ads.
+    lines = _buildMsgRelatorioSemanal(client, snapshot);
   }
 
   if (msgEl) {
@@ -12622,8 +12706,10 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     : `&date_preset=this_month`;
 
   const enc = encodeURIComponent(token);
+  // Campos expandidos: além de spend/actions, busca reach, impressions, clicks,
+  // inline_link_clicks e frequency para o Relatório Semanal estruturado.
   const url = `https://graph.facebook.com/v19.0/${acctId}/insights` +
-              `?fields=spend,actions,action_values&level=account${dateParam}` +
+              `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency&level=account${dateParam}` +
               `&access_token=${enc}`;
 
   try {
@@ -12646,8 +12732,37 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     // Leads reais da API — formulários nativos + mensagens iniciadas (fórmula canônica)
     const leadsCount = _calcLeadsTotal(acts);
 
-    console.log(`[fetchMetaReport] ${client.name} | compras:${purchaseCount} | cart:${addToCartCount} | fat:${faturamentoMetaAds.toFixed(2)} | lpv:${landingPageViews} | leads:${leadsCount}`);
-    return { spend: parseFloat(d.spend||0), purchaseCount, addToCartCount, faturamentoMetaAds, landingPageViews, leadsCount };
+    // ── Métricas de mídia para o Relatório Semanal ──────────────────────────
+    const reach            = parseInt(d.reach              || '0');
+    const impressions      = parseInt(d.impressions        || '0');
+    const clicks           = parseInt(d.clicks             || '0');
+    const inlineLinkClicks = parseInt(d.inline_link_clicks || '0');
+    // Frequência: vem direta da API; se ausente, calcula impressões/alcance
+    let frequency = parseFloat(d.frequency || '0');
+    if (!(frequency > 0) && reach > 0) frequency = impressions / reach;
+
+    // Conversas iniciadas (mensagens WhatsApp/Messenger) — pick-first entre aliases
+    const conversas = _pickMetricByPriority(acts, [
+      'onsite_conversion.messaging_first_reply_started',
+      'messaging_conversations_started_7d',
+      'onsite_conversion.messaging_conversation_started_7d',
+      'onsite_conversion.messaging_first_reply',
+      'onsite_conversion.total_messaging_connection',
+    ], parseInt);
+
+    // Visitas ao perfil (Instagram/página) — busca aliases conhecidos, fallback 0
+    const visitasPerfil = _pickMetricByPriority(acts, [
+      'onsite_conversion.ig_profile_visit',
+      'profile_visit',
+      'page_engagement',
+    ], parseInt);
+
+    console.log(`[fetchMetaReport] ${client.name} | conversas:${conversas} | reach:${reach} | impr:${impressions} | clicks:${clicks} | freq:${frequency.toFixed(2)} | leads:${leadsCount}`);
+    return {
+      spend: parseFloat(d.spend||0),
+      purchaseCount, addToCartCount, faturamentoMetaAds, landingPageViews, leadsCount,
+      reach, impressions, clicks, inlineLinkClicks, frequency, conversas, visitasPerfil,
+    };
   } catch(e) {
     console.warn('[fetchMetaInsightsForReport]', e.message);
     return null;
