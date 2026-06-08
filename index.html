@@ -18317,13 +18317,21 @@ function setMondayStatus(taskId, status) {
     patch.timeSpent = t.timeSpent || 0;
     _startTimerTick();
   } else if (status !== 'Em Andamento' && t.timerStartedAt) {
-    // Interrompe o timer: acumula o tempo decorrido desde o último checkpoint
+    // ── ORDEM RÍGIDA: para o timer ANTES de qualquer requisição ──────────────
+    // 1º) congela o intervalo de checkpoint para nenhum PATCH tardio disparar
+    //     (o backend também recusa PATCH em tarefa Pronto, mas paramos aqui também).
+    // 2º) captura o tempo final acumulado.
+    // 3º) só então o payload consolidado (status + timeSpent + timer null) é enviado.
     const elapsed = (Date.now() - new Date(t.timerStartedAt).getTime()) / 1000;
     t.timeSpent      = (t.timeSpent || 0) + elapsed;
     t.timerStartedAt = null;
     patch.timeSpent      = t.timeSpent;
     patch.timerStartedAt = null;
   }
+
+  // Se não há mais nenhum timer rodando, encerra o intervalo de checkpoint (15s).
+  // Garante que nenhum checkpoint dispare depois da conclusão.
+  if (!_hasRunningTimers()) _stopTimerTick();
 
   t._localUpdatedAt = Date.now(); // marca atualização local pendente
 
