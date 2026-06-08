@@ -3511,8 +3511,14 @@
           <option value="ampla_mkt">📢 Ampla MKT</option>
           <option value="clipy">🎞️ Clipy</option>
         </select>
+        <button id="cl-churn-toggle" class="btn btn-sm"
+                style="margin-left:auto;border:1px solid var(--border);color:var(--text2);
+                       background:transparent;display:flex;align-items:center;gap:6px"
+                onclick="toggleChurnView()">
+          <i class="ti ti-archive"></i> Ver Histórico / Churns
+        </button>
         <button id="sync-all-btn" class="btn btn-sm"
-                style="margin-left:auto;border:1px solid var(--accent);color:var(--accent);
+                style="border:1px solid var(--accent);color:var(--accent);
                        background:transparent;display:flex;align-items:center;gap:6px"
                 onclick="sincronizarTodosMeta()">
           <i class="ti ti-refresh"></i> Sincronizar Todos
@@ -8919,6 +8925,88 @@ function _clAvFallback(img, color, av, fs) {
   p.innerHTML = '<span style="font-size:' + fs + 'px;font-weight:700;color:#fff;">' + av + '</span>';
 }
 
+// ── CHURN: marcar saída do cliente ──────────────────────────────────────────
+async function marcarChurn(clientId) {
+  const c = CLIENTS.list.find(x => x.id === clientId);
+  if (!c) return;
+  const ok = confirm(
+    `Tem certeza que deseja marcar Churn para ${c.name}?\n\n` +
+    `Ele será removido das esteiras ativas e da listagem de clientes, ` +
+    `mas TODO o histórico (otimizações, investimentos) será preservado.\n\n` +
+    `Você pode reativá-lo a qualquer momento na aba "Ver Histórico / Churns".`
+  );
+  if (!ok) return;
+
+  // Optimista: atualiza local imediatamente
+  const churnISO = new Date().toISOString();
+  const startRaw = c.startDate || c.createdAt || churnISO;
+  const ltv = Math.max(0, Math.round((new Date(churnISO) - new Date(startRaw)) / 86400000));
+  c.status = 'churn'; c.churnDate = churnISO; c.startDate = startRaw; c.ltvDays = ltv;
+  c.dia_otimizacao = ''; // some da esteira
+  saveClients();
+  closeClientDetail();
+  renderClients();
+  renderEsteira?.();
+  renderDashboard?.();
+  showNotification(`${c.name} marcado como churn — LTV ${ltv} dias. Histórico preservado.`, 'ok');
+
+  // Persiste no servidor via rota dedicada (autoritativa para o cálculo do LTV)
+  const r = await _apiFetch(`/api/clients/${clientId}/churn`, { method: 'PATCH' }).catch(() => null);
+  if (r?.id) {
+    // Sincroniza com os valores autoritativos do backend
+    const idx = CLIENTS.list.findIndex(x => x.id === clientId);
+    if (idx >= 0) {
+      CLIENTS.list[idx].status   = r.status;
+      CLIENTS.list[idx].churnDate = r.churnDate;
+      CLIENTS.list[idx].ltvDays  = r.ltvDays;
+      CLIENTS.list[idx].startDate = r.startDate;
+      saveClients();
+      if (_clientsView === 'churn') renderClients();
+    }
+  } else {
+    showNotification('⚠️ Churn salvo localmente — falha ao confirmar no servidor. Sincronize depois.', 'warn');
+  }
+}
+
+async function reativarCliente(clientId) {
+  const c = CLIENTS.list.find(x => x.id === clientId);
+  if (!c) return;
+  if (!confirm(`Reativar ${c.name}? Ele volta para a listagem de clientes ativos.`)) return;
+
+  c.status = 'active'; c.churnDate = null; c.ltvDays = null;
+  saveClients();
+  closeClientDetail?.();
+  renderClients();
+  renderEsteira?.();
+  showNotification(`${c.name} reativado! ✅`, 'ok');
+
+  await _apiFetch(`/api/clients/${clientId}/reactivate`, { method: 'PATCH' }).catch(() => {
+    showNotification('⚠️ Reativação salva localmente — confirme a sincronização.', 'warn');
+  });
+}
+
+// Estado da visualização: 'active' (padrão) ou 'churn' (histórico de ex-clientes)
+let _clientsView = 'active';
+
+function toggleChurnView() {
+  _clientsView = _clientsView === 'active' ? 'churn' : 'active';
+  const btn = document.getElementById('cl-churn-toggle');
+  if (btn) {
+    if (_clientsView === 'churn') {
+      btn.innerHTML = '<i class="ti ti-arrow-back-up"></i> Ver Ativos';
+      btn.style.background = 'rgba(248,113,113,0.12)';
+      btn.style.borderColor = 'rgba(248,113,113,0.4)';
+      btn.style.color = 'var(--red)';
+    } else {
+      btn.innerHTML = '<i class="ti ti-archive"></i> Ver Histórico / Churns';
+      btn.style.background = 'transparent';
+      btn.style.borderColor = 'var(--border)';
+      btn.style.color = 'var(--text2)';
+    }
+  }
+  renderClients();
+}
+
 function renderClients() {
   const grid = document.getElementById('clients-grid');
   if (!grid) return;
@@ -8928,23 +9016,38 @@ function renderClients() {
   const catFilter  = document.getElementById('cl-filter-categoria')?.value || '';
 
   const filtered = CLIENTS.list.filter(c => {
+    // ── Filtro de Churn: ativos por padrão; histórico quando _clientsView==='churn' ──
+    const isChurn = (c.status === 'churn');
+    if (_clientsView === 'active' && isChurn)  return false; // esconde churns da visão ativa
+    if (_clientsView === 'churn'  && !isChurn) return false; // mostra só churns no histórico
     if (search && !c.name.toLowerCase().includes(search)) return false;
     if (segFilter  && c.segment    !== segFilter)              return false;
     if (impFilter  && c.importance !== parseInt(impFilter))    return false;
     if (catFilter  && c.categoria  !== catFilter)              return false;
-    // Sem filtro por dono/colaborador: todos os usuários veem 100% dos clientes
     return true;
   });
 
   grid.innerHTML = '';
+
+  if (_clientsView === 'churn' && filtered.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 0;color:var(--text3)">
+      <i class="ti ti-archive-off" style="font-size:36px;opacity:0.4;display:block;margin-bottom:12px"></i>
+      Nenhum cliente em churn. Todos os clientes estão ativos. 🎉
+    </div>`;
+    return;
+  }
+
   filtered.forEach(c => grid.appendChild(buildClientCard(c)));
 
-  const addCard = document.createElement('div');
-  addCard.className = 'card';
-  addCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;border-style:dashed;cursor:pointer;min-height:240px';
-  addCard.onclick = () => openNewClientModal();
-  addCard.innerHTML = `<div style="width:48px;height:48px;border-radius:12px;background:rgba(108,99,255,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="ti ti-plus" style="font-size:22px;color:var(--accent)"></i></div><div style="font-weight:500;font-size:13px;color:var(--text2)">Adicionar cliente</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Clique para cadastrar</div>`;
-  grid.appendChild(addCard);
+  // Card "Adicionar cliente" só na visão de ativos
+  if (_clientsView === 'active') {
+    const addCard = document.createElement('div');
+    addCard.className = 'card';
+    addCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;border-style:dashed;cursor:pointer;min-height:240px';
+    addCard.onclick = () => openNewClientModal();
+    addCard.innerHTML = `<div style="width:48px;height:48px;border-radius:12px;background:rgba(108,99,255,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="ti ti-plus" style="font-size:22px;color:var(--accent)"></i></div><div style="font-weight:500;font-size:13px;color:var(--text2)">Adicionar cliente</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Clique para cadastrar</div>`;
+    grid.appendChild(addCard);
+  }
 }
 
 function clGoalPct(c) {
@@ -8963,6 +9066,44 @@ function clFmtGoalVal(goalInfo, n) {
 }
 
 function buildClientCard(c) {
+  // ── Card de CHURN (arquivado, cinza) — layout enxuto com Saída + LTV ──────
+  if (c.status === 'churn') {
+    const seg = CL_SEGMENTS[c.segment] || { label:'—', color:'var(--text3)', bg:'var(--bg3)' };
+    const _fmtChurn = d => {
+      if (!d) return '—';
+      const dt = new Date(d);
+      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+    };
+    const ltv = (c.ltvDays != null) ? `${c.ltvDays} dia${c.ltvDays === 1 ? '' : 's'}` : '—';
+    const el = document.createElement('div');
+    el.className = 'client-card';
+    el.dataset.id = c.id;
+    el.dataset.clientId = c.id;
+    el.style.cssText = 'opacity:0.72;filter:grayscale(0.85);border-style:dashed;cursor:pointer';
+    el.onclick = () => openClientDetail(c.id);
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--border)">
+        <span style="font-size:10px;font-weight:700;color:var(--red);background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.3);padding:2px 8px;border-radius:20px">⚠ CHURN</span>
+        <div style="display:flex;flex-direction:column;gap:1px;font-size:10px;color:var(--text3);margin-left:auto;text-align:right">
+          <span>📅 Saída: <b style="color:var(--text2)">${_fmtChurn(c.churnDate)}</b></span>
+          <span>⏱️ LTV: <b style="color:var(--text2)">${ltv}</b></span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        ${_clAvatar(c, 44, '13px')}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
+          <span class="segment-badge" style="background:${seg.bg};color:${seg.color};font-size:9px;margin-top:3px">${seg.label}</span>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();reativarCliente('${c.id}')">
+          <i class="ti ti-arrow-back-up"></i> Reativar
+        </button>
+      </div>`;
+    return el;
+  }
+
   const seg      = CL_SEGMENTS[c.segment] || { label:'—', color:'var(--text3)', bg:'var(--bg3)' };
   const goalInfo = CL_GOAL_MAP[c.segment];
   // Ordena decrescente para garantir que [0] = mais recente independente da ordem salva
@@ -9869,9 +10010,11 @@ function renderEsteira() {
   }
 
   /* ---- filtered base list ---- */
+  // Exclui clientes em churn da esteira (só clientes ativos otimizam)
+  const _activeClients = CLIENTS.list.filter(c => c.status !== 'churn');
   let baseList = ESTEIRA_COLABORADOR === 'todos'
-    ? CLIENTS.list
-    : CLIENTS.list.filter(c => c.owner === ESTEIRA_COLABORADOR);
+    ? _activeClients
+    : _activeClients.filter(c => c.owner === ESTEIRA_COLABORADOR);
   if (ESTEIRA_CATEGORIA !== 'todos') {
     baseList = baseList.filter(c => c.categoria === ESTEIRA_CATEGORIA);
   }
@@ -10851,6 +10994,9 @@ function openClientDetail(id) {
       <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="btn btn-ghost btn-sm" onclick="generateClientReport('${c.id}')" title="Gerar Relatório PDF" style="color:var(--accent)"><i class="ti ti-file-text"></i> PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="closeClientDetail();openNewClientModal('${c.id}')"><i class="ti ti-edit"></i> Editar</button>
+        ${c.status === 'churn'
+          ? `<button class="btn btn-ghost btn-sm" onclick="reativarCliente('${c.id}')" title="Reativar cliente" style="color:var(--green)"><i class="ti ti-arrow-back-up"></i> Reativar</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="marcarChurn('${c.id}')" title="Marcar churn" style="color:var(--red)"><i class="ti ti-user-x"></i> Marcar Churn</button>`}
         <button class="btn btn-ghost btn-sm" onclick="closeClientDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
