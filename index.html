@@ -3920,9 +3920,6 @@
           <span id="bal-summary-ok"       style="display:inline-flex;align-items:center;gap:5px;background:rgba(34,211,160,0.10);border:1px solid rgba(34,211,160,0.25);color:var(--green);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600"></span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="toggleBalSimMode()" id="bal-sim-toggle">
-            <i class="ti ti-test-pipe"></i> Modo Simulação
-          </button>
           <button class="btn btn-ghost btn-sm" id="bal-sync-btn" onclick="forceSyncBalances()" title="Força re-fetch dos saldos na Meta API e persiste no banco">
             <i class="ti ti-rotate"></i> Sincronizar Saldos
           </button>
@@ -3932,10 +3929,24 @@
         </div>
       </div>
 
-      <!-- Banner modo simulação -->
-      <div id="bal-sim-banner" class="bal-sim-banner">
-        <i class="ti ti-test-pipe" style="font-size:14px"></i>
-        <strong>Modo Simulação ativo</strong> — dados fictícios para demonstração. Desative para usar dados reais da API.
+      <!-- Busca + filtros de Colaborador e Agência -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="search-wrap" style="flex:1;min-width:200px">
+          <i class="ti ti-search search-icon"></i>
+          <input type="text" id="bal-search" class="search-input" placeholder="Buscar cliente..."
+                 style="width:100%" oninput="onBalFilterChange()" autocomplete="off">
+        </div>
+        <select id="bal-filter-owner" class="form-select" style="width:200px;padding:7px 10px" onchange="onBalFilterChange()">
+          <option value="">Todos os Colaboradores</option>
+        </select>
+        <select id="bal-filter-agencia" class="form-select" style="width:190px;padding:7px 10px" onchange="onBalFilterChange()">
+          <option value="">Todas as Agências</option>
+          <option value="elo_marketing">🎯 Elo MKT</option>
+          <option value="bagano">🎒 Bagano</option>
+          <option value="brava_reels">🎬 Brava Reels</option>
+          <option value="ampla_mkt">📢 Ampla MKT</option>
+          <option value="clipy">🎞️ Clipy</option>
+        </select>
       </div>
 
       <!-- Legenda de plataformas -->
@@ -13296,10 +13307,22 @@ async function _callOpenAI(apiKey, payloadIA) {
 }
 
 /* ========== BALANCE MONITOR ========== */
-let BAL_SIM_MODE      = false;
+const BAL_SIM_MODE    = false;     // PRODUÇÃO: sempre dados reais (modo simulação removido)
 let BAL_FILTRO_METODO = 'todos';   // 'todos' | 'cartao' | 'pre_pago'
 let BAL_BLOCKS_CACHE  = null;      // cache dos blocks para filtragem instantânea
 let BAL_SYNC_ERROR    = null;      // null | 'META_TOKEN_EXPIRED' | 'SERVER_DOWN'
+// Filtros reativos do topo (busca + colaborador + agência)
+let BAL_SEARCH        = '';
+let BAL_FILTRO_OWNER  = '';        // '' = todos os colaboradores
+let BAL_FILTRO_AGENCIA= '';        // '' = todas as agências
+
+// Handler único reativo dos filtros do topo
+function onBalFilterChange() {
+  BAL_SEARCH         = (document.getElementById('bal-search')?.value || '').toLowerCase().trim();
+  BAL_FILTRO_OWNER   = document.getElementById('bal-filter-owner')?.value   || '';
+  BAL_FILTRO_AGENCIA = document.getElementById('bal-filter-agencia')?.value || '';
+  applyFiltroToContainer();
+}
 
 // Overrides auditados por account_id — usados quando a API retorna valor inconsistente.
 // Útil para contas pré-pagas (boleto/PIX) onde balance != saldo disponível real.
@@ -13662,19 +13685,7 @@ async function forceSyncBalances() {
   }
 }
 
-function toggleBalSimMode() {
-  BAL_SIM_MODE     = !BAL_SIM_MODE;
-  BAL_BLOCKS_CACHE = null; // força re-fetch com nova fonte de dados
-  const btn = document.getElementById('bal-sim-toggle');
-  if (btn) {
-    btn.style.background   = BAL_SIM_MODE ? 'rgba(245,158,11,0.15)' : '';
-    btn.style.borderColor  = BAL_SIM_MODE ? 'rgba(245,158,11,0.4)'  : '';
-    btn.style.color        = BAL_SIM_MODE ? 'var(--amber)'           : '';
-  }
-  const banner = document.getElementById('bal-sim-banner');
-  if (banner) banner.style.display = BAL_SIM_MODE ? 'flex' : 'none';
-  renderBalanceMonitor();
-}
+// toggleBalSimMode removido — Modo Simulação descontinuado (produção usa dados reais).
 
 // Helper: formata BRL com 2 casas decimais (ex: R$ 1.673,85)
 function fmtBRL2(n) {
@@ -14523,7 +14534,8 @@ async function renderBalanceMonitor() {
                   : metaData?.payType === 'prepaid'           ? 'prepaid'
                   : c.meta_balance > 0                        ? 'prepaid'  // legacy: tem saldo pré-pago cadastrado
                   : 'postpaid';
-      blocks.push({ html: buildBalClientBlock(c, metaAlert, gadsAlert, gadsData, metaData), level: worstLevel, payType });
+      blocks.push({ html: buildBalClientBlock(c, metaAlert, gadsAlert, gadsData, metaData), level: worstLevel, payType,
+                    clientName: c.name || '', owner: c.owner || '', categoria: c.categoria || '' });
     } catch (clientErr) {
       // ── Isolamento por cliente: um erro não derruba os demais ──────────────
       console.error('[renderBalanceMonitor] Erro ao processar cliente:', c?.name || c?.id, clientErr.message);
@@ -14541,10 +14553,14 @@ async function renderBalanceMonitor() {
           </div>
         </div>`,
         level: 'ok',
-        payType: _errPayType
+        payType: _errPayType,
+        clientName: c?.name || '', owner: c?.owner || '', categoria: c?.categoria || ''
       });
     }
   } // end for
+
+  // Popula o dropdown de Colaboradores com os owners reais das contas monitoradas
+  _populateBalOwnerFilter(blocks);
 
   // Persiste métodos de pagamento detectados automaticamente
   if (clientesAtualizados) {
@@ -14577,30 +14593,55 @@ async function renderBalanceMonitor() {
   }
 }
 
+// ── Popula o dropdown de Colaboradores com os owners reais das contas ────────
+// Preserva a seleção atual. Chamado a cada renderBalanceMonitor.
+function _populateBalOwnerFilter(blocks) {
+  const sel = document.getElementById('bal-filter-owner');
+  if (!sel) return;
+  const atual = sel.value;
+  const ownerIds = [...new Set(blocks.map(b => b.owner).filter(Boolean))];
+  const opts = ownerIds.map(id => {
+    const u = (typeof USERS !== 'undefined') ? USERS.find(u => u.id === id) : null;
+    return `<option value="${id}">${u ? u.name : id}</option>`;
+  }).join('');
+  sel.innerHTML = `<option value="">Todos os Colaboradores</option>` + opts;
+  // Restaura a seleção se ainda existir
+  if (atual && ownerIds.includes(atual)) sel.value = atual;
+  else BAL_FILTRO_OWNER = sel.value;
+}
+
 // ── Renderiza os cards aplicando o filtro ativo — sem re-fetch da API ─────────
 function applyFiltroToContainer() {
   if (!BAL_BLOCKS_CACHE) return;
   const container = document.getElementById('balance-monitor-container');
   if (!container) return;
 
-  const allBlocks = BAL_BLOCKS_CACHE;
+  // ── Filtros do topo (busca + colaborador + agência) — combinados e reativos ──
+  // Aplicados ANTES do filtro de método de pagamento, para que os contadores
+  // (Todos/Cartão/Pix) reflitam o escopo já filtrado pelo topo.
+  const topoBlocks = allBlocks.filter(b => {
+    const bateBusca      = !BAL_SEARCH         || (b.clientName || '').toLowerCase().includes(BAL_SEARCH);
+    const bateColaborador= !BAL_FILTRO_OWNER   || b.owner     === BAL_FILTRO_OWNER;
+    const bateAgencia    = !BAL_FILTRO_AGENCIA || b.categoria === BAL_FILTRO_AGENCIA;
+    return bateBusca && bateColaborador && bateAgencia;
+  });
 
-  // Aplicar filtro
+  // Filtro de método de pagamento, dentro do escopo dos filtros do topo
   const filteredBlocks = BAL_FILTRO_METODO === 'todos'
-    ? allBlocks
-    : allBlocks.filter(b => {
+    ? topoBlocks
+    : topoBlocks.filter(b => {
         if (BAL_FILTRO_METODO === 'cartao')   return b.payType === 'postpaid';
         if (BAL_FILTRO_METODO === 'pre_pago') return b.payType === 'prepaid';
         return true;
       });
 
-  // Atualiza contagens nos botões de filtro
-  const nCartao  = allBlocks.filter(b => b.payType === 'postpaid').length;
-  const nPrepago = allBlocks.filter(b => b.payType === 'prepaid').length;
+  // Contadores rápidos: refletem o escopo dos filtros do topo (não o total global)
+  const nCartao  = topoBlocks.filter(b => b.payType === 'postpaid').length;
+  const nPrepago = topoBlocks.filter(b => b.payType === 'prepaid').length;
   const fcTodos  = document.getElementById('bal-fcount-todos');
   const fcCartao = document.getElementById('bal-fcount-cartao');
   const fcPrepago= document.getElementById('bal-fcount-prepago');
-  if (fcTodos)  fcTodos.textContent  = allBlocks.length;
+  if (fcTodos)  fcTodos.textContent  = topoBlocks.length;
   if (fcCartao) fcCartao.textContent = nCartao;
   if (fcPrepago)fcPrepago.textContent= nPrepago;
 
@@ -14639,12 +14680,22 @@ function applyFiltroToContainer() {
   }
 
   if (filteredBlocks.length === 0) {
-    const labels = { 'cartao':'Cartão de Crédito', 'pre_pago':'Pix / Boleto', 'todos':'—' };
-    finalHtml = `<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:13px">
-      <i class="ti ti-filter-off" style="font-size:28px;display:block;margin-bottom:10px;opacity:0.4"></i>
-      Nenhum cliente com método <b>${labels[BAL_FILTRO_METODO]||''}</b> cadastrado.<br>
-      <span style="font-size:11px">Configure o método de faturamento no cadastro do cliente.</span>
-    </div>`;
+    // Se há filtro de topo ativo (busca/colaborador/agência), mensagem de "nenhum resultado"
+    const temFiltroTopo = BAL_SEARCH || BAL_FILTRO_OWNER || BAL_FILTRO_AGENCIA;
+    if (temFiltroTopo) {
+      finalHtml = `<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:13px">
+        <i class="ti ti-search-off" style="font-size:28px;display:block;margin-bottom:10px;opacity:0.4"></i>
+        Nenhum cliente corresponde aos filtros.<br>
+        <span style="font-size:11px">Ajuste a busca, o colaborador ou a agência.</span>
+      </div>`;
+    } else {
+      const labels = { 'cartao':'Cartão de Crédito', 'pre_pago':'Pix / Boleto', 'todos':'—' };
+      finalHtml = `<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:13px">
+        <i class="ti ti-filter-off" style="font-size:28px;display:block;margin-bottom:10px;opacity:0.4"></i>
+        Nenhum cliente com método <b>${labels[BAL_FILTRO_METODO]||''}</b> cadastrado.<br>
+        <span style="font-size:11px">Configure o método de faturamento no cadastro do cliente.</span>
+      </div>`;
+    }
   }
 
   // Contagens do filtro ativo (para badges de severidade)
