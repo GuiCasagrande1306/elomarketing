@@ -14616,6 +14616,9 @@ function applyFiltroToContainer() {
   const container = document.getElementById('balance-monitor-container');
   if (!container) return;
 
+  // Fonte: cache de blocks (com fallback de array vazio — nunca quebra a tela)
+  const allBlocks = BAL_BLOCKS_CACHE || [];
+
   // ── Filtros do topo (busca + colaborador + agência) — combinados e reativos ──
   // Aplicados ANTES do filtro de método de pagamento, para que os contadores
   // (Todos/Cartão/Pix) reflitam o escopo já filtrado pelo topo.
