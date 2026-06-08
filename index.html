@@ -319,10 +319,16 @@
     position: relative; background: var(--bg3); border: 1px solid var(--border);
     border-radius: 9px; width: 36px; height: 36px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    color: var(--text2); font-size: 17px; transition: background 0.15s, color 0.15s;
+    transition: background 0.15s; padding: 0;
   }
-  .notif-bell-btn:hover { background: var(--bg4); color: var(--text); }
-  .notif-bell-btn.has-alerts { color: var(--amber); }
+  .notif-bell-btn:hover { background: var(--bg4); }
+  .notif-bell-emoji { font-size: 17px; line-height: 1; }
+  .notif-bell-btn.has-alerts .notif-bell-emoji { animation: notif-bell-swing 2s ease-in-out infinite; }
+  @keyframes notif-bell-swing {
+    0%,50%,100% { transform: rotate(0); }
+    10%,30%     { transform: rotate(12deg); }
+    20%,40%     { transform: rotate(-12deg); }
+  }
   .notif-badge {
     position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
     padding: 0 4px; border-radius: 9px; background: var(--red); color: #fff;
@@ -3280,7 +3286,7 @@
       <!-- ── Sineta de Notificações ── -->
       <div class="notif-bell-wrap" id="notif-bell-wrap">
         <button class="notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifPanel(event)" title="Notificações" aria-label="Notificações">
-          <i class="ti ti-bell"></i>
+          <span class="notif-bell-emoji">🔔</span>
           <span class="notif-badge" id="notif-badge" style="display:none">0</span>
         </button>
         <div class="notif-panel" id="notif-panel" style="display:none">
