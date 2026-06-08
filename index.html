@@ -328,12 +328,20 @@
   }
   .notif-bell-btn:hover { background: var(--bg4); }
   .notif-bell-emoji { font-size: 17px; line-height: 1; }
-  .notif-bell-btn.has-alerts .notif-bell-emoji { animation: notif-bell-swing 2s ease-in-out infinite; }
-  @keyframes notif-bell-swing {
-    0%,50%,100% { transform: rotate(0); }
-    10%,30%     { transform: rotate(12deg); }
-    20%,40%     { transform: rotate(-12deg); }
+  /* Botão de dispensar notificação (X) — aparece em cada item */
+  .notif-dismiss {
+    flex-shrink: 0; background: none; border: none; cursor: pointer; padding: 3px;
+    border-radius: 6px; color: var(--text3); font-size: 13px; line-height: 1;
+    opacity: 0.5; transition: opacity 0.12s, background 0.12s, color 0.12s; margin-top: 1px;
   }
+  .notif-item:hover .notif-dismiss { opacity: 1; }
+  .notif-dismiss:hover { background: rgba(248,113,113,0.15); color: var(--red); }
+  .notif-clear-all {
+    width: 100%; padding: 9px; background: none; border: none; border-top: 1px solid var(--border);
+    cursor: pointer; color: var(--text3); font-size: 11px; font-weight: 600;
+    transition: background 0.12s, color 0.12s;
+  }
+  .notif-clear-all:hover { background: var(--bg3); color: var(--text); }
   .notif-badge {
     position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
     padding: 0 4px; border-radius: 9px; background: var(--red); color: #fff;
@@ -5322,10 +5330,40 @@ let _notifData     = { count: 0, items: [] };
 let _notifInterval = null;
 
 const _NOTIF_ICON = {
-  saldo:      { icon: 'ti-alert-circle-filled', color: 'var(--red)'   },  // 🔴 sem saldo
-  tarefa:     { icon: 'ti-clock-exclamation',   color: 'var(--amber)' },  // 🟡 tarefa atrasada
-  otimizacao: { icon: 'ti-layout-kanban',       color: 'var(--amber)' },  // 🟡 otimização atrasada
+  saldo:      { emoji: '🔴' },  // cliente sem saldo
+  tarefa:     { emoji: '🟡' },  // tarefa atrasada
+  otimizacao: { emoji: '🟡' },  // otimização atrasada
 };
+
+// ── Notificações dispensadas (marcadas como lidas) — persiste em localStorage ──
+function _notifDismissed() {
+  try { return new Set(JSON.parse(localStorage.getItem('tp_notif_dismissed') || '[]')); }
+  catch { return new Set(); }
+}
+function _notifSaveDismissed(set) {
+  localStorage.setItem('tp_notif_dismissed', JSON.stringify([...set]));
+}
+// Itens visíveis = vindos do servidor menos os dispensados
+function _notifVisibleItems() {
+  const dismissed = _notifDismissed();
+  return (_notifData.items || []).filter(it => !dismissed.has(it.id));
+}
+function dismissNotif(id, ev) {
+  if (ev) ev.stopPropagation();
+  const set = _notifDismissed();
+  set.add(id);
+  _notifSaveDismissed(set);
+  _renderNotifBadge();
+  _renderNotifList();
+}
+function clearAllNotif(ev) {
+  if (ev) ev.stopPropagation();
+  const set = _notifDismissed();
+  _notifVisibleItems().forEach(it => set.add(it.id));
+  _notifSaveDismissed(set);
+  _renderNotifBadge();
+  _renderNotifList();
+}
 
 async function fetchNotifications() {
   if (!currentUser) return;
@@ -5345,7 +5383,7 @@ async function fetchNotifications() {
 function _renderNotifBadge() {
   const badge = document.getElementById('notif-badge');
   const btn   = document.getElementById('notif-bell-btn');
-  const n = _notifData.count || 0;
+  const n = _notifVisibleItems().length; // conta só as NÃO dispensadas
   if (badge) {
     badge.textContent   = n > 99 ? '99+' : String(n);
     badge.style.display = n > 0 ? 'flex' : 'none';
@@ -5356,10 +5394,11 @@ function _renderNotifBadge() {
 function _renderNotifList() {
   const list  = document.getElementById('notif-list');
   const count = document.getElementById('notif-panel-count');
-  if (count) count.textContent = _notifData.count || 0;
   if (!list) return;
 
-  const items = _notifData.items || [];
+  const items = _notifVisibleItems();
+  if (count) count.textContent = items.length;
+
   if (items.length === 0) {
     list.innerHTML = `<div class="notif-empty">
       <i class="ti ti-circle-check" style="font-size:26px;display:block;margin-bottom:8px;color:var(--green);opacity:0.7"></i>
@@ -5369,19 +5408,28 @@ function _renderNotifList() {
   }
 
   const _subLabel = { saldo: 'Cliente sem saldo · Alertas', tarefa: 'Tarefa atrasada · Tarefas', otimizacao: 'Esteira de Otimizações' };
-  list.innerHTML = items.map(it => {
-    const cfg = _NOTIF_ICON[it.tipo] || { icon: 'ti-bell', color: 'var(--text3)' };
+  const rows = items.map(it => {
+    const cfg = _NOTIF_ICON[it.tipo] || { emoji: '🔔' };
     const msg = String(it.mensagem || '').replace(/</g, '&lt;');
     const pageEsc = String(it.page || 'dashboard').replace(/'/g, '');
+    const idEsc   = String(it.id).replace(/'/g, "\\'");
     return `<div class="notif-item" onclick="_notifGoTo('${pageEsc}')">
-      <i class="ti ${cfg.icon} notif-item-icon" style="color:${cfg.color}"></i>
+      <span class="notif-item-icon">${cfg.emoji}</span>
       <div style="flex:1;min-width:0">
         <div class="notif-item-msg">${msg}</div>
         <div class="notif-item-sub">${_subLabel[it.tipo] || ''}</div>
       </div>
-      <i class="ti ti-chevron-right" style="color:var(--text3);font-size:13px;flex-shrink:0;margin-top:2px"></i>
+      <button class="notif-dismiss" title="Marcar como lida" onclick="dismissNotif('${idEsc}', event)">
+        <i class="ti ti-x"></i>
+      </button>
     </div>`;
   }).join('');
+
+  // Botão "Limpar todas" no rodapé da lista
+  list.innerHTML = rows +
+    `<button class="notif-clear-all" onclick="clearAllNotif(event)">
+       <i class="ti ti-checks" style="margin-right:4px"></i>Marcar todas como lidas
+     </button>`;
 }
 
 function toggleNotifPanel(e) {
