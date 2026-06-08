@@ -313,6 +313,57 @@
 
   .topbar-right { display: flex; align-items: center; gap: 10px; }
 
+  /* ── Sineta de Notificações ── */
+  .notif-bell-wrap { position: relative; }
+  .notif-bell-btn {
+    position: relative; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 9px; width: 36px; height: 36px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text2); font-size: 17px; transition: background 0.15s, color 0.15s;
+  }
+  .notif-bell-btn:hover { background: var(--bg4); color: var(--text); }
+  .notif-bell-btn.has-alerts { color: var(--amber); }
+  .notif-badge {
+    position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
+    padding: 0 4px; border-radius: 9px; background: var(--red); color: #fff;
+    font-size: 10px; font-weight: 700; display: flex; align-items: center;
+    justify-content: center; line-height: 1; border: 2px solid var(--bg);
+    animation: notif-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes notif-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.55); }
+    50%     { box-shadow: 0 0 0 5px rgba(248,113,113,0); }
+  }
+  .notif-panel {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 400;
+    width: 340px; max-width: 90vw; background: var(--bg2);
+    border: 1px solid var(--border2); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.28); overflow: hidden;
+  }
+  .notif-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px; border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 700; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .notif-panel-count {
+    font-size: 10px; font-weight: 700; background: var(--bg4);
+    color: var(--text2); padding: 1px 8px; border-radius: 10px;
+  }
+  .notif-list { max-height: 380px; overflow-y: auto; }
+  .notif-item {
+    display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px;
+    border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s;
+  }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item:hover { background: var(--bg3); }
+  .notif-item-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .notif-item-msg  { font-size: 12.5px; color: var(--text); line-height: 1.45; }
+  .notif-item-sub  { font-size: 10.5px; color: var(--text3); margin-top: 2px; }
+  .notif-empty {
+    padding: 36px 16px; text-align: center; color: var(--text3); font-size: 12.5px;
+  }
+
   .btn {
     display: flex;
     align-items: center;
@@ -3226,6 +3277,21 @@
           <option value="all">Todos os Colaboradores</option>
         </select>
       </span>
+      <!-- ── Sineta de Notificações ── -->
+      <div class="notif-bell-wrap" id="notif-bell-wrap">
+        <button class="notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifPanel(event)" title="Notificações" aria-label="Notificações">
+          <i class="ti ti-bell"></i>
+          <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+        </button>
+        <div class="notif-panel" id="notif-panel" style="display:none">
+          <div class="notif-panel-header">
+            <span><i class="ti ti-bell" style="font-size:13px;margin-right:5px"></i>Notificações</span>
+            <span class="notif-panel-count" id="notif-panel-count">0</span>
+          </div>
+          <div class="notif-list" id="notif-list"></div>
+        </div>
+      </div>
+
       <!-- ícone padrão = sol (dark mode ativo). applyTheme() troca quando DOM carrega -->
       <button id="theme-toggle-btn" class="theme-toggle-btn" onclick="toggleTheme()" title="Modo Claro">
         <svg id="theme-icon-svg" data-icon="sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5A623" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -5234,6 +5300,113 @@ function _updateBottomNav(page) {
     const btn = document.getElementById('mbn-' + key);
     if (btn) btn.classList.add('mbn-active');
   }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SINETA DE NOTIFICAÇÕES — alertas consolidados no topbar
+   Fonte: GET /api/notifications (tarefas atrasadas, clientes sem saldo,
+   otimizações em atraso). Polling a cada 5 min. Clique → navega à página.
+════════════════════════════════════════════════════════════════ */
+let _notifData     = { count: 0, items: [] };
+let _notifInterval = null;
+
+const _NOTIF_ICON = {
+  saldo:      { icon: 'ti-alert-circle-filled', color: 'var(--red)'   },  // 🔴 sem saldo
+  tarefa:     { icon: 'ti-clock-exclamation',   color: 'var(--amber)' },  // 🟡 tarefa atrasada
+  otimizacao: { icon: 'ti-layout-kanban',       color: 'var(--amber)' },  // 🟡 otimização atrasada
+};
+
+async function fetchNotifications() {
+  if (!currentUser) return;
+  try {
+    const data = await _apiFetch('/api/notifications');
+    if (!data || data._coldStart || !Array.isArray(data.items)) return;
+    _notifData = data;
+    _renderNotifBadge();
+    // Se o painel estiver aberto, re-renderiza a lista
+    const panel = document.getElementById('notif-panel');
+    if (panel && panel.style.display !== 'none') _renderNotifList();
+  } catch (e) {
+    console.warn('[Notifications] fetch falhou:', e.message);
+  }
+}
+
+function _renderNotifBadge() {
+  const badge = document.getElementById('notif-badge');
+  const btn   = document.getElementById('notif-bell-btn');
+  const n = _notifData.count || 0;
+  if (badge) {
+    badge.textContent   = n > 99 ? '99+' : String(n);
+    badge.style.display = n > 0 ? 'flex' : 'none';
+  }
+  if (btn) btn.classList.toggle('has-alerts', n > 0);
+}
+
+function _renderNotifList() {
+  const list  = document.getElementById('notif-list');
+  const count = document.getElementById('notif-panel-count');
+  if (count) count.textContent = _notifData.count || 0;
+  if (!list) return;
+
+  const items = _notifData.items || [];
+  if (items.length === 0) {
+    list.innerHTML = `<div class="notif-empty">
+      <i class="ti ti-circle-check" style="font-size:26px;display:block;margin-bottom:8px;color:var(--green);opacity:0.7"></i>
+      Tudo em dia! 🎉<br>Nenhum alerta pendente.
+    </div>`;
+    return;
+  }
+
+  const _subLabel = { saldo: 'Cliente sem saldo · Alertas', tarefa: 'Tarefa atrasada · Tarefas', otimizacao: 'Esteira de Otimizações' };
+  list.innerHTML = items.map(it => {
+    const cfg = _NOTIF_ICON[it.tipo] || { icon: 'ti-bell', color: 'var(--text3)' };
+    const msg = String(it.mensagem || '').replace(/</g, '&lt;');
+    const pageEsc = String(it.page || 'dashboard').replace(/'/g, '');
+    return `<div class="notif-item" onclick="_notifGoTo('${pageEsc}')">
+      <i class="ti ${cfg.icon} notif-item-icon" style="color:${cfg.color}"></i>
+      <div style="flex:1;min-width:0">
+        <div class="notif-item-msg">${msg}</div>
+        <div class="notif-item-sub">${_subLabel[it.tipo] || ''}</div>
+      </div>
+      <i class="ti ti-chevron-right" style="color:var(--text3);font-size:13px;flex-shrink:0;margin-top:2px"></i>
+    </div>`;
+  }).join('');
+}
+
+function toggleNotifPanel(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  if (open) { panel.style.display = 'none'; return; }
+  _renderNotifList();
+  panel.style.display = 'block';
+  fetchNotifications(); // refresca ao abrir
+  setTimeout(() => document.addEventListener('click', _notifOutsideClick), 0);
+}
+
+function _notifOutsideClick(e) {
+  const wrap = document.getElementById('notif-bell-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const panel = document.getElementById('notif-panel');
+    if (panel) panel.style.display = 'none';
+    document.removeEventListener('click', _notifOutsideClick);
+  }
+}
+
+function _notifGoTo(page) {
+  const panel = document.getElementById('notif-panel');
+  if (panel) panel.style.display = 'none';
+  document.removeEventListener('click', _notifOutsideClick);
+  const navEl = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
+  navigate(page, navEl || null);
+}
+
+// Inicia o polling da sineta (5 min). Chamado após login.
+function startNotifPolling() {
+  fetchNotifications();
+  if (_notifInterval) clearInterval(_notifInterval);
+  _notifInterval = setInterval(fetchNotifications, 5 * 60 * 1000);
 }
 
 function navigate(page, el) {
@@ -7712,6 +7885,7 @@ function loginUser(user) {
   popularSelectCampanhaCliente();
   filtrarEExibirCampanhas();
   initSupabaseSync();
+  startNotifPolling(); // sineta de notificações: busca inicial + polling 5min
   // Aplica permissões de página na sidebar imediatamente após o login
   applySidebarPermissions();
   // Mostra/oculta painel Torre de Controle conforme role do usuário
