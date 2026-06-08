@@ -13305,8 +13305,32 @@ let BAL_SYNC_ERROR    = null;      // null | 'META_TOKEN_EXPIRED' | 'SERVER_DOWN
 // Útil para contas pré-pagas (boleto/PIX) onde balance != saldo disponível real.
 // Formato: { meta_balance: <saldo real R$>, meta_spend7d: <média 7d R$/dia> }
 const ACCOUNT_BALANCE_OVERRIDES = {
-  'act_1115165592789346': { meta_balance: 1673.85, meta_spend7d: 48.92 } // Istituto di Moda Burgo
+  // Removido o override de saldo do Burgo — agora o saldo vem 100% da API
+  // (display_string), batendo exatamente com o painel do Meta.
 };
+
+// ── EXTRATOR CANÔNICO DE SALDO PRÉ-PAGO ──────────────────────────────────────
+// FONTE DE VERDADE: funding_source_details.display_string — o MESMO texto que o
+// Gerenciador de Anúncios exibe (ex: "Saldo disponível (R$310,36 BRL)").
+// Os campos `balance` e `display_amount` NÃO são confiáveis para saldo pré-pago:
+//   • balance = valor interno (não é a carteira) → dava R$13,22 em vez de R$310,36
+//   • display_amount = quase sempre undefined nas contas BRL
+// Retorna: número (saldo real, inclusive 0.00) ou null (não é conta com carteira, ex: cartão).
+function _metaSaldoFromFSD(fsd) {
+  if (!fsd) return null;
+  const ds = fsd.display_string || '';
+  // "Saldo disponível (R$310,36 BRL)" / "R$1.673,85" — captura o número PT-BR
+  const m = ds.match(/saldo\s+dispon[íi]vel[^R]*R\$\s*([\d.]+,\d{2})/i);
+  if (m) {
+    return parseFloat(m[1].replace(/\./g, '').replace(',', '.')); // milhar→'' , vírgula→'.'
+  }
+  // Fallback raro: display_amount numérico preenchido
+  if (fsd.display_amount != null) {
+    const raw = parseFloat(fsd.display_amount);
+    if (raw > 0) return raw >= 200 ? raw / 100 : raw;
+  }
+  return null; // cartão (ex: "VISA *6874") ou conta sem carteira → sem saldo pré-pago
+}
 
 // ── Método de pagamento por ID de conta — override de segurança ─────────────
 // Adicione aqui os IDs confirmados pelos prints/extratos do cliente.
@@ -14205,23 +14229,15 @@ async function fetchMetaAccountStatus(client) {
       return n >= 200 ? n / 100 : n;  // centavos → reais
     };
 
-    let balance = 0;
     const fsd = acctJson.funding_source_details;
 
-    // Fonte 1: fsd.display_amount — saldo exibido na carteira de anúncios (pré-pago)
-    if (fsd?.display_amount != null) {
-      const v = _parseMetaBalance(fsd.display_amount);
-      if (v > 0) balance = v;
-    }
-    // Fonte 3: acctJson.balance — campo genérico da conta (sem filtro de threshold)
-    if (balance === 0 && acctJson.balance != null) {
-      const v = _parseMetaBalance(acctJson.balance);
-      if (v > 0) balance = v;
-    }
-    // Fonte 4: meta_balance salvo manualmente no cadastro do cliente
-    if (balance === 0 && client.meta_balance > 0) balance = client.meta_balance;
+    // FONTE DE VERDADE: display_string (idêntico ao painel Meta). null = cartão/sem carteira.
+    const saldoReal = _metaSaldoFromFSD(fsd);
+    // balance = saldo real da API; se null (cartão), cai para meta_balance salvo (legado).
+    let balance = (saldoReal != null) ? saldoReal
+                : (client.meta_balance > 0 ? client.meta_balance : 0);
 
-    console.log(`[CRON MONITOR] ${acctId} — balance: R$ ${balance.toFixed(2)} | account_status=${acctJson.account_status} | spend_cap=${acctJson.spend_cap} amount_spent=${acctJson.amount_spent} | fsd.display=${fsd?.display_amount}`);
+    console.log(`[CRON MONITOR] ${acctId} — saldo: R$ ${balance.toFixed(2)} (API display_string="${fsd?.display_string || '—'}") | status=${acctJson.account_status} | cap=${acctJson.spend_cap}/${acctJson.amount_spent}`);
 
     // ── 2. Gasto do mês vigente (this_month) — correto para pacing de cartão ──
     // Fallback: investment do cadastro (valor auditado pelo gestor, ex: R$ 890,20)
@@ -16150,32 +16166,13 @@ async function syncMetaBalanceFromAPI(accountId, client = null) {
     //   → balance retorna gasto acumulado — NÃO usar como saldo para pré-pagas
     //
     // Regra: funding_source_details > meta_balance confirmado > balance (só pós-pago)
-    let balance = 0;
     const fsd = acctJson.funding_source_details;
 
-    if (fsd?.display_amount != null && parseFloat(fsd.display_amount) > 0) {
-      // Conta pré-paga ou pós-paga com FSD preenchido — fonte mais confiável
-      const raw = parseFloat(fsd.display_amount);
-      balance   = raw >= 200 ? raw / 100 : raw; // centavos → BRL se ≥ 200
-      console.log('[syncMeta] saldo via funding_source_details:', balance);
-    }
-
-    // Se FSD não retornou saldo válido, usa meta_balance confirmado pelo gestor
-    // (NÃO usa balance — para pré-pagas esse campo retorna gasto, não saldo)
-    if (balance < 100 && client && client.meta_balance > 0) {
-      balance = client.meta_balance;
-      console.log('[syncMeta] fallback para meta_balance do cliente:', balance);
-    }
-
-    // Último recurso: balance apenas se parece ser centavos e maior que gasto 7d
-    if (balance < 100 && acctJson.balance != null) {
-      const raw = parseFloat(acctJson.balance);
-      const candidate = raw >= 200 ? raw / 100 : raw;
-      if (candidate >= 100) { // só aceita se parecer saldo real (≥ R$100)
-        balance = candidate;
-        console.log('[syncMeta] saldo via balance field (fallback final):', balance);
-      }
-    }
+    // FONTE DE VERDADE: display_string (idêntico ao painel Meta).
+    const saldoReal = _metaSaldoFromFSD(fsd);
+    let balance = (saldoReal != null) ? saldoReal
+                : (client && client.meta_balance > 0 ? client.meta_balance : 0);
+    console.log(`[syncMeta] saldo real: R$${balance.toFixed(2)} (display_string="${fsd?.display_string || '—'}")`);
 
     // ── Gasto do mês vigente (this_month — correto para pacing) ──────────────
     const gastoMesTotal = (!monthInsJson.error && monthInsJson.data?.length > 0)
@@ -16461,22 +16458,13 @@ async function atualizarDadosMeta(cliente) {
     // CONTAS PRÉ-PAGAS: funding_source_details.display_amount = saldo em carteira
     // CONTAS PÓS-PAGAS: display_amount = limite disponível (pode estar zerado)
     // Regra: FSD > balance como último recurso (para pré-pagas, balance = gasto acumulado)
-    let balance = 0;
     const fsd = !acctJson.error ? acctJson.funding_source_details : null;
 
-    if (fsd?.display_amount != null && parseFloat(fsd.display_amount) > 0) {
-      const raw = parseFloat(fsd.display_amount);
-      balance   = raw >= 200 ? raw / 100 : raw;     // centavos → BRL se ≥ 200
-      console.log(`[MetaSync] ${cliente.name}: saldo via FSD: R$${balance}`);
-    }
-    if (balance < 100 && !acctJson.error && acctJson.balance != null) {
-      const raw = parseFloat(acctJson.balance);
-      const candidate = raw >= 200 ? raw / 100 : raw;
-      if (candidate >= 100) {
-        balance = candidate;
-        console.log(`[MetaSync] ${cliente.name}: saldo via balance field: R$${balance}`);
-      }
-    }
+    // FONTE DE VERDADE: display_string (idêntico ao painel Meta).
+    const saldoReal = _metaSaldoFromFSD(fsd);
+    let balance = (saldoReal != null) ? saldoReal
+                : (cliente.meta_balance > 0 ? cliente.meta_balance : 0);
+    console.log(`[MetaSync] ${cliente.name}: saldo real R$${balance.toFixed(2)} (display_string="${fsd?.display_string || '—'}")`);
 
     // ── Gasto médio últimos 7 dias → cálculo de autonomia ────────────────────
     let gastoMedio7d = 0;
