@@ -13672,10 +13672,60 @@ function dateAddDays(days) {
 //   payType     — 'prepaid' | 'postpaid'
 //   status      — código de status da conta Meta
 //   budgetPct   — % do orçamento mensal consumido
+// ── Gera tarefa automática de alerta (com dedup por cliente+motivo+dia) ──────
+// Evita spam: só cria 1 tarefa por cliente+motivo a cada dia. Marca o id de forma
+// determinística (auto-alert-<clientId>-<motivo>-<YYYY-MM-DD>) para idempotência.
+function _gerarTarefaAlerta(client, motivo, titulo, descricao) {
+  if (!currentUser) return;
+  const hoje = new Date();
+  const diaKey = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+  const taskId = `auto-alert-${client.id}-${motivo}-${diaKey}`;
+
+  // Dedup local: já existe essa tarefa hoje? não recria
+  if (TASKS_DATA.some(t => t.id === taskId)) return;
+  // Dedup adicional: já existe tarefa ABERTA com o mesmo título p/ este cliente? pula
+  if (TASKS_DATA.some(t => t.client === client.id && t.title === titulo && normalizeTaskStatus(t.status) !== 'Pronto')) return;
+
+  const novaTarefa = {
+    id:          taskId,
+    title:       titulo,
+    description: descricao,
+    status:      'Não Iniciada',
+    priority:    'Alta',
+    group:       'semana',
+    client:      client.id,
+    assignedTo:  client.owner || currentUser.id,
+    created_by:  currentUser.id,
+    dueDate:     diaKey,
+  };
+  TASKS_DATA.push(novaTarefa);
+  saveTasks();
+  createTaskInDB(novaTarefa);
+  console.log(`[CRON MONITOR] 🚨 Tarefa automática criada: "${titulo}" (cliente ${client.name})`);
+}
+
 function evalBalanceAlert(platformData, clientBudget) {
   if (!platformData) return { level: 'pending', msg: 'Não configurado', detail: null };
 
-  const { balance, dailySpend, spend7d, status, payType, budgetPct } = platformData;
+  const { balance, dailySpend, spend7d, status, payType, budgetPct,
+          capReached, zeroSpend7d, disableReason } = platformData;
+
+  // ── REGRA CRÍTICA UNIVERSAL: conta parada (vale para cartão E pré-pago) ──────
+  // 1) Conta desativada por problema (disable_reason != 0)
+  if (disableReason && disableReason !== 0) {
+    return { level: 'critical', msg: 'Conta Desativada',
+             detail: `<span style="color:var(--red)">Conta com restrição (motivo ${disableReason}) — anúncios pausados. Verifique a Central de Qualidade da conta.</span>` };
+  }
+  // 2) Spend cap atingido — Meta para a entrega mesmo com conta "ativa"
+  if (capReached) {
+    return { level: 'critical', msg: 'Limite de Gasto Atingido',
+             detail: `<span style="color:var(--red)">A conta atingiu o teto de gasto (spend cap). Os anúncios pararam — aumente o limite de gasto da conta para retomar.</span>` };
+  }
+  // 3) Gasto ZERO nos últimos 7 dias com orçamento configurado → conta sem saldo/parada
+  if (zeroSpend7d) {
+    return { level: 'critical', msg: 'Conta Sem Saldo / Parada',
+             detail: `<span style="color:var(--red)">Gasto de R$ 0 nos últimos 7 dias. Verifique urgentemente o saldo (boleto/PIX), o cartão, ou se há anúncios reprovados.</span>` };
+  }
 
   // ── Pós-pago (Cartão de Crédito): nunca alerta por "saldo baixo"
   //    Alerta somente se: (1) cartão recusado / conta suspensa, ou (2) gasto ultrapassou o orçamento planejado
@@ -14121,8 +14171,11 @@ async function fetchMetaAccountStatus(client) {
     const _ts = Date.now();
     const _fetchOpts = { cache: 'no-store' };
     const [acctRes, monthInsRes, ins7dRes, txRes] = await Promise.all([
+      // amount_remaining foi REMOVIDO — descontinuado na API v19 (causava erro #100
+      // que derrubava a função inteira → null → nenhum alerta para NENHUM cliente).
+      // spend_cap + amount_spent permitem detectar conta que atingiu o teto de gasto.
       fetch(`https://graph.facebook.com/v19.0/${acctId}` +
-            `?fields=account_status,funding_source_details,balance,amount_remaining,currency` +
+            `?fields=account_status,funding_source_details,balance,currency,spend_cap,amount_spent,disable_reason` +
             `&access_token=${enc}&_ts=${_ts}`, _fetchOpts),
       fetch(`https://graph.facebook.com/v19.0/${acctId}/insights` +
             `?date_preset=this_month&fields=spend,actions,action_values&level=account` +
@@ -14155,13 +14208,8 @@ async function fetchMetaAccountStatus(client) {
     let balance = 0;
     const fsd = acctJson.funding_source_details;
 
-    // Fonte 1: amount_remaining — campo direto de saldo remanescente (pré-pago)
-    if (acctJson.amount_remaining != null) {
-      const v = _parseMetaBalance(acctJson.amount_remaining);
-      if (v > 0) balance = v;
-    }
-    // Fonte 2: fsd.display_amount — saldo exibido na carteira de anúncios
-    if (balance === 0 && fsd?.display_amount != null) {
+    // Fonte 1: fsd.display_amount — saldo exibido na carteira de anúncios (pré-pago)
+    if (fsd?.display_amount != null) {
       const v = _parseMetaBalance(fsd.display_amount);
       if (v > 0) balance = v;
     }
@@ -14173,7 +14221,7 @@ async function fetchMetaAccountStatus(client) {
     // Fonte 4: meta_balance salvo manualmente no cadastro do cliente
     if (balance === 0 && client.meta_balance > 0) balance = client.meta_balance;
 
-    console.log(`[fetchMeta] ${acctId} — balance: R$ ${balance.toFixed(2)} | amount_remaining=${acctJson.amount_remaining} | balance=${acctJson.balance} | fsd.display=${fsd?.display_amount}`);
+    console.log(`[CRON MONITOR] ${acctId} — balance: R$ ${balance.toFixed(2)} | account_status=${acctJson.account_status} | spend_cap=${acctJson.spend_cap} amount_spent=${acctJson.amount_spent} | fsd.display=${fsd?.display_amount}`);
 
     // ── 2. Gasto do mês vigente (this_month) — correto para pacing de cartão ──
     // Fallback: investment do cadastro (valor auditado pelo gestor, ex: R$ 890,20)
@@ -14223,10 +14271,23 @@ async function fetchMetaAccountStatus(client) {
     const detectedPayMethod = detectPaymentMethodFromData(acctId, fsd, txData);
     const payType           = detectedPayMethod === 'pre_pago' ? 'prepaid' : 'postpaid';
 
+    // ── 6. Detecção de "Conta sem saldo / parada" ───────────────────────────
+    // Sinais de conta que parou de rodar mesmo estando "ativa":
+    //  a) spend_cap atingido: amount_spent >= spend_cap (Meta pausa a entrega)
+    //  b) gasto nos últimos 7 dias = R$ 0 mas há orçamento configurado
+    const spendCap   = parseInt(acctJson.spend_cap   || '0', 10);
+    const amtSpent   = parseInt(acctJson.amount_spent || '0', 10);
+    const capReached = spendCap > 0 && amtSpent >= spendCap;
+    const zeroSpend7d = gastoTotal7d === 0 && (client.budget || 0) > 0;
+    // disable_reason != 0 → conta com problema (1=ads_integrity, 2=ads_ip_review, etc.)
+    const disableReason = parseInt(acctJson.disable_reason || '0', 10);
+
     return { balance: finalBalance, dailySpend: gastoDiario, spend7d: finalSpend7d,
              amountSpent, faturamentoMetaAds, purchaseCount, addToCartCount, landingPageViews,
              status: acctJson.account_status,
-             payType, budgetPct, detectedPayMethod };
+             payType, budgetPct, detectedPayMethod,
+             // flags de parada
+             capReached, zeroSpend7d, disableReason, gastoTotal7d };
   } catch(err) {
     console.warn('[fetchMetaAccountStatus] Erro:', err.message);
     const ov              = ACCOUNT_BALANCE_OVERRIDES[acctId];
@@ -14391,6 +14452,22 @@ async function renderBalanceMonitor() {
 
     const metaAlert  = evalBalanceAlert(metaData, c.budget);
     const gadsAlert  = evalGadsStatus(gadsData, c);
+
+    // ── Log de auditoria por cliente (estilo cron) ──────────────────────────
+    console.log(`[CRON MONITOR] Processando cliente: ${c.name} — Gasto7d: R$ ${(metaData?.gastoTotal7d ?? 0).toFixed(2)} | Alerta: ${metaAlert.level.toUpperCase()} (${metaAlert.msg})`);
+
+    // ── Geração automática de tarefa para alertas CRÍTICOS de conta parada ──
+    // Dispara para: Conta Sem Saldo, Limite de Gasto Atingido, Conta Desativada, Falha de Pagamento.
+    if (metaAlert.level === 'critical' && currentUser) {
+      _gerarTarefaAlerta(
+        c,
+        'saldo',
+        `🚨 ALERTA: ${metaAlert.msg} — ${c.name}`,
+        `${metaAlert.msg} na conta de anúncios de ${c.name}. ` +
+        `Gasto nos últimos 7 dias: R$ ${(metaData?.gastoTotal7d ?? 0).toFixed(2)}. ` +
+        `Ação: verifique saldo (boleto/PIX), cartão, limite de gasto da conta ou anúncios reprovados.`
+      );
+    }
 
     // Severidade: Google Ads 'pending'/'ok' não sobe acima de Meta — Meta é prioridade
     const worstLevel = metaAlert.level === 'critical' ? 'critical'
