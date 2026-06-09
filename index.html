@@ -18024,13 +18024,28 @@ async function sendReportViaWhatsApp() {
     const errMsg  = data?.error  || '';
     const errDtl  = data?.detail || '';
     const fullErr = (errMsg + ' ' + errDtl).toLowerCase();
-    if (/not connected|not found|instance|disconnected|closed|401|403/.test(fullErr)) {
+
+    // Sessão WhatsApp caiu (socket fechado) — mesmo que a instância marque "open".
+    // "Connection Closed" / disconnected → reconectar via QR resolve.
+    if (/connection closed|not connected|disconnected|closed|401|403|not found|no session/.test(fullErr)) {
       _showWaError(
-        '❌ WhatsApp não está conectado.',
-        'Escaneie o QR code em Integrações para reconectar.',
+        '❌ A sessão do WhatsApp caiu.',
+        'A conexão com o WhatsApp foi perdida (mesmo aparecendo como conectada). Reescaneie o QR code em Integrações para reativar o envio.',
+        null,
+        { label: '⚙️ Reconectar em Integrações', fn: goToIntegracoes }
+      );
+      return;
+    }
+
+    // Erro de servidor da Evolution API (500 / Prisma / Internal Server Error)
+    if (/500|internal server error|prisma|bad gateway|502|503|504/.test(fullErr)) {
+      _showWaError(
+        '⚠️ Servidor de WhatsApp instável.',
+        'O servidor da Evolution API (Railway) retornou um erro interno. Aguarde 1 min e tente novamente; se persistir, reinicie o serviço Evolution no Railway.',
         null,
         { label: '⚙️ Ir para Integrações', fn: goToIntegracoes }
       );
+      console.error('[sendReportViaWhatsApp] Evolution 500:', errMsg, errDtl);
       return;
     }
 
