@@ -5333,6 +5333,7 @@ let _notifInterval = null;
 
 const _NOTIF_ICON = {
   saldo:      { emoji: '🔴' },  // cliente sem saldo
+  token:      { emoji: '🔑' },  // token Meta expirando/inválido
   tarefa:     { emoji: '🟡' },  // tarefa atrasada
   otimizacao: { emoji: '🟡' },  // otimização atrasada
 };
@@ -5409,7 +5410,7 @@ function _renderNotifList() {
     return;
   }
 
-  const _subLabel = { saldo: 'Cliente sem saldo · Alertas', tarefa: 'Tarefa atrasada · Tarefas', otimizacao: 'Esteira de Otimizações' };
+  const _subLabel = { saldo: 'Cliente sem saldo · Alertas', token: 'Token Meta · Integrações', tarefa: 'Tarefa atrasada · Tarefas', otimizacao: 'Esteira de Otimizações' };
   const rows = items.map(it => {
     const cfg = _NOTIF_ICON[it.tipo] || { emoji: '🔔' };
     const msg = String(it.mensagem || '').replace(/</g, '&lt;');
@@ -16649,7 +16650,33 @@ function initMetaConfig() {
   // Botão Salvar Token: só para admins
   const saveBtn = document.querySelector('[onclick="saveMetaConfig()"]');
   if (saveBtn) saveBtn.style.display = isAdmin ? '' : 'none';
-  if (token) carregarContasMeta();
+  if (token) {
+    carregarContasMeta();
+    _checkMetaTokenHealth(); // valida e mostra validade/expiração no badge
+  }
+}
+
+// ── Saúde do token Meta: valida e mostra validade/expiração no badge ─────────
+async function _checkMetaTokenHealth() {
+  const badge = document.getElementById('meta-status-badge');
+  if (!badge) return;
+  try {
+    const h = await _apiFetch('/api/meta/token-health');
+    if (!h || h._coldStart || !h.configured) return;
+    if (h.valid === false) {
+      badge.textContent = '❌ Inválido / expirado';
+      badge.className   = 'badge badge-red';
+    } else if (h.valid) {
+      if (h.neverExpires) {
+        badge.textContent = '✅ Válido (não expira)';
+        badge.className   = 'badge badge-green';
+      } else if (typeof h.daysLeft === 'number') {
+        const crit = h.daysLeft <= 7;
+        badge.textContent = h.daysLeft <= 0 ? '⚠️ Expira hoje' : `Válido · expira em ${h.daysLeft}d`;
+        badge.className   = `badge ${crit ? 'badge-amber' : 'badge-green'}`;
+      }
+    }
+  } catch (e) { /* silencioso */ }
 }
 
 function initGA4Config() {
