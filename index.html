@@ -17864,6 +17864,29 @@ async function sendGroupReport(clientId) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/* ── Verifica conexão REAL do WhatsApp e tenta reconectar a sessão caída ──────
+   O state "open" da Evolution pode estar desatualizado (socket morto). Este
+   helper distingue: conectado / sessão caída (reconecta) / servidor instável.
+   Retorna { ok, serverError, needsQr, qr, coldStart, reconnected }. ── */
+async function _waEnsureConnected(userId, { autoReconnect = true } = {}) {
+  const st = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`).catch(() => null);
+  if (!st || st._coldStart) return { ok: false, coldStart: true };
+  if (st.serverError)       return { ok: false, serverError: true, detail: st.detail };
+  if (st.state === 'open')  return { ok: true };
+
+  // Não está "open" — tenta reconectar (re-estabelece o socket; sem novo QR se as creds existem)
+  if (autoReconnect) {
+    const conn = await _renderFetch('/api/whatsapp/connect', {
+      method: 'POST', body: JSON.stringify({ userId })
+    }).catch(() => null);
+    if (conn && !conn._coldStart) {
+      if (conn.state === 'open') return { ok: true, reconnected: true };
+      if (conn.qr)               return { ok: false, needsQr: true, qr: conn.qr };
+    }
+  }
+  return { ok: false, needsQr: true };
+}
+
 async function sendReportViaWhatsApp() {
   const clientId = document.getElementById('rep-client')?.value;
   const client   = CLIENTS.list.find(c => c.id === clientId);
@@ -17915,23 +17938,36 @@ async function sendReportViaWhatsApp() {
   // Para "completo" o loading visual indica geração de PDF
   setBtn(templateType === 'completo' ? 'pdf' : 'sending');
 
-  // ── Pré-verificação: instância conectada ────────────────────────────────────
+  // ── Pré-verificação ROBUSTA: conexão real + reconexão automática ────────────
   try {
-    const stateData = await _renderFetch(`/api/whatsapp/state?userId=${encodeURIComponent(userId)}`);
-    if (!stateData || stateData._coldStart) {
+    const conn = await _waEnsureConnected(userId);
+    if (conn.coldStart) {
       setBtn('idle');
       showNotification('⏳ Backend WhatsApp está acordando — tente novamente em 30s.', 'warn');
       return;
     }
-    if (stateData.state !== 'open') {
+    if (conn.serverError) {
       setBtn('idle');
       _showWaError(
-        '❌ WhatsApp não está conectado.',
-        'Escaneie o QR code em Integrações para conectar, depois tente novamente.',
+        '⚠️ Servidor de WhatsApp instável.',
+        'A Evolution API (Railway) está com erro interno. Aguarde 1 min e tente de novo; se persistir, reinicie o serviço Evolution no Railway.',
         null,
         { label: '⚙️ Ir para Integrações', fn: goToIntegracoes }
       );
       return;
+    }
+    if (!conn.ok) {
+      setBtn('idle');
+      _showWaError(
+        '❌ A sessão do WhatsApp caiu.',
+        'Não foi possível reconectar automaticamente. Reescaneie o QR code em Integrações para reativar o envio.',
+        null,
+        { label: '⚙️ Reconectar em Integrações', fn: goToIntegracoes }
+      );
+      return;
+    }
+    if (conn.reconnected) {
+      showNotification('🔄 Sessão reconectada — enviando…', 'ok');
     }
   } catch(eState) {
     console.warn('[WhatsApp precheck]', eState.message);
@@ -17981,16 +18017,31 @@ async function sendReportViaWhatsApp() {
     };
   }
 
-  // ── Envio ────────────────────────────────────────────────────────────────────
+  // ── Envio (com 1 auto-retry após reconexão se a sessão cair no meio) ────────
   try {
     const endpoint = templateType === 'completo'
       ? '/api/whatsapp/send-group-report'
       : '/api/whatsapp/send-group';
 
-    const data = await _renderFetch(endpoint, {
-      method: 'POST',
-      body:   JSON.stringify(basePayload),
-    });
+    const _doSend = () => _renderFetch(endpoint, { method: 'POST', body: JSON.stringify(basePayload) });
+
+    let data = await _doSend();
+
+    // Detecta falha por conexão e tenta reconectar + reenviar UMA vez
+    const _isConnErr = (d) => {
+      if (!d || d.ok) return false;
+      const f = ((d.error || '') + ' ' + (d.detail || '')).toLowerCase();
+      return /connection closed|not connected|disconnected|no session|closed/.test(f);
+    };
+    if (_isConnErr(data)) {
+      console.warn('[WhatsApp] envio falhou por conexão — tentando reconectar e reenviar…');
+      setBtn(templateType === 'completo' ? 'pdf' : 'sending');
+      const re = await _waEnsureConnected(userId);
+      if (re.ok) {
+        showNotification('🔄 Reconectado — reenviando…', 'ok');
+        data = await _doSend();
+      }
+    }
     setBtn('idle');
 
     if (!data || data._coldStart) {
