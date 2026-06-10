@@ -2112,6 +2112,14 @@
     padding:24px 20px;width:100%;
   }
   .login-nf-logo { margin-bottom:44px; }
+  /* Descrição pública do serviço + links legais */
+  .login-about { margin-top:40px; max-width:440px; text-align:center; }
+  .login-about-desc { font-size:11.5px; line-height:1.7; color:#8a8a8a; margin-bottom:14px; }
+  .login-about-desc strong { color:#b5b5b5; font-weight:600; }
+  .login-about-links { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; font-size:11px; }
+  .login-about-links a { color:#4EC3E8; text-decoration:none; }
+  .login-about-links a:hover { text-decoration:underline; }
+  .login-about-links span { color:#555; }
   .login-nf-title {
     font-size:26px;font-weight:600;color:#e5e5e5;letter-spacing:-0.2px;
     margin-bottom:40px;text-align:center;
@@ -3109,6 +3117,24 @@
       <button class="btn btn-primary login-btn" onclick="doLogin()">
         <i class="ti ti-login"></i> Entrar
       </button>
+    </div>
+
+    <!-- Descrição pública do serviço + links legais (exigência Google Ads API) -->
+    <div class="login-about">
+      <p class="login-about-desc">
+        <strong>Elo Marketing — Plataforma de Gestão de Tráfego Pago.</strong>
+        Painel para agências de marketing gerenciarem campanhas de anúncios de seus clientes:
+        consolida métricas de <strong>Meta Ads</strong> e <strong>Google Ads</strong> (investimento,
+        alcance, cliques, conversões), monitora saldo das contas, gera relatórios de performance e
+        organiza a rotina de otimização da equipe.
+      </p>
+      <div class="login-about-links">
+        <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>
+        <span>·</span>
+        <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a>
+        <span>·</span>
+        <a href="mailto:contato@elomarketing.com.br">Contato</a>
+      </div>
     </div>
   </div>
 </div>
