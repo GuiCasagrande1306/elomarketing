@@ -10520,8 +10520,11 @@ async function saveOptimization() {
   if (!Array.isArray(c.historico_otimizacoes)) c.historico_otimizacoes = [];
 
   if (OTIM_EDIT_ID !== null) {
-    /* ---- EDIT MODE: atualiza entrada existente ---- */
-    const entry = c.historico_otimizacoes.find(h => h.id === OTIM_EDIT_ID);
+    /* ---- EDIT MODE: atualiza entrada existente via rota ATÔMICA dedicada ----
+       Antes usava saveClients() (bulk sync), mas o bulk não blinda o histórico:
+       outro colaborador/aba com lista stale apagava a nota. Agora PUT atômico. */
+    const editId = OTIM_EDIT_ID;
+    const entry = c.historico_otimizacoes.find(h => h.id === editId);
     if (entry) {
       entry.texto_nota  = nota;
       entry.editado     = true;
@@ -10532,7 +10535,20 @@ async function saveOptimization() {
     document.querySelectorAll('.otim-note-item.editing-active')
       .forEach(el => el.classList.remove('editing-active'));
     _recalcUltimaOtimizacao(c);
-    saveClients(); // edição: bulk sync é aceitável
+    localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+
+    _apiFetch(`/api/clients/${c.id}/optimizations/${editId}`, {
+      method: 'PUT',
+      body:   JSON.stringify({ texto_nota: nota })
+    }).then(updated => {
+      if (updated && updated.id) {
+        const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
+        if (idx !== -1) {
+          CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
+          localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+        }
+      }
+    }).catch(() => saveClients()); // fallback: bulk sync se PUT falhar
   } else {
     /* ---- NOVA ENTRADA: update otimista em memória + POST atômico ----
        Salva via endpoint dedicado (/api/clients/:id/optimizations) para evitar
@@ -10610,7 +10626,21 @@ function deleteOtimEntry(entryId) {
   }
 
   _recalcUltimaOtimizacao(c);
-  saveClients();
+  localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+
+  /* Exclusão ATÔMICA via rota dedicada — não passa pelo bulk sync (que
+     poderia ressuscitar a nota a partir de uma lista stale de outra aba). */
+  _apiFetch(`/api/clients/${c.id}/optimizations/${entryId}`, { method: 'DELETE' })
+    .then(updated => {
+      if (updated && updated.id) {
+        const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
+        if (idx !== -1) {
+          CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
+          localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+        }
+      }
+    }).catch(() => saveClients()); // fallback: bulk sync se DELETE falhar
+
   renderOtimHistory(c);
   renderEsteira();
 }
