@@ -1,0 +1,36 @@
+# ============================================================
+# Netlify — EloMarketing SPA
+# ============================================================
+
+[build]
+  publish = "."          # pasta raiz (o index.html já é o build final)
+
+# Rotas legais públicas (exigência Google Ads API) — servidas ANTES do catch-all
+[[redirects]]
+  from   = "/politica-de-privacidade"
+  to     = "/politica-de-privacidade/index.html"
+  status = 200
+
+[[redirects]]
+  from   = "/termos-de-uso"
+  to     = "/termos-de-uso/index.html"
+  status = 200
+
+# SPA redirect — demais rotas caem no index.html (evita 404 no refresh)
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# Headers de segurança
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options       = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy       = "strict-origin-when-cross-origin"
