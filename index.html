@@ -18948,7 +18948,25 @@ function setMondayStatus(taskId, status) {
     showNotification(`❌ Falha ao salvar no servidor — status revertido para "${prevStatus}". Verifique sua conexão.`, 'error');
   };
 
-  updateTaskInDB(taskId, patch, 1, _rollback);
+  // ── Conclusão é IMUTÁVEL: NUNCA reverter "Pronto" por falha transitória ──────
+  // Bug clássico relatado pela equipe ("marquei como concluída e voltou pra aberto"):
+  // ao concluir durante um cold-start do Render (ou um 500 momentâneo), as tentativas
+  // de PUT falhavam e o _rollback DESFAZIA a conclusão — contradizendo toda a blindagem
+  // de Pronto (Regra 2 do poll/load) que existe justamente para preservar e RE-ENVIAR
+  // conclusões. Para Pronto, mantemos o estado otimista, marcamos como pendente
+  // (_localUpdatedAt) e deixamos o poll/load re-enviarem quando o servidor acordar.
+  // Sem reversão visual — a tarefa permanece concluída.
+  const _onDoneFailSoft = () => {
+    const task = TASKS_DATA.find(x => x.id === taskId);
+    if (!task) return;
+    task._localUpdatedAt = Date.now(); // garante re-envio pelas Regras 1/2 de merge
+    saveTasks();
+    showNotification('⏳ Conclusão registrada — será sincronizada assim que o servidor responder.', 'warn');
+  };
+
+  // Pronto → falha não reverte (re-sincroniza); demais status mantêm rollback normal.
+  const _onFail = (status === 'Pronto') ? _onDoneFailSoft : _rollback;
+  updateTaskInDB(taskId, patch, 1, _onFail);
   saveTasks(); renderTasksGrid(); updateNavBadges();
   showNotification(`Status → ${status}`, 'ok');
 }
