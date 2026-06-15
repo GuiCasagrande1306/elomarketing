@@ -18920,8 +18920,8 @@ function setMondayStatus(taskId, status) {
     //     (o backend também recusa PATCH em tarefa Pronto, mas paramos aqui também).
     // 2º) captura o tempo final acumulado.
     // 3º) só então o payload consolidado (status + timeSpent + timer null) é enviado.
-    const elapsed = (Date.now() - new Date(t.timerStartedAt).getTime()) / 1000;
-    t.timeSpent      = (t.timeSpent || 0) + elapsed;
+    const elapsed = _safeGapSecs(t.timerStartedAt); // NaN-safe + clampa gap de dias
+    t.timeSpent      = Math.min((Number(t.timeSpent) || 0) + elapsed, MAX_TIMER_SECS); // teto de segurança
     t.timerStartedAt = null;
     patch.timeSpent      = t.timeSpent;
     patch.timerStartedAt = null;
@@ -18994,6 +18994,53 @@ function deleteTaskRow(taskId) {
 let _tasksTimerTick       = null; // tick a cada 1 s (atualiza display)
 let _timerPersistInterval = null; // checkpoint a cada 15 s (persiste ao servidor)
 
+// Teto operacional: um cronômetro contínuo acima disto é tratado como esquecido.
+const MAX_TIMER_SECS = 12 * 3600; // 12h
+
+/**
+ * Calcula o gap (em segundos) desde a âncora do timer, à PROVA de:
+ *  • NaN / data inválida   → retorna 0 (nunca propaga NaN ao banco);
+ *  • relógio para trás      → negativo vira 0;
+ *  • intervalos de dias     → clampa no teto (um único gap nunca passa de MAX_TIMER_SECS),
+ *    evitando que um timer esquecido por dias estoure o display ou o registro.
+ */
+function _safeGapSecs(anchorISO) {
+  if (!anchorISO) return 0;
+  const a = new Date(anchorISO).getTime();
+  if (!Number.isFinite(a)) return 0;
+  const gap = (Date.now() - a) / 1000;
+  if (!Number.isFinite(gap) || gap < 0) return 0;
+  return Math.min(gap, MAX_TIMER_SECS);
+}
+
+/**
+ * Pausa automaticamente um cronômetro esquecido. Se o tempo efetivo
+ * (timeSpent + gap) passou do teto, trunca no teto, zera a âncora e
+ * persiste — em memória, localStorage e servidor. Retorna true se pausou.
+ */
+function _autoPauseRunawayTimer(t) {
+  if (!t || !t.timerStartedAt) return false;
+  const total = (Number(t.timeSpent) || 0) + _safeGapSecs(t.timerStartedAt);
+  if (total <= MAX_TIMER_SECS) return false;
+  t.timeSpent       = MAX_TIMER_SECS; // trunca o excesso
+  t.timerStartedAt  = null;           // para o cronômetro
+  t._localUpdatedAt = Date.now();
+  if (currentUser) {
+    _apiFetch(`/api/tasks/${t.id}/timer`, {
+      method: 'PATCH',
+      body: JSON.stringify({ timeSpent: MAX_TIMER_SECS, timerStartedAt: null }),
+    }).catch(() => {
+      _apiFetch(`/api/tasks/${t.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ timeSpent: MAX_TIMER_SECS, timerStartedAt: null, updated_by: currentUser?.id || '' }),
+      }).catch(() => {});
+    });
+  }
+  saveTasks();
+  showNotification(`⏸️ Cronômetro de "${t.title || 'tarefa'}" passou de ${Math.floor(MAX_TIMER_SECS/3600)}h e foi pausado automaticamente (provável esquecimento).`, 'warn');
+  return true;
+}
+
 function _formatTaskTime(secs) {
   secs = Math.floor(secs || 0);
   if (secs <= 0) return '0s';
@@ -19008,14 +19055,17 @@ function _formatTaskTime(secs) {
 function _startTimerTick() {
   if (_tasksTimerTick) return; // já rodando
   _tasksTimerTick = setInterval(() => {
+    let stoppedAny = false;
     document.querySelectorAll('[data-timer-id]').forEach(el => {
       const taskId = el.dataset.timerId;
       const t = TASKS_DATA.find(x => x.id === taskId);
       if (!t || !t.timerStartedAt) return;
-      const elapsed = (t.timeSpent || 0) + (Date.now() - new Date(t.timerStartedAt).getTime()) / 1000;
+      if (_autoPauseRunawayTimer(t)) { stoppedAny = true; return; }
+      const elapsed = (Number(t.timeSpent) || 0) + _safeGapSecs(t.timerStartedAt);
       el.textContent = _formatTaskTime(elapsed);
       el.className = 'm-timer m-timer-running';
     });
+    if (stoppedAny) { renderTasksGrid(); updateNavBadges(); if (!_hasRunningTimers()) _stopTimerTick(); }
   }, 1000);
 
   // Checkpoint periódico: a cada 15 s persiste o tempo acumulado ao servidor.
@@ -19042,8 +19092,9 @@ function _persistTimerCheckpoint() {
   let changed = false;
   TASKS_DATA.forEach(t => {
     if (!t.timerStartedAt || normalizeTaskStatus(t.status) !== 'Em Andamento') return;
-    const elapsed    = (now - new Date(t.timerStartedAt).getTime()) / 1000;
-    const totalSpent = (t.timeSpent || 0) + elapsed;
+    if (_autoPauseRunawayTimer(t)) { changed = true; return; } // timer esquecido → pausa e trunca
+    const elapsed    = _safeGapSecs(t.timerStartedAt);
+    const totalSpent = (Number(t.timeSpent) || 0) + elapsed;
     const newAnchor  = new Date(now).toISOString();
     // Move tempo decorrido para timeSpent e reseta âncora para agora
     t.timeSpent      = totalSpent;
