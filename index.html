@@ -3885,53 +3885,15 @@
               </select>
             </div>
 
-            <!-- ── Métricas de Destaque (escolha 3) — card roxo dinâmico ── -->
-            <div class="form-group">
-              <label class="form-label">
-                Métricas de Destaque
-                <span style="font-weight:400;text-transform:none;color:var(--text3)">(escolha 3)</span>
-                <span id="rep-metrics-count" style="font-weight:700;color:var(--accent2);margin-left:4px">0/3</span>
-              </label>
-              <div id="rep-metrics-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-              <button class="rep-save-default-btn" id="rep-save-default-btn" onclick="salvarMetricasPadrao()">
-                <i class="ti ti-device-floppy"></i> 💾 Salvar como Padrão do Cliente
-              </button>
-            </div>
-
-            <!-- ── KPI Switches — ligam/desligam métricas da prévia ── -->
-            <div id="rep-kpi-area" style="display:none;margin-bottom:12px">
-              <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">
-                <i class="ti ti-sliders" style="margin-right:4px"></i>KPIs ativos
-              </div>
-              <div id="rep-kpi-switches-list"></div>
-            </div>
-
-            <!-- ── Fontes de dados ativas para o cliente selecionado ── -->
-            <div id="rep-datasources" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-              <span class="rep-ds-label">Fontes:</span>
-              <span id="rep-ds-meta" class="rep-ds-badge meta inactive" title="Meta Ads">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 9.39 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z"/></svg>
-                Meta Ads
-              </span>
-              <span id="rep-ds-gads" class="rep-ds-badge gads inactive" title="Google Ads">
-                <svg width="11" height="11" viewBox="0 0 48 48" fill="none"><path d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" fill="#FFC107"/><path d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" fill="#FF3D00"/><path d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" fill="#4CAF50"/><path d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" fill="#1976D2"/></svg>
-                Google Ads
-              </span>
-            </div>
-
-            <div style="display:flex;gap:8px">
-              <button id="rep-ia-btn" class="btn btn-ghost btn-sm" style="flex:1" onclick="gerarAnaliseIA()">
-                <i class="ti ti-sparkles"></i> Gerar análise IA
-              </button>
-              <button id="rep-pdf-btn" class="btn btn-primary btn-sm" style="flex:1" onclick="exportarRelatorioPDF()"><i class="ti ti-file-pdf"></i> Exportar PDF</button>
-            </div>
+            <!-- Métricas de destaque agora são definidas no cadastro do cliente.
+                 A tela de relatórios lê client.defaultMetrics silenciosamente. -->
           </div>
 
           <!-- Bloco de texto para o cliente -->
           <div class="card" style="background:rgba(34,211,160,0.05);border-color:rgba(34,211,160,0.2)">
             <div class="card-header">
               <div class="card-title"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i> Texto para o cliente</div>
-              <button class="btn btn-ghost btn-sm" onclick="copyReportMsg()"><i class="ti ti-copy"></i> Copiar</button>
+              <button class="btn btn-primary btn-sm" onclick="copyReportMsg()" style="font-weight:700;box-shadow:0 2px 8px rgba(34,211,160,0.25)"><i class="ti ti-copy"></i> Copiar</button>
             </div>
             <textarea id="rep-wa-msg" rows="9"
               placeholder="Selecione um cliente e um template para gerar a mensagem."
@@ -3966,9 +3928,21 @@
               </label>
             </div>
 
-            <button id="rep-send-btn" onclick="sendReportViaWhatsApp()" class="btn btn-primary btn-sm" style="width:100%;margin-top:12px">
-              <i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp
-            </button>
+            <!-- ── Bloco de ação: passos finais ── -->
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+              <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">
+                <i class="ti ti-flag-3" style="margin-right:4px"></i>Passos finais
+              </div>
+              <div style="display:flex;gap:8px">
+                <button id="rep-ia-btn" class="btn btn-ghost btn-sm" style="flex:1" onclick="gerarAnaliseIA()">
+                  <i class="ti ti-sparkles"></i> Gerar análise IA
+                </button>
+                <button id="rep-pdf-btn" class="btn btn-ghost btn-sm" style="flex:1" onclick="exportarRelatorioPDF()"><i class="ti ti-file-pdf"></i> Exportar PDF</button>
+              </div>
+              <button id="rep-send-btn" onclick="sendReportViaWhatsApp()" class="btn btn-primary btn-sm" style="width:100%;margin-top:8px">
+                <i class="ti ti-brand-whatsapp"></i> Enviar via WhatsApp
+              </button>
+            </div>
           </div>
 
         </div>
@@ -5008,6 +4982,15 @@
             <div class="invest-rows" id="cl-inv-rows"></div>
           </div>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <i class="ti ti-sparkles" style="color:var(--accent2);margin-right:4px"></i>Métricas de Destaque do Relatório
+          <span style="font-weight:400;text-transform:none;color:var(--text3)">(escolha até 3)</span>
+          <span id="cl-form-metrics-count" style="font-weight:700;color:var(--accent2);margin-left:4px">0/3</span>
+        </label>
+        <div id="cl-form-metrics-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Estas 3 métricas aparecem em destaque no card roxo do relatório deste cliente.</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button type="button" class="btn btn-ghost" style="flex:1" onclick="closeNewClientModal()">Cancelar</button>
@@ -9809,6 +9792,7 @@ function openNewClientModal(id) {
   document.getElementById('cl-form-investment').value   = '';
   document.getElementById('cl-form-dia-otimizacao').value    = '';
   document.getElementById('cl-form-categoria').value         = 'elo_marketing';
+  _clEditMetrics = [...REP_METRICS_DEFAULT]; // métricas de destaque (default para novo cliente)
   const _grpJidReset  = document.getElementById('cl-form-wa-group-jid');
   const _grpNameReset = document.getElementById('cl-form-wa-group-name');
   const _grpClearReset = document.getElementById('cl-form-wa-group-clear');
@@ -9860,6 +9844,10 @@ function openNewClientModal(id) {
       if (_grpNameEl) _grpNameEl.value = c.whatsapp_group_name || '';
       if (_grpClear)  _grpClear.style.display = c.whatsapp_group_jid ? '' : 'none';
       document.getElementById('cl-form-categoria').value         = c.categoria || 'elo_marketing';
+      // Métricas de destaque salvas no perfil do cliente
+      _clEditMetrics = (Array.isArray(c.defaultMetrics) && c.defaultMetrics.length)
+        ? c.defaultMetrics.slice(0, 3)
+        : [...REP_METRICS_DEFAULT];
       // restore meta account dropdown — wait for accounts if cache is empty
       if (META_AD_ACCOUNTS.length > 0) {
         metaDdSetValue(c.meta_ad_account_id || '');
@@ -9924,6 +9912,7 @@ function openNewClientModal(id) {
     }
   }
   // Novo cliente sem investimentos: accordion vazio, nenhuma linha automática
+  _renderClMetricChips(); // chips de métricas de destaque (default p/ novo, salvas p/ edição)
   document.getElementById('client-add-overlay').classList.add('open');
   setTimeout(() => document.getElementById('cl-form-name').focus(), 50);
 }
@@ -10745,7 +10734,7 @@ function saveNewClient() {
 
   if (clEditingId) {
     const idx = CLIENTS.list.findIndex(c => c.id === clEditingId);
-    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, logoUrl, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, ...socialFields });
+    if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, logoUrl, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, defaultMetrics: [..._clEditMetrics], ...socialFields });
   } else {
     CLIENTS.list.push({
       id: `cl-${CLIENTS.nextId++}`,
@@ -10754,6 +10743,7 @@ function saveNewClient() {
       meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
       color: CL_COLORS[(CLIENTS.list.length) % CL_COLORS.length],
       investments, dia_otimizacao,
+      defaultMetrics: [..._clEditMetrics],
       ultima_otimizacao: '', historico_otimizacoes: [],
       ...socialFields
     });
@@ -12083,23 +12073,36 @@ function _repClientSelect(id, name) {
     display.style.color = id ? 'var(--text)' : 'var(--text3)';
   }
   _repClientClose();
-  // Reseta template e KPI switches para o novo cliente
+  // ── Velocidade de operação: limpa o relatório anterior NA HORA ───────────────
+  // Evita que o colaborador copie/envie dados do cliente errado enquanto a nova
+  // prévia (assíncrona) ainda está sendo montada.
+  _clearReportOutput();
+  // Reseta template para o novo cliente
   const tplSel = document.getElementById('rep-template');
   if (tplSel) tplSel.value = '';
-  const kpiArea = document.getElementById('rep-kpi-area');
-  if (kpiArea) kpiArea.style.display = 'none';
   _repKpiState = {};
   // Auto-seleciona template pelo segmento do cliente
   const client = CLIENTS.list.find(c => c.id === id);
   if (client) {
-    // ── Carrega as métricas de destaque salvas no perfil do cliente ──
+    // ── Lê silenciosamente as métricas de destaque do cadastro do cliente ──
+    // (a escolha é feita na tela de cadastro/edição de cliente, não aqui)
     _repMetrics = (Array.isArray(client.defaultMetrics) && client.defaultMetrics.length)
       ? client.defaultMetrics.slice(0, 3)
       : [...REP_METRICS_DEFAULT];
-    _renderRepMetricChips();
     _tplAutoSelectBySeg(client);
   }
   updateReportPreview();
+}
+
+/* ── Limpa a saída do relatório (texto + capa) instantaneamente ────────────── */
+function _clearReportOutput() {
+  const msg = document.getElementById('rep-wa-msg');
+  if (msg) msg.value = '';
+  ['rep-cover-v1', 'rep-cover-v2', 'rep-cover-v3'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = '—';
+  });
+  const nm = document.getElementById('rep-cover-name');   if (nm) nm.textContent = '—';
+  const pd = document.getElementById('rep-cover-period'); if (pd) pd.textContent = '—';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -12662,6 +12665,36 @@ const REP_METRIC_CATALOG = {
 };
 const REP_METRICS_DEFAULT = ['investimento', 'leads', 'cpl'];
 let _repMetrics = [...REP_METRICS_DEFAULT];
+
+// ── Seleção de métricas de destaque no CADASTRO/EDIÇÃO do cliente ───────────
+// (Movido da tela de relatórios para cá: o gestor define as 3 métricas ao
+//  editar o cliente; os relatórios apenas leem client.defaultMetrics.)
+let _clEditMetrics = [...REP_METRICS_DEFAULT];
+
+function _renderClMetricChips() {
+  const wrap = document.getElementById('cl-form-metrics-chips');
+  if (!wrap) return;
+  const full = _clEditMetrics.length >= 3;
+  wrap.innerHTML = Object.entries(REP_METRIC_CATALOG).map(([key, m]) => {
+    const active   = _clEditMetrics.includes(key);
+    const disabled = !active && full;
+    return `<span class="rep-metric-chip ${active?'active':''} ${disabled?'disabled':''}"
+                  onclick="_toggleClMetric('${key}')">${m.emoji} ${m.label}${active?' ✨':''}</span>`;
+  }).join('');
+  const cnt = document.getElementById('cl-form-metrics-count');
+  if (cnt) cnt.textContent = `${_clEditMetrics.length}/3`;
+}
+
+function _toggleClMetric(key) {
+  const i = _clEditMetrics.indexOf(key);
+  if (i >= 0) {
+    _clEditMetrics.splice(i, 1);
+  } else {
+    if (_clEditMetrics.length >= 3) { showNotification('Escolha no máximo 3 métricas de destaque.', 'warn'); return; }
+    _clEditMetrics.push(key);
+  }
+  _renderClMetricChips();
+}
 
 // Calcula o valor formatado de uma métrica a partir do client + snapshot
 function _repMetricValue(key, client, snapshot) {
