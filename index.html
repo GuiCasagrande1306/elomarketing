@@ -3024,22 +3024,24 @@
   .rep-kpi-switch input:checked + .rep-kpi-switch-track { background:var(--accent2); }
   .rep-kpi-switch input:checked + .rep-kpi-switch-track::after { transform:translateX(14px); }
 
-  /* ── Chips de Métricas de Destaque — alto contraste ── */
+  /* ── Chips de Métricas de Destaque — botões de alto contraste ── */
   .rep-metric-chip {
-    display:inline-flex; align-items:center; gap:5px; padding:7px 13px;
-    border-radius:12px; font-size:12px; font-weight:600; cursor:pointer;
-    border:2px solid var(--border); background:var(--bg3); color:var(--text3);
-    transition:all 0.18s ease; user-select:none;
+    display:inline-flex; align-items:center; gap:7px; padding:8px 14px;
+    border-radius:12px; font-size:12.5px; font-weight:500; cursor:pointer;
+    border:1.5px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.05); color:var(--text2);
+    transition:all 0.16s ease; user-select:none; white-space:nowrap; line-height:1.1;
   }
-  .rep-metric-chip:hover { border-color:var(--text3); color:var(--text2); }
-  /* ATIVO: roxo vivo, borda marcante, sombra forte */
+  .rep-metric-chip:hover {
+    background:rgba(255,255,255,0.10); border-color:rgba(255,255,255,0.28); color:var(--text);
+  }
+  /* SELECIONADO: preenchimento ROXO SÓLIDO da marca, texto branco, sombra forte */
   .rep-metric-chip.active {
-    background:var(--accent); border-color:#A78BFA; color:#fff;
-    box-shadow:0 4px 14px rgba(108,99,255,0.45); transform:translateY(-1px);
+    background:var(--accent); border-color:transparent; color:#fff; font-weight:600;
+    box-shadow:0 4px 14px rgba(108,99,255,0.45);
   }
-  .rep-metric-chip.active:hover { border-color:#C4B5FD; color:#fff; }
+  .rep-metric-chip.active:hover { background:#5b53e8; border-color:transparent; color:#fff; }
   .rep-metric-chip.disabled { opacity:0.35; cursor:not-allowed; }
-  .rep-metric-chip.disabled:hover { border-color:var(--border); color:var(--text3); }
   /* Botão Salvar como Padrão */
   .rep-save-default-btn {
     display:inline-flex; align-items:center; gap:5px; padding:5px 10px; margin-top:8px;
@@ -4980,7 +4982,7 @@
         <input type="text" id="cl-form-metrics-search" class="form-input" placeholder="🔍 Buscar métrica..."
                autocomplete="off" oninput="_clMetricFilter(this.value)" style="margin-bottom:8px">
         <div id="cl-form-metrics-chips"
-             style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;padding:2px 4px 2px 2px"></div>
+             style="display:flex;flex-wrap:wrap;gap:8px;max-height:184px;overflow-y:auto;padding:2px 4px 2px 2px"></div>
         <div style="font-size:10px;color:var(--text3);margin-top:6px">Aparecem no card roxo e no texto do relatório deste cliente, na ordem em que você seleciona.</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -12717,7 +12719,7 @@ function _renderClMetricChips() {
     wrap.innerHTML = entries.map(([key, m]) => {
       const active = _clEditMetrics.includes(key);
       return `<span class="rep-metric-chip ${active?'active':''}"
-                    onclick="_toggleClMetric('${key}')">${m.emoji} ${m.label}${active?' ✨':''}</span>`;
+                    onclick="_toggleClMetric('${key}')">${m.emoji} ${m.label}</span>`;
     }).join('');
   }
   const cnt = document.getElementById('cl-form-metrics-count');
@@ -12800,7 +12802,7 @@ function _renderRepMetricChips() {
   wrap.innerHTML = Object.entries(REP_METRIC_CATALOG).map(([key, m]) => {
     const active = _repMetrics.includes(key);
     return `<span class="rep-metric-chip ${active?'active':''}"
-                  onclick="_toggleRepMetric('${key}')">${m.emoji} ${m.label}${active?' ✨':''}</span>`;
+                  onclick="_toggleRepMetric('${key}')">${m.emoji} ${m.label}</span>`;
   }).join('');
   const cnt = document.getElementById('rep-metrics-count');
   if (cnt) cnt.textContent = `${_repMetrics.length} selecionada${_repMetrics.length !== 1 ? 's' : ''}`;
