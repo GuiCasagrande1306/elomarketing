@@ -3953,20 +3953,8 @@
             <div style="font-size:10px;opacity:0.7;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Relatório de Performance</div>
             <div id="rep-cover-name" style="font-size:22px;font-weight:700;margin-bottom:4px">—</div>
             <div id="rep-cover-period" style="font-size:14px;opacity:0.8">—</div>
-            <div style="margin-top:20px;display:flex;gap:16px">
-              <div style="flex:1;min-width:0">
-                <div id="rep-cover-v1" style="font-size:20px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
-                <div id="rep-cover-l1" style="font-size:10px;opacity:0.7">Investimento</div>
-              </div>
-              <div style="flex:1;min-width:0">
-                <div id="rep-cover-v2" style="font-size:20px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
-                <div id="rep-cover-l2" style="font-size:10px;opacity:0.7">Leads</div>
-              </div>
-              <div style="flex:1;min-width:0">
-                <div id="rep-cover-v3" style="font-size:20px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
-                <div id="rep-cover-l3" style="font-size:10px;opacity:0.7">CPL</div>
-              </div>
-            </div>
+            <!-- Slots dinâmicos: uma coluna por métrica selecionada (sem limite) -->
+            <div id="rep-cover-metrics" style="margin-top:20px;display:flex;flex-wrap:wrap;gap:16px 18px"></div>
           </div>
 
           <div class="card card-sm">
@@ -4986,11 +4974,14 @@
       <div class="form-group">
         <label class="form-label">
           <i class="ti ti-sparkles" style="color:var(--accent2);margin-right:4px"></i>Métricas de Destaque do Relatório
-          <span style="font-weight:400;text-transform:none;color:var(--text3)">(escolha até 3)</span>
-          <span id="cl-form-metrics-count" style="font-weight:700;color:var(--accent2);margin-left:4px">0/3</span>
+          <span style="font-weight:400;text-transform:none;color:var(--text3)">(selecione as que quiser)</span>
+          <span id="cl-form-metrics-count" style="font-weight:700;color:var(--accent2);margin-left:4px">0 selecionadas</span>
         </label>
-        <div id="cl-form-metrics-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-        <div style="font-size:10px;color:var(--text3);margin-top:6px">Estas 3 métricas aparecem em destaque no card roxo do relatório deste cliente.</div>
+        <input type="text" id="cl-form-metrics-search" class="form-input" placeholder="🔍 Buscar métrica..."
+               autocomplete="off" oninput="_clMetricFilter(this.value)" style="margin-bottom:8px">
+        <div id="cl-form-metrics-chips"
+             style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;padding:2px 4px 2px 2px"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Aparecem no card roxo e no texto do relatório deste cliente, na ordem em que você seleciona.</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button type="button" class="btn btn-ghost" style="flex:1" onclick="closeNewClientModal()">Cancelar</button>
@@ -9793,6 +9784,8 @@ function openNewClientModal(id) {
   document.getElementById('cl-form-dia-otimizacao').value    = '';
   document.getElementById('cl-form-categoria').value         = 'elo_marketing';
   _clEditMetrics = [...REP_METRICS_DEFAULT]; // métricas de destaque (default para novo cliente)
+  _clMetricSearch = '';
+  { const _ms = document.getElementById('cl-form-metrics-search'); if (_ms) _ms.value = ''; }
   const _grpJidReset  = document.getElementById('cl-form-wa-group-jid');
   const _grpNameReset = document.getElementById('cl-form-wa-group-name');
   const _grpClearReset = document.getElementById('cl-form-wa-group-clear');
@@ -9846,7 +9839,7 @@ function openNewClientModal(id) {
       document.getElementById('cl-form-categoria').value         = c.categoria || 'elo_marketing';
       // Métricas de destaque salvas no perfil do cliente
       _clEditMetrics = (Array.isArray(c.defaultMetrics) && c.defaultMetrics.length)
-        ? c.defaultMetrics.slice(0, 3)
+        ? [...c.defaultMetrics]
         : [...REP_METRICS_DEFAULT];
       // restore meta account dropdown — wait for accounts if cache is empty
       if (META_AD_ACCOUNTS.length > 0) {
@@ -12087,7 +12080,7 @@ function _repClientSelect(id, name) {
     // ── Lê silenciosamente as métricas de destaque do cadastro do cliente ──
     // (a escolha é feita na tela de cadastro/edição de cliente, não aqui)
     _repMetrics = (Array.isArray(client.defaultMetrics) && client.defaultMetrics.length)
-      ? client.defaultMetrics.slice(0, 3)
+      ? [...client.defaultMetrics]
       : [...REP_METRICS_DEFAULT];
     _tplAutoSelectBySeg(client);
   }
@@ -12098,9 +12091,7 @@ function _repClientSelect(id, name) {
 function _clearReportOutput() {
   const msg = document.getElementById('rep-wa-msg');
   if (msg) msg.value = '';
-  ['rep-cover-v1', 'rep-cover-v2', 'rep-cover-v3'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.textContent = '—';
-  });
+  const cm = document.getElementById('rep-cover-metrics'); if (cm) cm.innerHTML = '';
   const nm = document.getElementById('rep-cover-name');   if (nm) nm.textContent = '—';
   const pd = document.getElementById('rep-cover-period'); if (pd) pd.textContent = '—';
 }
@@ -12604,16 +12595,38 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
   // ── RESULTADOS GERAIS dirigido pelas métricas de destaque (_repMetrics) ──────
   // Cada métrica ativa imprime sua(s) linha(s); as demais não aparecem.
   const sel = (_repMetrics.length ? _repMetrics : REP_METRICS_DEFAULT);
+
+  // Derivações para as métricas estendidas (mesmas regras do card roxo)
+  const cpc         = cliques > 0 && investimentoTotal > 0 ? investimentoTotal / cliques : null;
+  const cpm         = impressoes > 0 && investimentoTotal > 0 ? investimentoTotal / impressoes * 1000 : null;
+  const ctr         = impressoes > 0 && cliques > 0 ? (cliques / impressoes * 100) : null;
+  const faturamento = snapshot?.faturamentoMetaAds ?? client.faturamentoMetaAds ?? 0;
+  const roas        = faturamento > 0 && investimentoTotal > 0 ? faturamento / investimentoTotal : null;
+  const compras     = snapshot?.purchaseCount ?? client.metaCompras ?? 0;
+  const custoCompra = compras > 0 && investimentoTotal > 0 ? investimentoTotal / compras : null;
+
+  // Mapa de chaves → linha(s) do texto. Espelha o REP_METRIC_CATALOG do card roxo.
   const linhasPorMetrica = {
     investimento:   [`💰 Investimento total: R$ ${fmtBRL(investimentoTotal)}`],
-    alcance:        [
-      `👥 Alcance: ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
-      `👀 Impressões: ${impressoes > 0 ? fmtN(impressoes) : '—'}`,
-    ],
+    cpc:            [`🖱️ CPC (custo por clique): ${cpc != null ? 'R$ ' + fmtBRL(cpc) : '—'}`],
+    cpm:            [`📊 CPM (custo por mil): ${cpm != null ? 'R$ ' + fmtBRL(cpm) : '—'}`],
+    ctr:            [`⚡ CTR (taxa de clique): ${ctr != null ? ctr.toFixed(2).replace('.',',') + '%' : '—'}`],
+    roas:           [`🚀 ROAS: ${roas != null ? roas.toFixed(2).replace('.',',') + 'x' : '—'}`],
+    faturamento:    [`💵 Faturamento: ${faturamento > 0 ? 'R$ ' + fmtBRL(faturamento) : '—'}`],
+    cliques:        [`👆 Cliques no link: ${cliques > 0 ? fmtN(cliques) : '—'}`],
+    impressoes:     [`👀 Impressões: ${impressoes > 0 ? fmtN(impressoes) : '—'}`],
+    alcance:        [`👥 Alcance: ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`],
+    frequencia:     [`🔁 Frequência: ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`],
+    video_3s:       [`▶️ Visualizações de vídeo (3s): —`],
+    video_50:       [`⏯️ Visualizações de vídeo (50%): —`],
+    video_100:      [`🎬 Visualizações de vídeo (100%): —`],
+    engajamento:    [`❤️ Engajamento: —`],
     conversas:      [`💬 Total de conversas geradas: ${totalConversas > 0 ? totalConversas : '—'}`],
-    custo_conversa: [`📉 Custo por conversa: ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`],
+    custo_conversa: [`☕ Custo por conversa: ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`],
     leads:          [`🎯 Total de leads gerados: ${leads > 0 ? fmtN(leads) : '—'}`],
     cpl:            [`📉 Custo por lead: ${cplLead != null ? 'R$ ' + fmtBRL(cplLead) : '—'}`],
+    compras:        [`🛒 Compras: ${compras > 0 ? fmtN(compras) : '—'}`],
+    custo_compra:   [`🏷️ Custo por compra: ${custoCompra != null ? 'R$ ' + fmtBRL(custoCompra) : '—'}`],
   };
 
   const resultados = [];
@@ -12656,12 +12669,29 @@ function _buildMsgEcommerce(client, periodStr) {
    do client + snapshot. O card e a IA leem _repMetrics (3 chaves).
 ════════════════════════════════════════════════════════════════ */
 const REP_METRIC_CATALOG = {
-  investimento:   { emoji:'💰', label:'Investimento',     short:'Investimento',  aiName:'Investimento' },
-  alcance:        { emoji:'👥', label:'Alcance / Impr.',  short:'Alcance',       aiName:'Alcance e Impressões' },
-  conversas:      { emoji:'💬', label:'Conversas',        short:'Conversas',     aiName:'Conversas iniciadas' },
-  leads:          { emoji:'🎯', label:'Leads / Conv.',    short:'Leads',         aiName:'Leads / Conversões' },
-  cpl:            { emoji:'📉', label:'CPL',               short:'CPL',           aiName:'Custo por Lead (CPL)' },
-  custo_conversa: { emoji:'☕', label:'Custo/Conversa',   short:'Custo/Conversa',aiName:'Custo por Conversa' },
+  // ── Financeiras / Retorno ──
+  investimento:   { emoji:'💰', label:'Investimento (Gasto)',            short:'Investimento',  aiName:'Investimento' },
+  cpc:            { emoji:'🖱️', label:'CPC (Custo por Clique)',          short:'CPC',           aiName:'Custo por Clique (CPC)' },
+  cpm:            { emoji:'📊', label:'CPM (Custo por Mil)',             short:'CPM',           aiName:'Custo por Mil Impressões (CPM)' },
+  ctr:            { emoji:'⚡', label:'CTR (Taxa de Clique)',            short:'CTR',           aiName:'Taxa de Clique (CTR)' },
+  roas:           { emoji:'🚀', label:'ROAS (Retorno)',                 short:'ROAS',          aiName:'Retorno sobre investimento (ROAS)' },
+  faturamento:    { emoji:'💵', label:'Valor de Conversão (Faturamento)',short:'Faturamento',  aiName:'Valor de Conversão / Faturamento' },
+  // ── Engajamento / Cliques ──
+  cliques:        { emoji:'👆', label:'Cliques no Link',                short:'Cliques',       aiName:'Cliques no Link' },
+  impressoes:     { emoji:'👀', label:'Impressões',                     short:'Impressões',    aiName:'Impressões' },
+  alcance:        { emoji:'👥', label:'Alcance',                        short:'Alcance',       aiName:'Alcance' },
+  frequencia:     { emoji:'🔁', label:'Frequência',                     short:'Frequência',    aiName:'Frequência' },
+  video_3s:       { emoji:'▶️', label:'Visualizações de Vídeo (3s)',     short:'Vídeo 3s',      aiName:'Visualizações de Vídeo 3s' },
+  video_50:       { emoji:'⏯️', label:'Visualizações de Vídeo (50%)',    short:'Vídeo 50%',     aiName:'Visualizações de Vídeo 50%' },
+  video_100:      { emoji:'🎬', label:'Visualizações de Vídeo (100%)',   short:'Vídeo 100%',    aiName:'Visualizações de Vídeo 100%' },
+  engajamento:    { emoji:'❤️', label:'Engajamento',                    short:'Engajamento',   aiName:'Engajamento' },
+  // ── Conversão / Ação ──
+  conversas:      { emoji:'💬', label:'Conversas Iniciadas',            short:'Conversas',     aiName:'Conversas iniciadas' },
+  custo_conversa: { emoji:'☕', label:'Custo por Conversa',             short:'Custo/Conversa',aiName:'Custo por Conversa' },
+  leads:          { emoji:'🎯', label:'Leads / Cadastros',              short:'Leads',         aiName:'Leads / Cadastros' },
+  cpl:            { emoji:'📉', label:'CPL (Custo por Lead)',           short:'CPL',           aiName:'Custo por Lead (CPL)' },
+  compras:        { emoji:'🛒', label:'Compras',                       short:'Compras',       aiName:'Compras' },
+  custo_compra:   { emoji:'🏷️', label:'Custo por Compra',              short:'Custo/Compra',  aiName:'Custo por Compra' },
 };
 const REP_METRICS_DEFAULT = ['investimento', 'leads', 'cpl'];
 let _repMetrics = [...REP_METRICS_DEFAULT];
@@ -12670,66 +12700,110 @@ let _repMetrics = [...REP_METRICS_DEFAULT];
 // (Movido da tela de relatórios para cá: o gestor define as 3 métricas ao
 //  editar o cliente; os relatórios apenas leem client.defaultMetrics.)
 let _clEditMetrics = [...REP_METRICS_DEFAULT];
+let _clMetricSearch = '';
+
+const _normTxt = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 function _renderClMetricChips() {
   const wrap = document.getElementById('cl-form-metrics-chips');
   if (!wrap) return;
-  const full = _clEditMetrics.length >= 3;
-  wrap.innerHTML = Object.entries(REP_METRIC_CATALOG).map(([key, m]) => {
-    const active   = _clEditMetrics.includes(key);
-    const disabled = !active && full;
-    return `<span class="rep-metric-chip ${active?'active':''} ${disabled?'disabled':''}"
-                  onclick="_toggleClMetric('${key}')">${m.emoji} ${m.label}${active?' ✨':''}</span>`;
-  }).join('');
+  const term = _normTxt(_clMetricSearch.trim());
+  const entries = Object.entries(REP_METRIC_CATALOG).filter(([, m]) =>
+    !term || _normTxt(`${m.label} ${m.short}`).includes(term));
+
+  if (!entries.length) {
+    wrap.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:8px 2px">Nenhuma métrica encontrada para "${_clMetricSearch}".</div>`;
+  } else {
+    wrap.innerHTML = entries.map(([key, m]) => {
+      const active = _clEditMetrics.includes(key);
+      return `<span class="rep-metric-chip ${active?'active':''}"
+                    onclick="_toggleClMetric('${key}')">${m.emoji} ${m.label}${active?' ✨':''}</span>`;
+    }).join('');
+  }
   const cnt = document.getElementById('cl-form-metrics-count');
-  if (cnt) cnt.textContent = `${_clEditMetrics.length}/3`;
+  if (cnt) { const n = _clEditMetrics.length; cnt.textContent = `${n} selecionada${n !== 1 ? 's' : ''}`; }
 }
+
+// Filtro da barra de busca — re-renderiza preservando a seleção atual
+function _clMetricFilter(v) { _clMetricSearch = v || ''; _renderClMetricChips(); }
 
 function _toggleClMetric(key) {
   const i = _clEditMetrics.indexOf(key);
   if (i >= 0) {
-    _clEditMetrics.splice(i, 1);
+    _clEditMetrics.splice(i, 1);            // desmarca
   } else {
-    if (_clEditMetrics.length >= 3) { showNotification('Escolha no máximo 3 métricas de destaque.', 'warn'); return; }
-    _clEditMetrics.push(key);
+    _clEditMetrics.push(key);               // marca — sem limite de seleção
   }
   _renderClMetricChips();
 }
 
-// Calcula o valor formatado de uma métrica a partir do client + snapshot
+// Calcula o valor formatado de uma métrica a partir do client + snapshot.
+// Lê o snapshot de forma DEFENSIVA (vários formatos: bruto da Meta, consolidado
+// Meta+Google, delivery) e devolve "—" quando a métrica não tem dado disponível.
 function _repMetricValue(key, client, snapshot) {
   const fmtBRL = n => 'R$' + (n||0).toLocaleString('pt-BR', { maximumFractionDigits: (n%1===0?0:1) }).replace('.',',');
   const fmtN   = n => (n>0) ? Math.round(n).toLocaleString('pt-BR') : '—';
-  const inv      = snapshot?.inv ?? client.investment ?? 0;
-  const reach    = snapshot?.reach ?? 0;
-  const impr     = snapshot?.impressions ?? 0;
-  const conversas= snapshot?.conversas ?? 0;
+  const fmtPct = n => (n).toFixed(2).replace('.',',') + '%';
+  const fmtX   = n => (n).toFixed(2).replace('.',',') + 'x';
+  const num    = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const s = snapshot || {};
+
+  // Investimento: Meta + Google, com vários nomes de campo possíveis
+  const inv = (num(s.metaSpend) + num(s.gads && s.gads.spend)) || num(s.inv) || num(s.spend) || num(client.investment);
+  const reach     = num(s.reach);
+  const impr      = num(s.impressions) + num(s.gads && s.gads.impressions);
+  const clicks    = (num(s.inlineLinkClicks) > 0 ? num(s.inlineLinkClicks) : num(s.clicks)) + num(s.gads && s.gads.clicks);
+  const freq      = num(s.frequency) || (reach > 0 ? impr / reach : 0);
+  const conversas = num(s.conversas);
   const isLeadsClient = !['delivery','ecommerce'].includes(client.segment);
-  const leads    = snapshot?.leads != null ? snapshot.leads : (isLeadsClient ? Math.round(client.goal?.realized || 0) : 0);
+  const leads     = (s.leads != null ? num(s.leads)
+                   : s.leadsCount != null ? num(s.leadsCount)
+                   : (isLeadsClient ? Math.round(num(client.goal && client.goal.realized)) : 0));
+  const fat       = num(s.faturamentoMetaAds) || num(s.fat) || num(client.faturamentoMetaAds);
+  const compras   = (s.purchaseCount != null ? num(s.purchaseCount)
+                   : s.compras != null ? num(s.compras) : num(client.metaCompras));
+  const v3   = num(s.video3s)  || num(s.videoViews3s);
+  const v50  = num(s.video50)  || num(s.videoViews50);
+  const v100 = num(s.video100) || num(s.videoViews100);
+  const engaj = num(s.engajamento) || num(s.postEngagement);
+
   switch (key) {
     case 'investimento':   return inv > 0 ? fmtBRL(inv) : '—';
-    case 'alcance':        return reach > 0 ? fmtN(reach) : (impr > 0 ? fmtN(impr) : '—');
+    case 'cpc':            return (clicks > 0 && inv > 0) ? fmtBRL(inv / clicks) : '—';
+    case 'cpm':            return (impr > 0 && inv > 0) ? fmtBRL(inv / impr * 1000) : '—';
+    case 'ctr':            return (impr > 0 && clicks > 0) ? fmtPct(clicks / impr * 100) : '—';
+    case 'roas':           return (fat > 0 && inv > 0) ? fmtX(fat / inv) : '—';
+    case 'faturamento':    return fat > 0 ? fmtBRL(fat) : '—';
+    case 'cliques':        return clicks > 0 ? fmtN(clicks) : '—';
+    case 'impressoes':     return impr > 0 ? fmtN(impr) : '—';
+    case 'alcance':        return reach > 0 ? fmtN(reach) : '—';
+    case 'frequencia':     return freq > 0 ? freq.toFixed(2).replace('.',',') : '—';
+    case 'video_3s':       return v3 > 0 ? fmtN(v3) : '—';
+    case 'video_50':       return v50 > 0 ? fmtN(v50) : '—';
+    case 'video_100':      return v100 > 0 ? fmtN(v100) : '—';
+    case 'engajamento':    return engaj > 0 ? fmtN(engaj) : '—';
     case 'conversas':      return conversas > 0 ? fmtN(conversas) : '—';
+    case 'custo_conversa': return (conversas > 0 && inv > 0) ? fmtBRL(inv / conversas) : '—';
     case 'leads':          return leads > 0 ? fmtN(leads) : '—';
     case 'cpl':            return (leads > 0 && inv > 0) ? fmtBRL(inv / leads) : '—';
-    case 'custo_conversa': return (conversas > 0 && inv > 0) ? fmtBRL(inv / conversas) : '—';
+    case 'compras':        return compras > 0 ? fmtN(compras) : '—';
+    case 'custo_compra':   return (compras > 0 && inv > 0) ? fmtBRL(inv / compras) : '—';
     default:               return '—';
   }
 }
 
-// Renderiza os chips de seleção (máx 3 ativos) — ativo brilha em roxo + ✨
+// (Legado — a tela de relatórios não tem mais chooser; a seleção mora no cadastro
+//  do cliente. Mantido sem trava de 3 por consistência.)
 function _renderRepMetricChips() {
   const wrap = document.getElementById('rep-metrics-chips');
   if (!wrap) return;
-  const full = _repMetrics.length >= 3;
   wrap.innerHTML = Object.entries(REP_METRIC_CATALOG).map(([key, m]) => {
-    const active   = _repMetrics.includes(key);
-    const disabled = !active && full; // bloqueia 4ª seleção
-    return `<span class="rep-metric-chip ${active?'active':''} ${disabled?'disabled':''}"
+    const active = _repMetrics.includes(key);
+    return `<span class="rep-metric-chip ${active?'active':''}"
                   onclick="_toggleRepMetric('${key}')">${m.emoji} ${m.label}${active?' ✨':''}</span>`;
   }).join('');
   const cnt = document.getElementById('rep-metrics-count');
-  if (cnt) cnt.textContent = `${_repMetrics.length}/3`;
+  if (cnt) cnt.textContent = `${_repMetrics.length} selecionada${_repMetrics.length !== 1 ? 's' : ''}`;
 }
 
 // Salva as métricas atuais como padrão do cliente no banco (PUT /api/clients/:id)
@@ -12767,38 +12841,40 @@ function _toggleRepMetric(key) {
   if (i >= 0) {
     _repMetrics.splice(i, 1);            // desmarca
   } else {
-    if (_repMetrics.length >= 3) {
-      showNotification('Escolha no máximo 3 métricas de destaque.', 'warn');
-      return;
-    }
-    _repMetrics.push(key);               // marca (mantém ordem de clique)
+    _repMetrics.push(key);               // marca — sem limite de seleção
   }
   _renderRepMetricChips();
   updateReportPreview(); // atualiza o card roxo na hora
 }
 
-/* ── Atualiza capa (coluna direita) — 3 slots dinâmicos via _repMetrics ────── */
+/* ── Atualiza capa (coluna direita) — N slots dinâmicos via _repMetrics ────── */
 function _updateRepCover(client, snapshot, periodStr, seg) {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('rep-cover-name',   client.name);
   set('rep-cover-period', periodStr);
 
-  // Preenche os 3 slots conforme as métricas selecionadas (fallback: defaults)
-  const metrics = (_repMetrics.length ? _repMetrics : REP_METRICS_DEFAULT).slice(0, 3);
-  for (let s = 0; s < 3; s++) {
-    const key = metrics[s];
-    const cfg = key ? REP_METRIC_CATALOG[key] : null;
-    set(`rep-cover-v${s+1}`, cfg ? _repMetricValue(key, client, snapshot) : '—');
-    set(`rep-cover-l${s+1}`, cfg ? cfg.short : '');
+  // Uma coluna por métrica selecionada (sem limite) — quebra em linhas via flex-wrap
+  const metrics = (_repMetrics.length ? _repMetrics : REP_METRICS_DEFAULT);
+  const wrap = document.getElementById('rep-cover-metrics');
+  if (wrap) {
+    wrap.innerHTML = metrics.map(key => {
+      const cfg = REP_METRIC_CATALOG[key];
+      if (!cfg) return '';
+      const val = _repMetricValue(key, client, snapshot);
+      return `<div style="flex:1 1 28%;min-width:84px">
+                <div style="font-size:20px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${val}</div>
+                <div style="font-size:10px;opacity:0.7">${cfg.short}</div>
+              </div>`;
+    }).join('') || `<div style="font-size:12px;opacity:0.7">Sem métricas selecionadas</div>`;
   }
 }
 
 /* ── Mostra estado de carregamento no card de capa ── */
 function _setRepCoverLoading(isLoading) {
-  ['rep-cover-v1','rep-cover-v2','rep-cover-v3'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = isLoading ? '…' : el.textContent;
-  });
+  if (isLoading) {
+    const wrap = document.getElementById('rep-cover-metrics');
+    if (wrap) [...wrap.querySelectorAll('div > div:first-child')].forEach(el => { el.textContent = '…'; });
+  }
   const btn = document.getElementById('rep-period-btn');
   if (btn) btn.style.opacity = isLoading ? '0.5' : '1';
 }
@@ -12838,8 +12914,9 @@ async function updateReportPreview() {
     REPORT_STATE.fetching  = false;
     /* Limpa a UI imediatamente — sem dados do cliente anterior visíveis */
     if (msgEl) { if (msgEl.tagName === 'TEXTAREA') { msgEl.value = ''; msgEl.placeholder = '⏳ Carregando dados do cliente…'; } else { msgEl.innerHTML = '<span style="color:var(--text3);font-size:11px">⏳ Carregando dados do cliente…</span>'; } }
-    ['rep-cover-name','rep-cover-period','rep-cover-v1','rep-cover-v2','rep-cover-v3']
+    ['rep-cover-name','rep-cover-period']
       .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+    const _cm = document.getElementById('rep-cover-metrics'); if (_cm) _cm.innerHTML = '';
   }
 
   if (!client) {
