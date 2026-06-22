@@ -12627,8 +12627,22 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
     custo_conversa: [`☕ Custo por conversa: ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`],
     leads:          [`🎯 Total de leads gerados: ${leads > 0 ? fmtN(leads) : '—'}`],
     cpl:            [`📉 Custo por lead: ${cplLead != null ? 'R$ ' + fmtBRL(cplLead) : '—'}`],
-    compras:        [`🛒 Compras: ${compras > 0 ? fmtN(compras) : '—'}`],
-    custo_compra:   [`🏷️ Custo por compra: ${custoCompra != null ? 'R$ ' + fmtBRL(custoCompra) : '—'}`],
+    compras:           [`🛍️ Compras: ${compras > 0 ? fmtN(compras) : '—'}`],
+    custo_compra:      [`💸 Custo por compra (CPA): ${custoCompra != null ? 'R$ ' + fmtBRL(custoCompra) : '—'}`],
+    todos_cliques:     [`🖱️ Cliques (todos): ${fmtN(snapshot?.clicks ?? 0)}`],
+    ctr_link:          [`⚡ CTR (cliques no link): ${ctr != null ? ctr.toFixed(2).replace('.',',') + '%' : '—'}`],
+    cliques_mensagem:  [`📱 Cliques para iniciar conversa: —`],
+    visitas_perfil:    [`📸 Visitas ao perfil do Instagram: ${visitasPerfil > 0 ? fmtN(visitasPerfil) : '—'}`],
+    curtidas_pagina:   [`👍 Curtidas / Seguidores da Página: —`],
+    novos_seguidores:  [`✨ Novos Seguidores (Instagram): ${novosSeguidores != null && novosSeguidores > 0 ? fmtN(novosSeguidores) : '—'}`],
+    reacoes_post:      [`🥰 Reações na publicação: —`],
+    comentarios_post:  [`💬 Comentários no post: —`],
+    compartilhamentos: [`📣 Compartilhamentos: —`],
+    salvamentos:       [`💾 Salvamentos do post: —`],
+    cadastros_site:    [`📝 Cadastros no site (pixel): —`],
+    add_carrinho:      [`🛒 Adições ao carrinho: ${(snapshot?.addToCartCount ?? 0) > 0 ? fmtN(snapshot.addToCartCount) : '—'}`],
+    inicio_checkout:   [`💳 Finalizações de compra iniciadas: —`],
+    thruplay:          [`🎬 Visualizações ThruPlay: —`],
   };
 
   const resultados = [];
@@ -12671,29 +12685,47 @@ function _buildMsgEcommerce(client, periodStr) {
    do client + snapshot. O card e a IA leem _repMetrics (3 chaves).
 ════════════════════════════════════════════════════════════════ */
 const REP_METRIC_CATALOG = {
-  // ── Financeiras / Retorno ──
-  investimento:   { emoji:'💰', label:'Investimento (Gasto)',            short:'Investimento',  aiName:'Investimento' },
-  cpc:            { emoji:'🖱️', label:'CPC (Custo por Clique)',          short:'CPC',           aiName:'Custo por Clique (CPC)' },
-  cpm:            { emoji:'📊', label:'CPM (Custo por Mil)',             short:'CPM',           aiName:'Custo por Mil Impressões (CPM)' },
-  ctr:            { emoji:'⚡', label:'CTR (Taxa de Clique)',            short:'CTR',           aiName:'Taxa de Clique (CTR)' },
-  roas:           { emoji:'🚀', label:'ROAS (Retorno)',                 short:'ROAS',          aiName:'Retorno sobre investimento (ROAS)' },
-  faturamento:    { emoji:'💵', label:'Valor de Conversão (Faturamento)',short:'Faturamento',  aiName:'Valor de Conversão / Faturamento' },
-  // ── Engajamento / Cliques ──
-  cliques:        { emoji:'👆', label:'Cliques no Link',                short:'Cliques',       aiName:'Cliques no Link' },
-  impressoes:     { emoji:'👀', label:'Impressões',                     short:'Impressões',    aiName:'Impressões' },
-  alcance:        { emoji:'👥', label:'Alcance',                        short:'Alcance',       aiName:'Alcance' },
-  frequencia:     { emoji:'🔁', label:'Frequência',                     short:'Frequência',    aiName:'Frequência' },
-  video_3s:       { emoji:'▶️', label:'Visualizações de Vídeo (3s)',     short:'Vídeo 3s',      aiName:'Visualizações de Vídeo 3s' },
-  video_50:       { emoji:'⏯️', label:'Visualizações de Vídeo (50%)',    short:'Vídeo 50%',     aiName:'Visualizações de Vídeo 50%' },
-  video_100:      { emoji:'🎬', label:'Visualizações de Vídeo (100%)',   short:'Vídeo 100%',    aiName:'Visualizações de Vídeo 100%' },
-  engajamento:    { emoji:'❤️', label:'Engajamento',                    short:'Engajamento',   aiName:'Engajamento' },
-  // ── Conversão / Ação ──
-  conversas:      { emoji:'💬', label:'Conversas Iniciadas',            short:'Conversas',     aiName:'Conversas iniciadas' },
-  custo_conversa: { emoji:'☕', label:'Custo por Conversa',             short:'Custo/Conversa',aiName:'Custo por Conversa' },
-  leads:          { emoji:'🎯', label:'Leads / Cadastros',              short:'Leads',         aiName:'Leads / Cadastros' },
-  cpl:            { emoji:'📉', label:'CPL (Custo por Lead)',           short:'CPL',           aiName:'Custo por Lead (CPL)' },
-  compras:        { emoji:'🛒', label:'Compras',                       short:'Compras',       aiName:'Compras' },
-  custo_compra:   { emoji:'🏷️', label:'Custo por Compra',              short:'Custo/Compra',  aiName:'Custo por Compra' },
+  // ── Performance Central ──
+  investimento:     { emoji:'💰', label:'Investimento (Gasto)',                  short:'Investimento',      aiName:'Investimento',                     keywords:'gasto investimento custo dinheiro total' },
+  alcance:          { emoji:'👥', label:'Alcance',                               short:'Alcance',            aiName:'Alcance',                          keywords:'alcance pessoas publico unicos' },
+  impressoes:       { emoji:'👀', label:'Impressões',                            short:'Impressões',         aiName:'Impressões',                       keywords:'impressoes views exibicoes telas' },
+  frequencia:       { emoji:'🔁', label:'Frequência',                            short:'Frequência',         aiName:'Frequência',                       keywords:'frequencia repeticao vezes' },
+  cpm:              { emoji:'📊', label:'CPM (Custo por Mil)',                   short:'CPM',                aiName:'Custo por Mil Impressões (CPM)',    keywords:'cpm custo por mil impressoes' },
+  // ── Cliques e Direcionamento ──
+  todos_cliques:    { emoji:'🖱️', label:'Cliques (Todos)',                       short:'Cliques (Todos)',    aiName:'Cliques (Todos)',                   keywords:'cliques todos cliques interacao' },
+  cliques:          { emoji:'🔗', label:'Cliques no Link',                       short:'Cliques Link',       aiName:'Cliques no Link',                  keywords:'cliques no link arrasta pra cima saiba mais site' },
+  cpc:              { emoji:'💵', label:'CPC (Custo por Clique)',                short:'CPC',                aiName:'Custo por Clique (CPC)',            keywords:'cpc custo por clique no link' },
+  ctr:              { emoji:'📈', label:'CTR (Taxa de Clique — Todos)',          short:'CTR Todos',          aiName:'Taxa de Clique (CTR)',              keywords:'ctr todos taxa de clique' },
+  ctr_link:         { emoji:'⚡', label:'CTR (Cliques no Link)',                 short:'CTR Link',           aiName:'CTR Cliques no Link',               keywords:'ctr link taxa de clique link' },
+  // ── Mensagens e Conversas ──
+  conversas:        { emoji:'💬', label:'Conversas Iniciadas',                   short:'Conversas',          aiName:'Conversas iniciadas',               keywords:'conversas whatsapp direct messenger mensagens iniciadas' },
+  custo_conversa:   { emoji:'☕', label:'Custo por Conversa',                    short:'Custo/Conversa',     aiName:'Custo por Conversa',                keywords:'custo por conversa cpc mensagens whatsapp valor' },
+  cliques_mensagem: { emoji:'📱', label:'Cliques para Iniciar Conversa',         short:'Cliques WPP',        aiName:'Cliques para Iniciar Conversa',     keywords:'cliques whatsapp iniciar conversa' },
+  // ── Redes Sociais e Engajamento ──
+  visitas_perfil:   { emoji:'📸', label:'Visitas ao Perfil do Instagram',        short:'Visitas Perfil',     aiName:'Visitas ao Perfil do Instagram',    keywords:'visitas perfil instagram insta cliques instagram' },
+  curtidas_pagina:  { emoji:'👍', label:'Curtidas / Seguidores da Página',       short:'Curtidas Página',    aiName:'Curtidas da Página',                keywords:'curtidas pagina seguidores facebook face curtidas' },
+  novos_seguidores: { emoji:'✨', label:'Novos Seguidores (Instagram)',           short:'Seguidores',         aiName:'Novos Seguidores Instagram',        keywords:'seguidores instagram insta seguidores novos seguidores' },
+  engajamento:      { emoji:'❤️', label:'Engajamento com o Post',                short:'Engajamento',        aiName:'Engajamento',                       keywords:'engajamento curtidas comentarios compartilhamentos salvamentos' },
+  reacoes_post:     { emoji:'🥰', label:'Reações na Publicação',                 short:'Reações',            aiName:'Reações na Publicação',             keywords:'reacoes likes amei' },
+  comentarios_post: { emoji:'💬', label:'Comentários no Post',                   short:'Comentários',        aiName:'Comentários no Post',               keywords:'comentarios responder' },
+  compartilhamentos:{ emoji:'📣', label:'Compartilhamentos',                     short:'Compartilhamentos',  aiName:'Compartilhamentos',                 keywords:'compartilhamentos enviar encaminhar' },
+  salvamentos:      { emoji:'💾', label:'Salvamentos do Post',                   short:'Salvamentos',        aiName:'Salvamentos do Post',               keywords:'salvamentos salvar guardados' },
+  // ── Captação de Leads ──
+  leads:            { emoji:'🎯', label:'Leads / Cadastros',                     short:'Leads',              aiName:'Leads / Cadastros',                keywords:'leads cadastros formulario captacao' },
+  cpl:              { emoji:'📉', label:'CPL (Custo por Lead)',                  short:'CPL',                aiName:'Custo por Lead (CPL)',              keywords:'cpl custo por lead valor cadastro' },
+  cadastros_site:   { emoji:'📝', label:'Cadastros Concluídos no Site',          short:'Cadastros Site',     aiName:'Cadastros Concluídos no Site',      keywords:'cadastros site pixel leads' },
+  // ── Vendas e E-commerce ──
+  compras:          { emoji:'🛍️', label:'Compras (Vendas)',                      short:'Compras',            aiName:'Compras',                           keywords:'compras vendas pedidos pixel' },
+  custo_compra:     { emoji:'💸', label:'Custo por Compra (CPA)',                short:'Custo/Compra',       aiName:'Custo por Compra',                  keywords:'custo por compra cpa custo pedido' },
+  faturamento:      { emoji:'🪙', label:'Faturamento (Valor das Compras)',        short:'Faturamento',        aiName:'Valor de Conversão / Faturamento',  keywords:'faturamento receita valor de conversao ganho' },
+  roas:             { emoji:'🚀', label:'ROAS (Retorno sobre Anúncio)',           short:'ROAS',               aiName:'Retorno sobre investimento (ROAS)', keywords:'roas retorno sobre investimento lucro' },
+  add_carrinho:     { emoji:'🛒', label:'Adições ao Carrinho',                   short:'Carrinho',           aiName:'Adições ao Carrinho',               keywords:'carrinho add cart compras site' },
+  inicio_checkout:  { emoji:'💳', label:'Finalizações de Compra Iniciadas',      short:'Checkout',           aiName:'Checkout Iniciado',                 keywords:'checkout iniciou compra quase comprou' },
+  // ── Vídeos ──
+  thruplay:         { emoji:'🎬', label:'Visualizações (ThruPlay)',              short:'ThruPlay',           aiName:'Visualizações ThruPlay',            keywords:'thruplay video 15s visualizacoes completas' },
+  video_3s:         { emoji:'▶️', label:'Visualizações de Vídeo (3s)',           short:'Vídeo 3s',           aiName:'Visualizações de Vídeo 3s',         keywords:'video 3s views video' },
+  video_50:         { emoji:'🌗', label:'Visualizações de Vídeo (50%)',          short:'Vídeo 50%',          aiName:'Visualizações de Vídeo 50%',        keywords:'video 50 metade do video' },
+  video_100:        { emoji:'💯', label:'Visualizações de Vídeo (100%)',         short:'Vídeo 100%',         aiName:'Visualizações de Vídeo 100%',       keywords:'video 100 assistiu tudo fim do video' },
 };
 const REP_METRICS_DEFAULT = ['investimento', 'leads', 'cpl'];
 let _repMetrics = [...REP_METRICS_DEFAULT];
@@ -12711,7 +12743,7 @@ function _renderClMetricChips() {
   if (!wrap) return;
   const term = _normTxt(_clMetricSearch.trim());
   const entries = Object.entries(REP_METRIC_CATALOG).filter(([, m]) =>
-    !term || _normTxt(`${m.label} ${m.short}`).includes(term));
+    !term || _normTxt(`${m.label} ${m.short} ${m.keywords || ''}`).includes(term));
 
   if (!entries.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:8px 2px">Nenhuma métrica encontrada para "${_clMetricSearch}".</div>`;
@@ -12788,9 +12820,23 @@ function _repMetricValue(key, client, snapshot) {
     case 'custo_conversa': return (conversas > 0 && inv > 0) ? fmtBRL(inv / conversas) : '—';
     case 'leads':          return leads > 0 ? fmtN(leads) : '—';
     case 'cpl':            return (leads > 0 && inv > 0) ? fmtBRL(inv / leads) : '—';
-    case 'compras':        return compras > 0 ? fmtN(compras) : '—';
-    case 'custo_compra':   return (compras > 0 && inv > 0) ? fmtBRL(inv / compras) : '—';
-    default:               return '—';
+    case 'compras':           return compras > 0 ? fmtN(compras) : '—';
+    case 'custo_compra':      return (compras > 0 && inv > 0) ? fmtBRL(inv / compras) : '—';
+    case 'todos_cliques':     { const tc = num(s.clicks); return tc > 0 ? fmtN(tc) : '—'; }
+    case 'ctr_link':          return (impr > 0 && clicks > 0) ? fmtPct(clicks / impr * 100) : '—';
+    case 'cliques_mensagem':  { const mc = num(s.messagingWelcomeClicks); return mc > 0 ? fmtN(mc) : '—'; }
+    case 'visitas_perfil':    { const vp = num(s.visitasPerfil); return vp > 0 ? fmtN(vp) : '—'; }
+    case 'curtidas_pagina':   { const pl = num(s.pageLikes); return pl > 0 ? fmtN(pl) : '—'; }
+    case 'novos_seguidores':  { const ns = num(s.novosSeguidores); return ns > 0 ? fmtN(ns) : '—'; }
+    case 'reacoes_post':      { const rp = num(s.postReactions); return rp > 0 ? fmtN(rp) : '—'; }
+    case 'comentarios_post':  { const cp2 = num(s.postComments); return cp2 > 0 ? fmtN(cp2) : '—'; }
+    case 'compartilhamentos': { const sh = num(s.postShares); return sh > 0 ? fmtN(sh) : '—'; }
+    case 'salvamentos':       { const sv = num(s.postSaves); return sv > 0 ? fmtN(sv) : '—'; }
+    case 'cadastros_site':    { const cs = num(s.registrationsCompleted); return cs > 0 ? fmtN(cs) : '—'; }
+    case 'add_carrinho':      { const ac = num(s.addToCartCount); return ac > 0 ? fmtN(ac) : '—'; }
+    case 'inicio_checkout':   { const ic = num(s.initiateCheckout); return ic > 0 ? fmtN(ic) : '—'; }
+    case 'thruplay':          { const tp = num(s.thruplay) || num(s.thruplays); return tp > 0 ? fmtN(tp) : '—'; }
+    default:                  return '—';
   }
 }
 
