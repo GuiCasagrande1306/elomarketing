@@ -13482,11 +13482,10 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     : `&date_preset=this_month`;
 
   const enc = encodeURIComponent(token);
-  // Campos: spend/actions (contém profile_visits/followers) + reach, impressions,
-  // clicks, inline_link_clicks, frequency. O nó 'actions' é obrigatório — sem ele
-  // o Meta não devolve as métricas de perfil (seguidores/visitas).
+  // Inclui instagram_profile_follows como campo direto: para campanhas de mensagens
+  // esse valor NÃO vem em actions[] — só aparece como coluna de insight direta.
   const url = `https://graph.facebook.com/v19.0/${acctId}/insights` +
-              `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency&level=account${dateParam}` +
+              `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency,instagram_profile_follows&level=account${dateParam}` +
               `&access_token=${enc}`;
 
   try {
@@ -13495,8 +13494,26 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     if (json.error || !json.data?.length) return null;
 
     const d    = json.data[0];
-    const acts = d.actions       || [];
-    const avs  = d.action_values || [];
+
+    // Agrega actions/action_values + campo direto instagram_profile_follows de TODOS os rows.
+    // Para campanhas de mensagens o Meta não inclui seguidores em actions[] — só no campo direto.
+    const allActs = [], allAvs = [];
+    let instagramFollowsDirect = 0;
+    json.data.forEach(row => {
+      instagramFollowsDirect += parseInt(row.instagram_profile_follows || 0);
+      (row.actions       || []).forEach(a => {
+        const ex = allActs.find(x => x.action_type === a.action_type);
+        if (ex) ex.value = String(Number(ex.value) + Number(a.value || 0));
+        else allActs.push({ ...a });
+      });
+      (row.action_values || []).forEach(a => {
+        const ex = allAvs.find(x => x.action_type === a.action_type);
+        if (ex) ex.value = String(Number(ex.value) + Number(a.value || 0));
+        else allAvs.push({ ...a });
+      });
+    });
+    const acts = allActs;
+    const avs  = allAvs;
 
     // _pickMetricByPriority evita dupla-contagem dos aliases Meta
     const purchaseCount      = _pickMetricByPriority(acts, _META_SALE_PRIORITY, parseInt);
@@ -13527,30 +13544,41 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
       'onsite_conversion.total_messaging_connection',
     ], parseInt);
 
-    // ── DEBUG: lista exata de actions que o Meta devolveu para este cliente ──
-    // Abra o Console do navegador (F12 → Console) para ver as chaves reais.
-    console.log('[DEBUG META ACTIONS]:', JSON.stringify(acts));
+    // ── DIAGNÓSTICO: lista TODAS as action_types que a Meta devolveu ────────────
+    // Abra o Console do navegador (F12 → Console) para inspecionar as chaves reais.
+    console.log(`====== [DIAGNÓSTICO META API] ${client.name} — ${acts.length} action_types ======`);
+    if (acts.length > 0) {
+      console.log('action_types disponíveis:',
+        acts.map(a => `${a.action_type}=${a.value}`).join(' | '));
+    } else {
+      console.warn('[DIAGNÓSTICO] acts vazio — verifique se "actions" está no fields da requisição');
+    }
 
-    // ── Visitas ao perfil — chave OFICIAL EXATA do Gerenciador ────────────────
-    // Lê estritamente 'instagram_profile_visits'. NÃO usa page_engagement nem
-    // outbound_clicks como fallback (esses inflavam o valor para ~44.001).
-    // Quando o Meta não devolve essa action (depende do tipo de campanha),
-    // o valor fica 0 → exibido como "—" (honesto, nunca um número errado).
+    // ── Visitas ao perfil ─────────────────────────────────────────────────────
     const visitasArray  = acts.find(a => a.action_type === 'instagram_profile_visits');
     const visitasPerfil = visitasArray ? Number(visitasArray.value) : 0;
 
-    // ── Novos seguidores — chaves conhecidas do Gerenciador (pick-first) ────────
-    // Meta pode usar nomes ligeiramente diferentes dependendo do tipo de campanha.
-    const novosSeguidores = _pickMetricByPriority(acts, [
+    // ── Novos seguidores ──────────────────────────────────────────────────────
+    // Fonte 1 (direta): campo instagram_profile_follows — devolvido por campanhas de
+    //   mensagens onde o Meta NÃO inclui seguidores no array actions[].
+    // Fonte 2 (actions): para campanhas de objetivo "Seguidores / Visitas ao Perfil"
+    //   o valor vem em actions[] com uma das chaves abaixo.
+    const _FOLLOWERS_KEYS = [
+      'onsite_conversion.instagram_profile_follow',
+      'onsite_conversion.instagram_profile_followers',
+      'instagram_profile_follow',
       'instagram_profile_followers',
-      'onsite_conversion.instagram_profile_follows',
-      'follow',
-    ], Number);
+      'social_action:instagram_profile_follow',
+    ];
+    const followersFromActions = acts
+      .filter(a => _FOLLOWERS_KEYS.includes(a.action_type))
+      .reduce((sum, a) => sum + Number(a.value || 0), 0);
+    const novosSeguidores = instagramFollowsDirect > 0
+      ? instagramFollowsDirect
+      : followersFromActions;
 
-    console.log(`[fetchMetaReport] ${client.name} | conversas:${conversas} | seguidores:${novosSeguidores} | visitasPerfil:${visitasPerfil} | reach:${reach} | impr:${impressions} | clicks:${clicks} | freq:${frequency.toFixed(2)} | leads:${leadsCount}`);
-    if (acts.length > 0) {
-      console.log(`[fetchMetaReport] ${client.name} — action_types disponíveis:`, acts.map(a => `${a.action_type}=${a.value}`).join(', '));
-    }
+    console.log(`[fetchMetaReport] ${client.name} | seguidores:${novosSeguidores} (direto:${instagramFollowsDirect} / actions:${followersFromActions}) | conversas:${conversas} | visitasPerfil:${visitasPerfil} | reach:${reach} | impr:${impressions} | clicks:${clicks} | freq:${frequency.toFixed(2)} | leads:${leadsCount}`);
+    console.log(`====== [DIAGNÓSTICO META API] FIM — novosSeguidores: ${novosSeguidores} (fonte: ${instagramFollowsDirect > 0 ? 'campo direto' : 'actions[]'}) ======`);
 
     return {
       spend: parseFloat(d.spend||0),
