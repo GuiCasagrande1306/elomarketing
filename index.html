@@ -12615,6 +12615,8 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
   const roas        = faturamento > 0 && investimentoTotal > 0 ? faturamento / investimentoTotal : null;
   const compras     = snapshot?.purchaseCount ?? client.metaCompras ?? 0;
   const custoCompra = compras > 0 && investimentoTotal > 0 ? investimentoTotal / compras : null;
+  const ticketMedio = compras > 0 && faturamento > 0 ? faturamento / compras : null;
+  const carrinho    = snapshot?.addToCartCount ?? client.metaAddToCart ?? 0;
 
   // Mapa de chaves → linha(s) do texto. Espelha o REP_METRIC_CATALOG do card roxo.
   const linhasPorMetrica = {
@@ -12654,35 +12656,55 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
     thruplay:          [`🎬 Visualizações ThruPlay: —`],
   };
 
-  return [
-    `📈 RELATÓRIO DE TRÁFEGO PAGO – SEMANAL`,
+  const seg = client.segment || 'infoproduto';
+  const periodLabel = `${dataInicio} a ${dataFim}`;
+
+  const header = [
+    `Olá! 👋 Segue o resumo de *${periodLabel}*:`,
     ``,
-    `Cliente: ${client.name}`,
-    ``,
-    `Período: ${dataInicio} a ${dataFim}`,
-    ``,
-    `Objetivo: ${objetivo}`,
-    ``,
-    `🔢 RESULTADOS GERAIS`,
-    ``,
-    `💰 Investimento total: R$ ${fmtBRL(investimentoTotal)}`,
-    ``,
-    `💬 Total de conversas geradas: ${totalConversas > 0 ? fmtN(totalConversas) : '—'}`,
-    ``,
-    `📉 Custo por conversa (CPA): ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`,
-    ``,
-    `👥 Alcance: ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
-    ``,
-    `👀 Impressões: ${impressoes > 0 ? fmtN(impressoes) : '—'}`,
-    ``,
-    `🔁 Frequência média: ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`,
-    ``,
-    `👤 Novos seguidores (no período): ${novosSeguidores != null && novosSeguidores > 0 ? fmtN(novosSeguidores) : '—'}`,
-    ``,
-    `🔗 Cliques no link: ${cliques > 0 ? fmtN(cliques) : '—'}`,
-    ``,
-    `🎯 CPC (Custo por clique): ${cpc != null ? 'R$ ' + fmtBRL(cpc) : '—'}`,
   ];
+
+  let corpo;
+  if (seg === 'delivery' || seg === 'ecommerce') {
+    const isDelivery = seg === 'delivery';
+    corpo = [
+      `💰 *Investimento:* R$ ${fmtBRL(investimentoTotal)}`,
+      `👥 *Alcance:* ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
+      ...(seg === 'ecommerce' && carrinho > 0 ? [`🛒 *Adições ao Carrinho:* ${fmtN(carrinho)}`] : []),
+      `🛍️ *${isDelivery ? 'Pedidos' : 'Compras'}:* ${compras > 0 ? fmtN(compras) : '—'}`,
+      `💳 *Custo por ${isDelivery ? 'Pedido' : 'Compra'}:* ${custoCompra != null ? 'R$ ' + fmtBRL(custoCompra) : '—'}`,
+      `🖥️ *Ticket Médio:* ${ticketMedio != null ? 'R$ ' + fmtBRL(ticketMedio) : '—'}`,
+      `📝 *Faturamento:* ${faturamento > 0 ? 'R$ ' + fmtBRL(faturamento) : '—'}`,
+      `🚀 *ROAS:* ${roas != null ? roas.toFixed(2).replace('.',',') + 'x' : '—'}`,
+    ];
+  } else if (seg === 'negocio-local') {
+    corpo = [
+      `💰 *Investimento:* R$ ${fmtBRL(investimentoTotal)}`,
+      `👥 *Alcance:* ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
+      `👀 *Impressões:* ${impressoes > 0 ? fmtN(impressoes) : '—'}`,
+      `🔁 *Frequência:* ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`,
+      ...(totalConversas > 0
+        ? [`💬 *Conversas Geradas:* ${fmtN(totalConversas)}`,
+           `📉 *Custo por Conversa:* ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`]
+        : []),
+      `🔗 *Cliques no Link:* ${cliques > 0 ? fmtN(cliques) : '—'}`,
+      `🎯 *CPC:* ${cpc != null ? 'R$ ' + fmtBRL(cpc) : '—'}`,
+    ];
+  } else {
+    // infoproduto / leads (padrão)
+    corpo = [
+      `💰 *Investimento:* R$ ${fmtBRL(investimentoTotal)}`,
+      `👥 *Alcance:* ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
+      `💬 *Conversas Geradas:* ${totalConversas > 0 ? fmtN(totalConversas) : '—'}`,
+      `📉 *Custo por Conversa:* ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`,
+      `👀 *Impressões:* ${impressoes > 0 ? fmtN(impressoes) : '—'}`,
+      `🔁 *Frequência:* ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`,
+      `🔗 *Cliques no Link:* ${cliques > 0 ? fmtN(cliques) : '—'}`,
+      `🎯 *CPC:* ${cpc != null ? 'R$ ' + fmtBRL(cpc) : '—'}`,
+    ];
+  }
+
+  return [...header, ...corpo];
 }
 
 function _buildMsgEcommerce(client, periodStr) {
@@ -13148,11 +13170,17 @@ async function updateReportPreview() {
       clicks:           meta?.clicks           ?? 0,
       inlineLinkClicks: meta?.inlineLinkClicks ?? 0,
       frequency:        meta?.frequency        ?? 0,
-      novosSeguidores:  meta?.novosSeguidores  ?? null, // instagram_profile_followers da API Meta
+      novosSeguidores:     meta?.novosSeguidores     ?? null,
+      faturamentoMetaAds:  meta?.faturamentoMetaAds  ?? 0,
+      purchaseCount:       meta?.purchaseCount       ?? 0,
+      addToCartCount:      meta?.addToCartCount      ?? 0,
     };
 
     if (meta || gads) {
       console.log(`[updateReportPreview leads] meta.spend=${metaSpend?.toFixed(2)} gads.spend=${gadsSpend?.toFixed(2)} total=${totalSpend?.toFixed(2)} | metaLeads=${metaLeads} gadsConv=${gadsConv} combinado=${combinedLeads}`);
+    } else {
+      if (client.meta_ad_account_id) console.warn(`[updateReportPreview leads] Meta retornou null para ${client.name} — verifique o console acima para o motivo.`);
+      if (client.google_ads_customer_id) console.warn(`[updateReportPreview leads] Google Ads retornou null para ${client.name}.`);
     }
 
     REPORT_STATE.fetching  = false;
@@ -13478,7 +13506,7 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
   const from = fromDate || DR.from;
   const to   = toDate   || DR.to;
   const dateParam = (from && to)
-    ? `&time_range={"since":"${_toISO(from)}","until":"${_toISO(to)}"}`
+    ? `&time_range=${encodeURIComponent(JSON.stringify({since: _toISO(from), until: _toISO(to)}))}`
     : `&date_preset=this_month`;
 
   const enc = encodeURIComponent(token);
@@ -13486,10 +13514,22 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency&level=account${dateParam}` +
     `&access_token=${enc}`;
 
+  console.log(`[fetchMetaInsightsForReport] Buscando dados de ${client.name} | conta: ${acctId} | período: ${dateParam}`);
+
   try {
     const res  = await fetch(url);
     const json = await res.json();
-    if (json.error || !json.data?.length) return null;
+    if (json.error) {
+      console.warn(`[fetchMetaInsightsForReport] ERRO DA API META (${client.name}):`, json.error.code, json.error.type, json.error.message);
+      if (json.error.type === 'OAuthException') {
+        console.warn('[fetchMetaInsightsForReport] TOKEN EXPIRADO ou inválido — renovar o token Meta no painel de configurações.');
+      }
+      return null;
+    }
+    if (!json.data?.length) {
+      console.warn(`[fetchMetaInsightsForReport] SEM DADOS para ${client.name} no período selecionado (conta: ${acctId}).`);
+      return null;
+    }
 
     const d = json.data[0];
 
