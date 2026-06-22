@@ -13482,15 +13482,24 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     : `&date_preset=this_month`;
 
   const enc = encodeURIComponent(token);
-  // Inclui instagram_profile_follows como campo direto: para campanhas de mensagens
-  // esse valor NÃO vem em actions[] — só aparece como coluna de insight direta.
-  const url = `https://graph.facebook.com/v19.0/${acctId}/insights` +
-              `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency,instagram_profile_follows&level=account${dateParam}` +
-              `&access_token=${enc}`;
+  // Tenta incluir instagram_profile_follows; se a conta não suportar o campo,
+  // o Meta devolve erro e fazemos retry sem ele (não derruba as outras métricas).
+  const _baseFields = 'spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency';
+  const _mkUrl = (fields) =>
+    `https://graph.facebook.com/v19.0/${acctId}/insights` +
+    `?fields=${fields}&level=account${dateParam}&access_token=${enc}`;
 
   try {
-    const res  = await fetch(url);
-    const json = await res.json();
+    let res  = await fetch(_mkUrl(_baseFields + ',instagram_profile_follows'));
+    let json = await res.json();
+
+    // Campo rejeitado pela conta → retry sem ele (mantém todas as outras métricas)
+    if (json.error) {
+      console.warn('[fetchMetaReport] instagram_profile_follows rejeitado, retry sem ele:', json.error.message);
+      res  = await fetch(_mkUrl(_baseFields));
+      json = await res.json();
+    }
+
     if (json.error || !json.data?.length) return null;
 
     const d    = json.data[0];
