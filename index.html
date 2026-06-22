@@ -12643,7 +12643,7 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
     cliques_mensagem:  [`📱 Cliques para iniciar conversa: —`],
     visitas_perfil:    [`📸 Visitas ao perfil do Instagram: ${visitasPerfil > 0 ? fmtN(visitasPerfil) : '—'}`],
     curtidas_pagina:   [`👍 Curtidas / Seguidores da Página: —`],
-    novos_seguidores:  [`✨ Novos Seguidores (Instagram): ${novosSeguidores != null && novosSeguidores > 0 ? fmtN(novosSeguidores) : '—'}`],
+    novos_seguidores:  [`✨ Novos Seguidores (Instagram): ${novosSeguidores != null ? (novosSeguidores > 0 ? fmtN(novosSeguidores) : '0') : '—'}`],
     reacoes_post:      [`🥰 Reações na publicação: —`],
     comentarios_post:  [`💬 Comentários no post: —`],
     compartilhamentos: [`📣 Compartilhamentos: —`],
@@ -12677,7 +12677,7 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
     ``,
     `🔁 Frequência média: ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`,
     ``,
-    `👤 Novos seguidores (no período): ${novosSeguidores != null && novosSeguidores > 0 ? fmtN(novosSeguidores) : '—'}`,
+    `👤 Novos seguidores (no período): ${novosSeguidores != null ? (novosSeguidores > 0 ? fmtN(novosSeguidores) : '0') : '—'}`,
     ``,
     `🔗 Cliques no link: ${cliques > 0 ? fmtN(cliques) : '—'}`,
     ``,
@@ -12851,7 +12851,7 @@ function _repMetricValue(key, client, snapshot) {
     case 'cliques_mensagem':  { const mc = num(s.messagingWelcomeClicks); return mc > 0 ? fmtN(mc) : '—'; }
     case 'visitas_perfil':    { const vp = num(s.visitasPerfil); return vp > 0 ? fmtN(vp) : '—'; }
     case 'curtidas_pagina':   { const pl = num(s.pageLikes); return pl > 0 ? fmtN(pl) : '—'; }
-    case 'novos_seguidores':  { const ns = num(s.novosSeguidores); return ns > 0 ? fmtN(ns) : '—'; }
+    case 'novos_seguidores':  { const ns = num(s?.novosSeguidores); return ns > 0 ? fmtN(ns) : '0'; }
     case 'reacoes_post':      { const rp = num(s.postReactions); return rp > 0 ? fmtN(rp) : '—'; }
     case 'comentarios_post':  { const cp2 = num(s.postComments); return cp2 > 0 ? fmtN(cp2) : '—'; }
     case 'compartilhamentos': { const sh = num(s.postShares); return sh > 0 ? fmtN(sh) : '—'; }
@@ -13539,10 +13539,13 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     const visitasArray  = acts.find(a => a.action_type === 'instagram_profile_visits');
     const visitasPerfil = visitasArray ? Number(visitasArray.value) : 0;
 
-    // ── Novos seguidores — chave OFICIAL EXATA do Gerenciador ─────────────────
-    // Lê estritamente 'instagram_profile_followers' (coluna do Gerenciador).
-    const seguidoresArray = acts.find(a => a.action_type === 'instagram_profile_followers');
-    const novosSeguidores = seguidoresArray ? Number(seguidoresArray.value) : 0;
+    // ── Novos seguidores — chaves conhecidas do Gerenciador (pick-first) ────────
+    // Meta pode usar nomes ligeiramente diferentes dependendo do tipo de campanha.
+    const novosSeguidores = _pickMetricByPriority(acts, [
+      'instagram_profile_followers',
+      'onsite_conversion.instagram_profile_follows',
+      'follow',
+    ], Number);
 
     console.log(`[fetchMetaReport] ${client.name} | conversas:${conversas} | seguidores:${novosSeguidores} | visitasPerfil:${visitasPerfil} | reach:${reach} | impr:${impressions} | clicks:${clicks} | freq:${frequency.toFixed(2)} | leads:${leadsCount}`);
     if (acts.length > 0) {
