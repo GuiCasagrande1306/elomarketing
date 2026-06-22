@@ -10495,6 +10495,34 @@ function _recalcUltimaOtimizacao(c) {
   c.ultima_otimizacao = sorted[0].data;
 }
 
+/* Envia otimização ao servidor com até 3 tentativas (Render free tier acorda em ~15s).
+   method: 'POST' para nova entrada, 'PUT' para edição.
+   Notifica o colaborador se o servidor não confirmar após todas as tentativas.       */
+async function _syncOptimization(clientId, method, url, payload, attempt = 0) {
+  const updated = await _apiFetch(url, { method, body: JSON.stringify(payload) });
+
+  if (updated && updated.id) {
+    const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
+    if (idx !== -1) {
+      CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
+      localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+    }
+    console.log(`[Esteira] ${method} ${url} confirmado pelo servidor (tentativa ${attempt + 1})`);
+    if (attempt > 0) showNotification('✅ Otimização sincronizada com sucesso!', 'ok');
+    return;
+  }
+
+  if (attempt < 2) {
+    const delaySec = (attempt + 1) * 20;
+    console.warn(`[Esteira] ${method} ${url} não confirmado — retry ${attempt + 1}/3 em ${delaySec}s`);
+    if (attempt === 0) showNotification('⚡ Servidor acordando… salvando automaticamente em breve.', 'warn');
+    setTimeout(() => _syncOptimization(clientId, method, url, payload, attempt + 1), delaySec * 1000);
+  } else {
+    console.error(`[Esteira] ${method} ${url} falhou após 3 tentativas — dado preservado no localStorage`);
+    showNotification('⚠️ Otimização salva localmente. Abra o app novamente em 1 min para sincronizar.', 'warn');
+  }
+}
+
 async function saveOptimization() {
   if (!OTIM_CLIENT_ID) return;
   const c = CLIENTS.list.find(x => x.id === OTIM_CLIENT_ID);
@@ -10521,18 +10549,9 @@ async function saveOptimization() {
     _recalcUltimaOtimizacao(c);
     localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
 
-    _apiFetch(`/api/clients/${c.id}/optimizations/${editId}`, {
-      method: 'PUT',
-      body:   JSON.stringify({ texto_nota: nota })
-    }).then(updated => {
-      if (updated && updated.id) {
-        const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
-        if (idx !== -1) {
-          CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
-          localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
-        }
-      }
-    }).catch(() => saveClients()); // fallback: bulk sync se PUT falhar
+    _syncOptimization(c.id, 'PUT',
+      `/api/clients/${c.id}/optimizations/${editId}`,
+      { texto_nota: nota });
   } else {
     /* ---- NOVA ENTRADA: update otimista em memória + POST atômico ----
        Salva via endpoint dedicado (/api/clients/:id/optimizations) para evitar
@@ -10549,20 +10568,10 @@ async function saveOptimization() {
     // Persiste localStorage imediatamente (UX: dados não se perdem se fechar aba)
     localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
 
-    // POST atômico — não interfere com outros bulk syncs em voo
-    _apiFetch(`/api/clients/${c.id}/optimizations`, {
-      method: 'POST',
-      body:   JSON.stringify({ texto_nota: nota, autor: currentUser?.name || 'Usuário' })
-    }).then(updated => {
-      if (updated && updated.id) {
-        // Mescla resposta do servidor (IDs/datas confirmados) de volta em memória
-        const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
-        if (idx !== -1) {
-          CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
-          localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
-        }
-      }
-    }).catch(() => saveClients()); // fallback: bulk sync se POST falhar
+    // POST atômico com retry automático (Render free tier pode estar dormindo)
+    _syncOptimization(c.id, 'POST',
+      `/api/clients/${c.id}/optimizations`,
+      { texto_nota: nota, autor: currentUser?.name || 'Usuário' });
   }
 
   _otimClearContent();
