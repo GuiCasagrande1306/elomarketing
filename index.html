@@ -13482,28 +13482,21 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     : `&date_preset=this_month`;
 
   const enc = encodeURIComponent(token);
-  // Duas chamadas paralelas para não contaminar métricas principais com campos opcionais.
-  // Call 1: campos estáveis garantidos. Call 2: apenas instagram_profile_follows (isolada).
-  const _mkUrl = (fields) =>
-    `https://graph.facebook.com/v19.0/${acctId}/insights` +
-    `?fields=${fields}&level=account${dateParam}&access_token=${enc}`;
+  const url = `https://graph.facebook.com/v19.0/${acctId}/insights` +
+    `?fields=spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency&level=account${dateParam}` +
+    `&access_token=${enc}`;
 
   try {
-    const [jsonCore, jsonFollowers] = await Promise.all([
-      fetch(_mkUrl('spend,actions,action_values,reach,impressions,clicks,inline_link_clicks,frequency'))
-        .then(r => r.json()),
-      fetch(_mkUrl('instagram_profile_follows'))
-        .then(r => r.json())
-        .catch(() => null),
-    ]);
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (json.error || !json.data?.length) return null;
 
-    if (jsonCore.error || !jsonCore.data?.length) return null;
+    const d = json.data[0];
 
-    const d = jsonCore.data[0];
-
-    // Agrega actions/action_values de todos os rows do core (level=account → 1 row normalmente)
+    // Agrega actions/action_values de todos os rows (level=account → 1 row normalmente)
     const allActs = [], allAvs = [];
-    jsonCore.data.forEach(row => {
+    let instagramFollowsDirect = 0;
+    json.data.forEach(row => {
       (row.actions       || []).forEach(a => {
         const ex = allActs.find(x => x.action_type === a.action_type);
         if (ex) ex.value = String(Number(ex.value) + Number(a.value || 0));
@@ -13517,14 +13510,6 @@ async function fetchMetaInsightsForReport(client, fromDate, toDate) {
     });
     const acts = allActs;
     const avs  = allAvs;
-
-    // Campo direto de seguidores da chamada isolada (null/erro = 0, não afeta o core)
-    let instagramFollowsDirect = 0;
-    if (jsonFollowers && !jsonFollowers.error && jsonFollowers.data?.length) {
-      jsonFollowers.data.forEach(row => {
-        instagramFollowsDirect += parseInt(row.instagram_profile_follows || 0);
-      });
-    }
 
     // _pickMetricByPriority evita dupla-contagem dos aliases Meta
     const purchaseCount      = _pickMetricByPriority(acts, _META_SALE_PRIORITY, parseInt);
