@@ -12645,19 +12645,34 @@ function _buildMsgRelatorioSemanal(client, snapshot) {
     thruplay:          [`🎬 Visualizações ThruPlay: —`],
   };
 
-  const resultados = [];
-  sel.forEach(m => { (linhasPorMetrica[m] || []).forEach(l => resultados.push(l)); });
-  // Fallback de segurança: se nada selecionado, mostra ao menos o investimento
-  if (resultados.length === 0) resultados.push(linhasPorMetrica.investimento[0]);
-
   return [
-    `📈 *RELATÓRIO DE TRÁFEGO PAGO – SEMANAL*`,
+    `📈 RELATÓRIO DE TRÁFEGO PAGO – SEMANAL`,
+    ``,
     `Cliente: ${client.name}`,
+    ``,
     `Período: ${dataInicio} a ${dataFim}`,
+    ``,
     `Objetivo: ${objetivo}`,
     ``,
-    `🔢 *RESULTADOS GERAIS*`,
-    ...resultados,
+    `🔢 RESULTADOS GERAIS`,
+    ``,
+    `💰 Investimento total: R$ ${fmtBRL(investimentoTotal)}`,
+    ``,
+    `💬 Total de conversas geradas: ${totalConversas > 0 ? fmtN(totalConversas) : '—'}`,
+    ``,
+    `📉 Custo por conversa (CPA): ${cpl != null ? 'R$ ' + fmtBRL(cpl) : '—'}`,
+    ``,
+    `👥 Alcance: ${reach > 0 ? fmtN(reach) + ' pessoas' : '—'}`,
+    ``,
+    `👀 Impressões: ${impressoes > 0 ? fmtN(impressoes) : '—'}`,
+    ``,
+    `🔁 Frequência média: ${frequencia > 0 ? frequencia.toFixed(2).replace('.',',') : '—'}`,
+    ``,
+    `👤 Novos seguidores (no período): ${novosSeguidores != null && novosSeguidores > 0 ? fmtN(novosSeguidores) : '—'}`,
+    ``,
+    `🔗 Cliques no link: ${cliques > 0 ? fmtN(cliques) : '—'}`,
+    ``,
+    `🎯 CPC (Custo por clique): ${cpc != null ? 'R$ ' + fmtBRL(cpc) : '—'}`,
   ];
 }
 
