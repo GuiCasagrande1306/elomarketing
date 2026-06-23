@@ -4526,6 +4526,31 @@
       </div>
     </div><!-- /fin-tab-recorrencias -->
 
+    <!-- ── Painel lateral: detalhes do contrato recorrente ── -->
+    <div id="rec-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1200" onclick="closeRecDetail()"></div>
+    <div id="rec-detail-panel" style="position:fixed;top:0;right:-440px;width:min(420px,100vw);height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:1201;transition:right .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden">
+      <!-- header -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div>
+          <div id="rec-detail-name" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px"></div>
+          <div id="rec-detail-status"></div>
+        </div>
+        <button onclick="closeRecDetail()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;padding:2px;line-height:1"><i class="ti ti-x"></i></button>
+      </div>
+      <!-- métricas -->
+      <div id="rec-detail-metrics" style="display:grid;grid-template-columns:1fr 1fr;background:var(--border);gap:1px;flex-shrink:0"></div>
+      <!-- histórico -->
+      <div style="flex:1;overflow-y:auto;padding:16px 20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Histórico de Pagamentos</div>
+        <div id="rec-detail-history"></div>
+      </div>
+      <!-- ações -->
+      <div style="border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" style="flex:1" id="rec-detail-edit-btn" onclick="openRecDetailEdit()"><i class="ti ti-pencil"></i> Editar Contrato</button>
+        <button class="btn btn-ghost btn-sm" id="rec-detail-pause-btn" onclick="recDetailTogglePause()"></button>
+      </div>
+    </div>
+
     <!-- Tab: Mensalidades do Mês -->
     <div id="fin-tab-mensalidades" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
@@ -21124,7 +21149,7 @@ function recRenderTable() {
       ${r.status_contrato === 'Pausado' ? `<button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#34D399" onclick="recTogglePause('${r.id}','Ativo')"   title="Reativar"><i class="ti ti-player-play"></i></button>` : ''}`;
     return `
     <tr class="monday-row">
-      <td class="monday-td"><strong>${r.client_name}</strong></td>
+      <td class="monday-td"><strong style="cursor:pointer;color:var(--accent)" onclick="openRecDetail('${r.id}')">${r.client_name}</strong></td>
       <td class="monday-td" style="text-align:right">${valorFmt}</td>
       <td class="monday-td" style="text-align:center">${diaFmt}</td>
       <td class="monday-td" style="text-align:center">${r.forma_pagamento || '—'}</td>
@@ -21180,6 +21205,124 @@ function openRecModal(recId) {
 function closeRecModal() {
   document.getElementById('rec-modal').style.display = 'none';
   _REC_EDITING = null;
+}
+
+/* ══ Painel lateral de detalhes do contrato ══════════════════════════════════ */
+let _REC_DETAIL_DATA = null;
+
+async function openRecDetail(recId) {
+  const panel   = document.getElementById('rec-detail-panel');
+  const overlay = document.getElementById('rec-detail-overlay');
+  document.getElementById('rec-detail-name').textContent    = 'Carregando...';
+  document.getElementById('rec-detail-status').innerHTML    = '';
+  document.getElementById('rec-detail-metrics').innerHTML   = '';
+  document.getElementById('rec-detail-history').innerHTML   =
+    `<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i></div>`;
+  overlay.style.display = 'block';
+  panel.style.right = '0';
+
+  const data = await _apiFetch(`/api/finance/recurrences/${recId}/history`);
+  if (!data || data.error) {
+    document.getElementById('rec-detail-history').innerHTML =
+      `<div style="color:#F87171;font-size:12px">${data?.error || 'Erro ao carregar.'}</div>`;
+    return;
+  }
+  _REC_DETAIL_DATA = data;
+  _renderRecDetail(data);
+}
+
+function _renderRecDetail(data) {
+  const statusColor = { 'Ativo':'#34D399', 'Pausado':'#FBBF24', 'Cancelado':'#F87171' };
+  const clr  = statusColor[data.status_contrato] || '#6C63FF';
+  const fmt  = v  => `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtD = d  => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const mesLabel = mes => {
+    const [y,m] = mes.split('-');
+    return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+m-1]+' '+y;
+  };
+
+  document.getElementById('rec-detail-name').textContent = data.client_name;
+  document.getElementById('rec-detail-status').innerHTML =
+    `<span style="background:${clr}22;color:${clr};border:1px solid ${clr}44;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700">${data.status_contrato}</span>
+     <span style="font-size:10px;color:var(--text3);margin-left:8px">${data.forma_pagamento}</span>`;
+
+  const metrics = [
+    { label:'Início', value: fmtD(data.data_inicio) },
+    { label:'Meses ativos', value: `${data.meses_ativos}` },
+    { label:'Mensalidade', value: fmt(data.valor_mensal) },
+    { label:'Vencimento', value: `Dia ${data.dia_vencimento}` },
+    { label:'LTV Esperado', value: fmt(data.ltv_esperado) },
+    { label:'LTV Pago', value: fmt(data.ltv_pago) },
+  ];
+  document.getElementById('rec-detail-metrics').innerHTML = metrics.map(m => `
+    <div style="background:var(--bg2);padding:12px 16px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">${m.label}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text)">${m.value}</div>
+    </div>`).join('');
+
+  // Botão pausar/reativar no rodapé
+  const pauseBtn = document.getElementById('rec-detail-pause-btn');
+  if (data.status_contrato === 'Ativo') {
+    pauseBtn.innerHTML = '<i class="ti ti-player-pause"></i> Pausar';
+    pauseBtn.style.color = '#FBBF24';
+    pauseBtn.style.display = '';
+  } else if (data.status_contrato === 'Pausado') {
+    pauseBtn.innerHTML = '<i class="ti ti-player-play"></i> Reativar';
+    pauseBtn.style.color = '#34D399';
+    pauseBtn.style.display = '';
+  } else {
+    pauseBtn.style.display = 'none';
+  }
+
+  // Histórico
+  const histEl = document.getElementById('rec-detail-history');
+  if (!data.history?.length) {
+    histEl.innerHTML = '<div style="color:var(--text3);font-size:12px">Sem histórico ainda.</div>';
+    return;
+  }
+  const pagoCount = data.history.filter(h => h.pago).length;
+  histEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:14px">
+      <span>${pagoCount} pago${pagoCount!==1?'s':''} de ${data.history.length} meses</span>
+      <span style="color:${data.ltv_pago >= data.ltv_esperado ? '#34D399' : '#FBBF24'}">
+        ${Math.round(data.ltv_pago / (data.ltv_esperado||1) * 100)}% quitado
+      </span>
+    </div>` +
+    data.history.map(h => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${mesLabel(h.mes_ref)}</div>
+        ${h.data_pagamento ? `<div style="font-size:10px;color:var(--text3)">Pago em ${fmtD(h.data_pagamento)}</div>` : ''}
+      </div>
+      <span style="background:${h.pago?'#34D39922':'#F8717122'};color:${h.pago?'#34D399':'#F87171'};border:1px solid ${h.pago?'#34D39944':'#F8717144'};padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">
+        ${h.pago ? 'Pago' : 'Pendente'}
+      </span>
+    </div>`).join('');
+}
+
+function closeRecDetail() {
+  document.getElementById('rec-detail-panel').style.right = '-440px';
+  document.getElementById('rec-detail-overlay').style.display = 'none';
+  _REC_DETAIL_DATA = null;
+}
+
+function openRecDetailEdit() {
+  if (!_REC_DETAIL_DATA) return;
+  closeRecDetail();
+  openRecModal(_REC_DETAIL_DATA.id);
+}
+
+async function recDetailTogglePause() {
+  if (!_REC_DETAIL_DATA) return;
+  const newStatus = _REC_DETAIL_DATA.status_contrato === 'Ativo' ? 'Pausado' : 'Ativo';
+  const r = await _apiFetch(`/api/finance/recurrences/${_REC_DETAIL_DATA.id}`, {
+    method: 'PUT', body: JSON.stringify({ status_contrato: newStatus }),
+  });
+  if (r?.ok) {
+    showNotification(`Contrato ${newStatus === 'Ativo' ? 'reativado' : 'pausado'}.`, 'ok');
+    recLoad();
+    openRecDetail(_REC_DETAIL_DATA.id);
+  }
 }
 
 async function recSave() {
