@@ -4497,8 +4497,13 @@
     <!-- Tab: Recorrências -->
     <div id="fin-tab-recorrencias" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-        <div style="font-size:14px;font-weight:700;color:var(--text)"><i class="ti ti-repeat" style="color:var(--accent);margin-right:6px"></i> Contratos Recorrentes</div>
-        <button class="btn btn-primary" onclick="openRecModal()"><i class="ti ti-plus"></i> Nova Recorrência</button>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)"><i class="ti ti-repeat" style="color:var(--accent);margin-right:6px"></i> Contratos Recorrentes</div>
+          <div id="rec-count-label" style="font-size:11px;color:var(--text3);margin-top:3px">Todos os clientes ativos são listados automaticamente</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="rec-summary-badge" style="display:none;font-size:11px;background:rgba(251,191,36,.12);color:#FBBF24;border:1px solid rgba(251,191,36,.3);padding:3px 10px;border-radius:20px;font-weight:600"></span>
+        </div>
       </div>
       <div class="card" style="padding:0;overflow:hidden">
         <div style="overflow-x:auto">
@@ -4602,15 +4607,16 @@
 
   <!-- ── Modal: Nova/Editar Recorrência ── -->
   <div id="rec-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeRecModal()">
-    <div class="modal-box" style="max-width:480px">
+    <div class="modal-box" style="max-width:460px">
       <div class="modal-header">
-        <h3 class="modal-title" id="rec-modal-title"><i class="ti ti-repeat"></i> Nova Recorrência</h3>
+        <h3 class="modal-title" id="rec-modal-title"><i class="ti ti-repeat"></i> Configurar Mensalidade</h3>
         <button class="modal-close" onclick="closeRecModal()"><i class="ti ti-x"></i></button>
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;padding:20px">
-        <div>
-          <label class="form-label">Cliente *</label>
-          <select id="rec-client" class="form-select"></select>
+        <!-- cliente estático (não editável) -->
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <i class="ti ti-user" style="color:var(--accent);font-size:15px"></i>
+          <span id="rec-modal-client-name" style="font-size:13px;font-weight:600;color:var(--text)"></span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
@@ -21046,10 +21052,10 @@ function finSwitchTab(tab, btn) {
   if (tab === 'mensalidades') recLoadMonthly();
 }
 
-/* ── RECORRÊNCIAS state & helpers ── */
-let _REC_LIST = [];
-let _REC_EDITING = null;
-let _REC_MES = (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
+/* ── RECORRÊNCIAS state ── */
+let _REC_LIST    = [];   // merged list: all active clients + their recurrence data
+let _REC_EDITING = null; // { clientId, recId, clientName } — set when modal is open
+let _REC_MES     = (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
 
 function _recFmtMes(ym) {
   const [y,m] = ym.split('-');
@@ -21057,14 +21063,14 @@ function _recFmtMes(ym) {
   return `${names[parseInt(m)-1]}/${y}`;
 }
 
-/* ── Load recorrências ── */
+/* ── Carrega lista mesclada (clientes ativos + dados financeiros) ── */
 async function recLoad() {
   const tbody = document.getElementById('rec-tbody');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Carregando...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Carregando clientes...</td></tr>`;
   const data = await _apiFetch('/api/finance/recurrences');
   if (!data || !Array.isArray(data)) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Erro ao carregar contratos.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Erro ao carregar. Verifique a conexão com o servidor.</td></tr>`;
     return;
   }
   _REC_LIST = data;
@@ -21075,55 +21081,78 @@ function recRenderTable() {
   const tbody = document.getElementById('rec-tbody');
   if (!tbody) return;
   if (!_REC_LIST.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado. Clique em <strong>+ Nova Recorrência</strong> para começar.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum cliente ativo encontrado.</td></tr>`;
     return;
   }
+
+  // Atualiza badge de resumo
+  const pendentes = _REC_LIST.filter(r => !r.id || !(r.valor_mensal > 0)).length;
+  const badge = document.getElementById('rec-summary-badge');
+  if (badge) {
+    if (pendentes > 0) {
+      badge.textContent = `⚠️ ${pendentes} pendente${pendentes > 1 ? 's' : ''} de configuração`;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
   const statusColor = { 'Ativo':'#34D399', 'Pausado':'#FBBF24', 'Cancelado':'#F87171' };
-  tbody.innerHTML = _REC_LIST.map(r => `
+  tbody.innerHTML = _REC_LIST.map(r => {
+    const isPending   = !r.id || !(r.valor_mensal > 0);
+    const statusLabel = isPending ? 'Pendente' : (r.status_contrato || 'Ativo');
+    const statusClr   = isPending ? '#F59E0B' : (statusColor[r.status_contrato] || '#6C63FF');
+    const valorFmt    = r.valor_mensal > 0
+      ? `R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+      : `<span style="color:var(--text3);font-size:11px">— não configurado</span>`;
+    const diaFmt      = r.dia_vencimento ? `Dia ${r.dia_vencimento}` : `<span style="color:var(--text3);font-size:11px">—</span>`;
+    const acaoBotao   = isPending
+      ? `<button class="btn btn-primary btn-sm" style="padding:3px 10px;font-size:11px;background:rgba(251,191,36,.15);color:#FBBF24;border:1px solid rgba(251,191,36,.4)" onclick="openRecModal('${r.client_id}')">
+           <i class="ti ti-settings"></i> Configurar
+         </button>`
+      : `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px" onclick="openRecModal('${r.client_id}')">
+           <i class="ti ti-pencil"></i> Editar
+         </button>
+         ${r.status_contrato === 'Ativo' ? `<button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#FBBF24" onclick="recTogglePause('${r.client_id}','Pausado')" title="Pausar"><i class="ti ti-player-pause"></i></button>` : ''}
+         ${r.status_contrato === 'Pausado' ? `<button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#34D399" onclick="recTogglePause('${r.client_id}','Ativo')" title="Reativar"><i class="ti ti-player-play"></i></button>` : ''}`;
+    return `
     <tr class="monday-row">
-      <td class="monday-td"><strong>${r.client_name}</strong></td>
-      <td class="monday-td" style="text-align:right">R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      <td class="monday-td" style="text-align:center">Dia ${r.dia_vencimento}</td>
-      <td class="monday-td" style="text-align:center">${r.forma_pagamento}</td>
-      <td class="monday-td" style="text-align:center">
-        <span style="background:${statusColor[r.status_contrato]||'#6C63FF'}22;color:${statusColor[r.status_contrato]||'#6C63FF'};border:1px solid ${statusColor[r.status_contrato]||'#6C63FF'}44;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">
-          ${r.status_contrato}
-        </span>
+      <td class="monday-td">
+        <strong>${r.client_name}</strong>
+        ${isPending ? `<br><span style="font-size:10px;color:#F59E0B;font-weight:600">⚠️ Configuração pendente</span>` : ''}
       </td>
+      <td class="monday-td" style="text-align:right">${valorFmt}</td>
+      <td class="monday-td" style="text-align:center">${diaFmt}</td>
+      <td class="monday-td" style="text-align:center">${r.forma_pagamento || '—'}</td>
       <td class="monday-td" style="text-align:center">
-        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px" onclick="openRecModal('${r.id}')">
-          <i class="ti ti-pencil"></i> Editar
-        </button>
-        ${r.status_contrato === 'Ativo' ? `
-        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:#FBBF24" onclick="recTogglePause('${r.id}','Pausado')">
-          <i class="ti ti-player-pause"></i>
-        </button>` : r.status_contrato === 'Pausado' ? `
-        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:#34D399" onclick="recTogglePause('${r.id}','Ativo')">
-          <i class="ti ti-player-play"></i>
-        </button>` : ''}
+        <span style="background:${statusClr}22;color:${statusClr};border:1px solid ${statusClr}44;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">${statusLabel}</span>
       </td>
-    </tr>`).join('');
+      <td class="monday-td" style="text-align:center;white-space:nowrap">${acaoBotao}</td>
+    </tr>`;
+  }).join('');
 }
 
-async function recTogglePause(id, newStatus) {
-  const r = await _apiFetch(`/api/finance/recurrences/${id}`, { method:'PUT', body:JSON.stringify({ status_contrato: newStatus }) });
+async function recTogglePause(clientId, newStatus) {
+  const entry = _REC_LIST.find(r => r.client_id === clientId);
+  if (!entry?.id) return;
+  const r = await _apiFetch(`/api/finance/recurrences/${entry.id}`, { method:'PUT', body:JSON.stringify({ status_contrato: newStatus }) });
   if (r?.ok) { showNotification(`Contrato ${newStatus === 'Ativo' ? 'reativado' : 'pausado'}.`, 'ok'); recLoad(); }
 }
 
-/* ── Modal Recorrência ── */
-function openRecModal(id) {
-  _REC_EDITING = id || null;
-  const rec = id ? _REC_LIST.find(r => r.id === id) : null;
-  document.getElementById('rec-modal-title').innerHTML = `<i class="ti ti-repeat"></i> ${rec ? 'Editar Recorrência' : 'Nova Recorrência'}`;
+/* ── Modal: abre pelo client_id (funciona para novo e edição) ── */
+function openRecModal(clientId) {
+  const entry = _REC_LIST.find(r => r.client_id === clientId);
+  if (!entry) return;
+  _REC_EDITING = { clientId: entry.client_id, recId: entry.id || null, clientName: entry.client_name };
 
-  const sel = document.getElementById('rec-client');
-  sel.innerHTML = (CLIENTS.list || []).map(c => `<option value="${c.id}" data-name="${c.name}"${rec?.client_id===c.id?' selected':''}>${c.name}</option>`).join('');
-  sel.disabled = !!rec;
+  document.getElementById('rec-modal-title').innerHTML =
+    `<i class="ti ti-repeat"></i> ${entry.id ? 'Editar Mensalidade' : 'Configurar Mensalidade'}`;
+  document.getElementById('rec-modal-client-name').textContent = entry.client_name;
 
-  document.getElementById('rec-valor').value  = rec?.valor_mensal ?? '';
-  document.getElementById('rec-dia').value    = rec?.dia_vencimento ?? '10';
-  document.getElementById('rec-forma').value  = rec?.forma_pagamento ?? 'Pix';
-  document.getElementById('rec-inicio').value = rec?.data_inicio?.slice(0,10) ?? new Date().toISOString().slice(0,10);
+  document.getElementById('rec-valor').value  = entry.valor_mensal > 0 ? entry.valor_mensal : '';
+  document.getElementById('rec-dia').value    = entry.dia_vencimento || '10';
+  document.getElementById('rec-forma').value  = entry.forma_pagamento || 'Pix';
+  document.getElementById('rec-inicio').value = entry.data_inicio?.slice(0,10) || new Date().toISOString().slice(0,10);
 
   const errEl = document.getElementById('rec-modal-error');
   if (errEl) errEl.style.display = 'none';
@@ -21138,16 +21167,13 @@ function closeRecModal() {
 async function recSave() {
   const errEl   = document.getElementById('rec-modal-error');
   const saveBtn = document.getElementById('rec-save-btn');
-  const sel     = document.getElementById('rec-client');
-  const clientId   = sel.value;
-  const clientName = sel.options[sel.selectedIndex]?.dataset?.name || sel.options[sel.selectedIndex]?.text || '';
-  const valor      = parseFloat(document.getElementById('rec-valor').value);
-  const dia        = parseInt(document.getElementById('rec-dia').value);
-  const forma      = document.getElementById('rec-forma').value;
-  const inicio     = document.getElementById('rec-inicio').value;
+  const valor   = parseFloat(document.getElementById('rec-valor').value);
+  const dia     = parseInt(document.getElementById('rec-dia').value);
+  const forma   = document.getElementById('rec-forma').value;
+  const inicio  = document.getElementById('rec-inicio').value;
 
-  if (!clientId || isNaN(valor) || valor <= 0 || !dia || !inicio) {
-    errEl.textContent = 'Preencha todos os campos obrigatórios.';
+  if (!_REC_EDITING || isNaN(valor) || valor <= 0 || !dia || !inicio) {
+    errEl.textContent = 'Preencha Valor Mensal, Dia do Vencimento e Data de Início.';
     errEl.style.display = '';
     return;
   }
@@ -21156,15 +21182,25 @@ async function recSave() {
   saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>';
 
   let r;
-  if (_REC_EDITING) {
-    r = await _apiFetch(`/api/finance/recurrences/${_REC_EDITING}`, {
+  if (_REC_EDITING.recId) {
+    // Atualiza recorrência existente
+    r = await _apiFetch(`/api/finance/recurrences/${_REC_EDITING.recId}`, {
       method: 'PUT',
       body: JSON.stringify({ valor_mensal: valor, dia_vencimento: dia, forma_pagamento: forma }),
     });
   } else {
+    // Cria nova recorrência para o cliente
     r = await _apiFetch('/api/finance/recurrences', {
       method: 'POST',
-      body: JSON.stringify({ client_id: clientId, client_name: clientName, valor_mensal: valor, dia_vencimento: dia, data_inicio: inicio, forma_pagamento: forma, status_contrato: 'Ativo' }),
+      body: JSON.stringify({
+        client_id: _REC_EDITING.clientId,
+        client_name: _REC_EDITING.clientName,
+        valor_mensal: valor,
+        dia_vencimento: dia,
+        data_inicio: inicio,
+        forma_pagamento: forma,
+        status_contrato: 'Ativo',
+      }),
     });
   }
 
@@ -21172,10 +21208,10 @@ async function recSave() {
   saveBtn.innerHTML = '<i class="ti ti-check"></i> Salvar';
   if (r?.ok) {
     closeRecModal();
-    showNotification(_REC_EDITING ? 'Contrato atualizado!' : 'Contrato criado!', 'ok');
+    showNotification(_REC_EDITING.recId ? 'Mensalidade atualizada!' : 'Mensalidade configurada!', 'ok');
     recLoad();
   } else {
-    errEl.textContent = r?.error || 'Erro ao salvar.';
+    errEl.textContent = r?.error || 'Erro ao salvar. Tente novamente.';
     errEl.style.display = '';
   }
 }
@@ -21189,10 +21225,24 @@ async function recLoadMonthly() {
   tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i></td></tr>`;
   const data = await _apiFetch(`/api/finance/recurrences/monthly?mes=${_REC_MES}`);
   if (!Array.isArray(data) || !data.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato ativo para ${_recFmtMes(_REC_MES)}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">
+      Nenhuma mensalidade configurada para ${_recFmtMes(_REC_MES)}.<br>
+      <span style="font-size:11px">Configure o valor mensal na aba <strong>Recorrências</strong>.</span>
+    </td></tr>`;
     return;
   }
-  tbody.innerHTML = data.map(r => `
+  const totalMes = data.reduce((s, r) => s + Number(r.valor_mensal || 0), 0);
+  const totalPago = data.filter(r => r.pago).reduce((s, r) => s + Number(r.valor_mensal || 0), 0);
+  tbody.innerHTML = `
+    <tr style="background:var(--bg3)">
+      <td class="monday-td" colspan="3" style="font-size:11px;color:var(--text3)">
+        ${data.length} mensalidades · Total: <strong style="color:var(--text)">R$ ${totalMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
+      </td>
+      <td class="monday-td" colspan="2" style="font-size:11px;color:#34D399;text-align:right">
+        Recebido: <strong>R$ ${totalPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
+      </td>
+    </tr>` +
+  data.map(r => `
     <tr class="monday-row">
       <td class="monday-td"><strong>${r.client_name}</strong></td>
       <td class="monday-td" style="text-align:right">R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
@@ -21215,20 +21265,17 @@ async function recMarcarPago(id) {
   if (r?.ok) { showNotification('Mensalidade marcada como paga!', 'ok'); recLoadMonthly(); }
   else showNotification(r?.error || 'Erro ao marcar pagamento.', 'error');
 }
-
 async function recDesmarcarPago(id) {
   const r = await _apiFetch(`/api/finance/recurrences/${id}/pay/${_REC_MES}`, { method:'DELETE' });
   if (r?.ok) { showNotification('Pagamento desfeito.', 'ok'); recLoadMonthly(); }
   else showNotification(r?.error || 'Erro ao desfazer.', 'error');
 }
-
 function recMesAnterior() {
   const [y,m] = _REC_MES.split('-').map(Number);
   const d = new Date(y, m-2, 1);
   _REC_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   recLoadMonthly();
 }
-
 function recMesProximo() {
   const [y,m] = _REC_MES.split('-').map(Number);
   const d = new Date(y, m, 1);
