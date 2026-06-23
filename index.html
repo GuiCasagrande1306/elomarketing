@@ -2735,6 +2735,9 @@
 .fin-period-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
 .fin-period-btn:hover{background:var(--bg3);color:var(--text1)}
 .fin-period-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.fin-tab-btn{background:none;border:none;border-bottom:2px solid transparent;padding:10px 18px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;transition:color .2s,border-color .2s;display:flex;align-items:center;gap:6px;margin-bottom:-1px}
+.fin-tab-btn:hover{color:var(--text)}
+.fin-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .fin-badge-receita{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(52,211,153,.15);color:#34D399;border:1px solid rgba(52,211,153,.3)}
 .fin-badge-despesa{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(248,113,113,.15);color:#F87171;border:1px solid rgba(248,113,113,.3)}
 .fin-import-progress{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px}
@@ -4378,6 +4381,22 @@
   <!-- ===== FINANCEIRO ===== -->
   <div class="page" id="page-financeiro">
 
+    <!-- Tab navigation -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px">
+      <button class="fin-tab-btn active" data-tab="transacoes" onclick="finSwitchTab('transacoes',this)">
+        <i class="ti ti-list-details"></i> Transações
+      </button>
+      <button class="fin-tab-btn" data-tab="recorrencias" onclick="finSwitchTab('recorrencias',this)">
+        <i class="ti ti-repeat"></i> Recorrências
+      </button>
+      <button class="fin-tab-btn" data-tab="mensalidades" onclick="finSwitchTab('mensalidades',this)">
+        <i class="ti ti-calendar-due"></i> Mensalidades do Mês
+      </button>
+    </div>
+
+    <!-- Tab: Transações (existing content) -->
+    <div id="fin-tab-transacoes">
+
     <!-- ── Toolbar: filtros de período + importação ── -->
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -4473,6 +4492,65 @@
       <div id="fin-table-footer" style="padding:10px 20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);display:none"></div>
     </div>
 
+    </div><!-- /fin-tab-transacoes -->
+
+    <!-- Tab: Recorrências -->
+    <div id="fin-tab-recorrencias" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <div style="font-size:14px;font-weight:700;color:var(--text)"><i class="ti ti-repeat" style="color:var(--accent);margin-right:6px"></i> Contratos Recorrentes</div>
+        <button class="btn btn-primary" onclick="openRecModal()"><i class="ti ti-plus"></i> Nova Recorrência</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table class="monday-table" id="rec-table">
+            <thead>
+              <tr style="background:var(--bg3)">
+                <th class="monday-th">Cliente</th>
+                <th class="monday-th" style="text-align:right">Valor Mensal</th>
+                <th class="monday-th" style="text-align:center">Dia Vencimento</th>
+                <th class="monday-th" style="text-align:center">Forma Pgto</th>
+                <th class="monday-th" style="text-align:center">Status</th>
+                <th class="monday-th" style="text-align:center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="rec-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /fin-tab-recorrencias -->
+
+    <!-- Tab: Mensalidades do Mês -->
+    <div id="fin-tab-mensalidades" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <div style="font-size:14px;font-weight:700;color:var(--text)"><i class="ti ti-calendar-due" style="color:var(--accent);margin-right:6px"></i> Mensalidades do Mês</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-ghost btn-sm" onclick="recMesAnterior()">&#8249;</button>
+          <span id="rec-mes-label" style="font-size:13px;font-weight:600;color:var(--text)">Junho/2026</span>
+          <button class="btn btn-ghost btn-sm" onclick="recMesProximo()">&#8250;</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table class="monday-table" id="rec-monthly-table">
+            <thead>
+              <tr style="background:var(--bg3)">
+                <th class="monday-th">Cliente</th>
+                <th class="monday-th" style="text-align:right">Valor</th>
+                <th class="monday-th" style="text-align:center">Vencimento</th>
+                <th class="monday-th" style="text-align:center">Status</th>
+                <th class="monday-th" style="text-align:center">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="rec-monthly-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um mês para ver as mensalidades.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /fin-tab-mensalidades -->
+
   </div><!-- /page-financeiro -->
 
   <!-- ── Modal: Nova Transação ── -->
@@ -4517,6 +4595,51 @@
           <button class="btn btn-primary" onclick="finSaveTransaction()" id="fin-add-save-btn">
             <i class="ti ti-check"></i> Salvar
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Nova/Editar Recorrência ── -->
+  <div id="rec-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeRecModal()">
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-header">
+        <h3 class="modal-title" id="rec-modal-title"><i class="ti ti-repeat"></i> Nova Recorrência</h3>
+        <button class="modal-close" onclick="closeRecModal()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding:20px">
+        <div>
+          <label class="form-label">Cliente *</label>
+          <select id="rec-client" class="form-select"></select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="form-label">Valor Mensal (R$) *</label>
+            <input type="number" id="rec-valor" class="form-input" placeholder="1500.00" min="0" step="0.01">
+          </div>
+          <div>
+            <label class="form-label">Dia do Vencimento *</label>
+            <select id="rec-dia" class="form-select">
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="form-label">Forma de Pagamento</label>
+            <select id="rec-forma" class="form-select">
+              <option>Pix</option><option>Boleto</option><option>Cartão</option><option>Crédito</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Data de Início</label>
+            <input type="date" id="rec-inicio" class="form-input">
+          </div>
+        </div>
+        <div id="rec-modal-error" style="display:none;color:#F87171;font-size:11px;padding:8px 12px;background:rgba(248,113,113,.1);border-radius:6px;border:1px solid rgba(248,113,113,.3)"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="closeRecModal()">Cancelar</button>
+          <button class="btn btn-primary" id="rec-save-btn" onclick="recSave()"><i class="ti ti-check"></i> Salvar</button>
         </div>
       </div>
     </div>
@@ -20911,6 +21034,206 @@ async function _finParseXLSX(file) {
     reader.onerror = () => reject(new Error('Erro ao ler arquivo XLSX'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+/* ── FIN TABS ── */
+function finSwitchTab(tab, btn) {
+  ['transacoes','recorrencias','mensalidades'].forEach(t => {
+    document.getElementById(`fin-tab-${t}`).style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'recorrencias') recLoad();
+  if (tab === 'mensalidades') recLoadMonthly();
+}
+
+/* ── RECORRÊNCIAS state & helpers ── */
+let _REC_LIST = [];
+let _REC_EDITING = null;
+let _REC_MES = (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
+
+function _recFmtMes(ym) {
+  const [y,m] = ym.split('-');
+  const names = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${names[parseInt(m)-1]}/${y}`;
+}
+
+/* ── Load recorrências ── */
+async function recLoad() {
+  const tbody = document.getElementById('rec-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Carregando...</td></tr>`;
+  const data = await _apiFetch('/api/finance/recurrences');
+  if (!data || !Array.isArray(data)) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Erro ao carregar contratos.</td></tr>`;
+    return;
+  }
+  _REC_LIST = data;
+  recRenderTable();
+}
+
+function recRenderTable() {
+  const tbody = document.getElementById('rec-tbody');
+  if (!tbody) return;
+  if (!_REC_LIST.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado. Clique em <strong>+ Nova Recorrência</strong> para começar.</td></tr>`;
+    return;
+  }
+  const statusColor = { 'Ativo':'#34D399', 'Pausado':'#FBBF24', 'Cancelado':'#F87171' };
+  tbody.innerHTML = _REC_LIST.map(r => `
+    <tr class="monday-row">
+      <td class="monday-td"><strong>${r.client_name}</strong></td>
+      <td class="monday-td" style="text-align:right">R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="monday-td" style="text-align:center">Dia ${r.dia_vencimento}</td>
+      <td class="monday-td" style="text-align:center">${r.forma_pagamento}</td>
+      <td class="monday-td" style="text-align:center">
+        <span style="background:${statusColor[r.status_contrato]||'#6C63FF'}22;color:${statusColor[r.status_contrato]||'#6C63FF'};border:1px solid ${statusColor[r.status_contrato]||'#6C63FF'}44;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">
+          ${r.status_contrato}
+        </span>
+      </td>
+      <td class="monday-td" style="text-align:center">
+        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px" onclick="openRecModal('${r.id}')">
+          <i class="ti ti-pencil"></i> Editar
+        </button>
+        ${r.status_contrato === 'Ativo' ? `
+        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:#FBBF24" onclick="recTogglePause('${r.id}','Pausado')">
+          <i class="ti ti-player-pause"></i>
+        </button>` : r.status_contrato === 'Pausado' ? `
+        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:#34D399" onclick="recTogglePause('${r.id}','Ativo')">
+          <i class="ti ti-player-play"></i>
+        </button>` : ''}
+      </td>
+    </tr>`).join('');
+}
+
+async function recTogglePause(id, newStatus) {
+  const r = await _apiFetch(`/api/finance/recurrences/${id}`, { method:'PUT', body:JSON.stringify({ status_contrato: newStatus }) });
+  if (r?.ok) { showNotification(`Contrato ${newStatus === 'Ativo' ? 'reativado' : 'pausado'}.`, 'ok'); recLoad(); }
+}
+
+/* ── Modal Recorrência ── */
+function openRecModal(id) {
+  _REC_EDITING = id || null;
+  const rec = id ? _REC_LIST.find(r => r.id === id) : null;
+  document.getElementById('rec-modal-title').innerHTML = `<i class="ti ti-repeat"></i> ${rec ? 'Editar Recorrência' : 'Nova Recorrência'}`;
+
+  const sel = document.getElementById('rec-client');
+  sel.innerHTML = (CLIENTS.list || []).map(c => `<option value="${c.id}" data-name="${c.name}"${rec?.client_id===c.id?' selected':''}>${c.name}</option>`).join('');
+  sel.disabled = !!rec;
+
+  document.getElementById('rec-valor').value  = rec?.valor_mensal ?? '';
+  document.getElementById('rec-dia').value    = rec?.dia_vencimento ?? '10';
+  document.getElementById('rec-forma').value  = rec?.forma_pagamento ?? 'Pix';
+  document.getElementById('rec-inicio').value = rec?.data_inicio?.slice(0,10) ?? new Date().toISOString().slice(0,10);
+
+  const errEl = document.getElementById('rec-modal-error');
+  if (errEl) errEl.style.display = 'none';
+  document.getElementById('rec-modal').style.display = 'flex';
+}
+
+function closeRecModal() {
+  document.getElementById('rec-modal').style.display = 'none';
+  _REC_EDITING = null;
+}
+
+async function recSave() {
+  const errEl   = document.getElementById('rec-modal-error');
+  const saveBtn = document.getElementById('rec-save-btn');
+  const sel     = document.getElementById('rec-client');
+  const clientId   = sel.value;
+  const clientName = sel.options[sel.selectedIndex]?.dataset?.name || sel.options[sel.selectedIndex]?.text || '';
+  const valor      = parseFloat(document.getElementById('rec-valor').value);
+  const dia        = parseInt(document.getElementById('rec-dia').value);
+  const forma      = document.getElementById('rec-forma').value;
+  const inicio     = document.getElementById('rec-inicio').value;
+
+  if (!clientId || isNaN(valor) || valor <= 0 || !dia || !inicio) {
+    errEl.textContent = 'Preencha todos os campos obrigatórios.';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>';
+
+  let r;
+  if (_REC_EDITING) {
+    r = await _apiFetch(`/api/finance/recurrences/${_REC_EDITING}`, {
+      method: 'PUT',
+      body: JSON.stringify({ valor_mensal: valor, dia_vencimento: dia, forma_pagamento: forma }),
+    });
+  } else {
+    r = await _apiFetch('/api/finance/recurrences', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: clientId, client_name: clientName, valor_mensal: valor, dia_vencimento: dia, data_inicio: inicio, forma_pagamento: forma, status_contrato: 'Ativo' }),
+    });
+  }
+
+  saveBtn.disabled = false;
+  saveBtn.innerHTML = '<i class="ti ti-check"></i> Salvar';
+  if (r?.ok) {
+    closeRecModal();
+    showNotification(_REC_EDITING ? 'Contrato atualizado!' : 'Contrato criado!', 'ok');
+    recLoad();
+  } else {
+    errEl.textContent = r?.error || 'Erro ao salvar.';
+    errEl.style.display = '';
+  }
+}
+
+/* ── Mensalidades do Mês ── */
+async function recLoadMonthly() {
+  const label = document.getElementById('rec-mes-label');
+  if (label) label.textContent = _recFmtMes(_REC_MES);
+  const tbody = document.getElementById('rec-monthly-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i></td></tr>`;
+  const data = await _apiFetch(`/api/finance/recurrences/monthly?mes=${_REC_MES}`);
+  if (!Array.isArray(data) || !data.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato ativo para ${_recFmtMes(_REC_MES)}.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(r => `
+    <tr class="monday-row">
+      <td class="monday-td"><strong>${r.client_name}</strong></td>
+      <td class="monday-td" style="text-align:right">R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="monday-td" style="text-align:center">Dia ${r.dia_vencimento}</td>
+      <td class="monday-td" style="text-align:center">
+        ${r.pago
+          ? `<span style="background:#34D39922;color:#34D399;border:1px solid #34D39944;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">✓ Pago</span>`
+          : `<span style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">Pendente</span>`}
+      </td>
+      <td class="monday-td" style="text-align:center">
+        ${r.pago
+          ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#F87171" onclick="recDesmarcarPago('${r.id}')"><i class="ti ti-x"></i> Desfazer</button>`
+          : `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="recMarcarPago('${r.id}')"><i class="ti ti-check"></i> Marcar Pago</button>`}
+      </td>
+    </tr>`).join('');
+}
+
+async function recMarcarPago(id) {
+  const r = await _apiFetch(`/api/finance/recurrences/${id}/pay`, { method:'POST', body:JSON.stringify({ mes: _REC_MES }) });
+  if (r?.ok) { showNotification('Mensalidade marcada como paga!', 'ok'); recLoadMonthly(); }
+  else showNotification(r?.error || 'Erro ao marcar pagamento.', 'error');
+}
+
+async function recDesmarcarPago(id) {
+  const r = await _apiFetch(`/api/finance/recurrences/${id}/pay/${_REC_MES}`, { method:'DELETE' });
+  if (r?.ok) { showNotification('Pagamento desfeito.', 'ok'); recLoadMonthly(); }
+  else showNotification(r?.error || 'Erro ao desfazer.', 'error');
+}
+
+function recMesAnterior() {
+  const [y,m] = _REC_MES.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  _REC_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  recLoadMonthly();
+}
+
+function recMesProximo() {
+  const [y,m] = _REC_MES.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  _REC_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  recLoadMonthly();
 }
 
 /* ── Inicializa a página Financeiro ────────────────────────────── */
