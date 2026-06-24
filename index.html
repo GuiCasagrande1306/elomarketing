@@ -7946,6 +7946,8 @@ const _TRAFFIC_COLLAB_PAGES = [
 ];
 // Designer: tarefas + integracoes (para conectar o próprio WhatsApp)
 const _DESIGNER_COLLAB_PAGES = ['tarefas','integracoes'];
+// Vendedor: apenas CRM Comercial e Leads / WhatsApp
+const _VENDEDOR_PAGES = ['crm','leads'];
 
 /* ── Organograma ───────────────────────────────────────────────────────────────
    isSuperAdmin → Guilherme (CEO): acesso irrestrito total
@@ -7958,6 +7960,7 @@ const USERS = [
   { id:'bernardo',  initials:'BE', name:'Bernardo',  role:'Gestor de Tráfego',             pin:'user123',  color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._TRAFFIC_COLLAB_PAGES] },
   { id:'amanda',    initials:'AM', name:'Amanda',    role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES] },
   { id:'jaqueline', initials:'JA', name:'Jaqueline', role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES] },
+  { id:'caio',      initials:'CA', name:'Caio',      role:'Vendedor',                        pin:'vendas123', color:'linear-gradient(135deg,#10B981,#059669)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._VENDEDOR_PAGES] },
 ];
 
 // Mapa completo de páginas para o sistema de permissões
