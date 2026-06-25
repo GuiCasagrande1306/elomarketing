@@ -7489,9 +7489,23 @@ async function loadTasksFromDB() {
 
   if (localOnly.length > 0) {
     console.warn(
-      `[Tasks] loadTasksFromDB: ${localOnly.length} tarefa(s) ainda não confirmada(s) pelo servidor — preservando localmente:`,
+      `[Tasks] loadTasksFromDB: ${localOnly.length} tarefa(s) ainda não confirmada(s) pelo servidor — sincronizando:`,
       localOnly.map(t => `"${t.title}" (id=${t.id})`).join(', ')
     );
+    // Sobe as tarefas local-only uma a uma (sem bloquear o merge).
+    // Isso cobre o caso de primeira migração onde o _autoSyncAndLoad agora só
+    // envia dirty tasks (com _localUpdatedAt), deixando estas para cá.
+    localOnly.forEach(task => {
+      _apiFetch('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...task,
+          assignedTo:  task.assignedTo  || currentUser?.id,
+          created_by:  task.created_by  || currentUser?.id,
+          updated_by:  currentUser?.id,
+        }),
+      }).catch(() => null);
+    });
   }
 
   // ── Merge com preferência local quando há atualização pendente ─────────────
@@ -7595,37 +7609,39 @@ async function _autoSyncAndLoad() {
   });
   if (claimed) { saveTasks(); renderTasksGrid(); updateNavBadges(); }
 
-  // Dispara todos os upserts em paralelo e rastreia resultados
-  const _uploadResults = await Promise.allSettled(
-    TASKS_DATA.map(task =>
-      _apiFetch('/api/tasks', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...task,
-          assignedTo:  task.assignedTo  || currentUser.id,
-          created_by:  task.created_by  || currentUser.id,
-          updated_by:  currentUser.id,
-        }),
-      }).catch(() => null)
-    )
-  );
+  // Só envia ao servidor tarefas que têm mudanças locais pendentes (_localUpdatedAt).
+  // Isso evita disparar N requisições simultâneas toda vez que a página carrega
+  // (o bug antigo enviava TODOS os N tasks a cada visita — 127 POSTs simultâneos
+  //  quando o Render está cold-starting → 127 "signal is aborted" no console).
+  const dirtyTasks = TASKS_DATA.filter(t => t._localUpdatedAt);
 
-  // Detecta se algum upload teve cold-start (servidor dormindo)
-  const _coldStarts = _uploadResults.filter(r => {
-    const v = r.status === 'fulfilled' ? r.value : null;
-    return !v || v._coldStart || v.error;
-  }).length;
+  if (dirtyTasks.length > 0) {
+    const _uploadResults = await Promise.allSettled(
+      dirtyTasks.map(task =>
+        _apiFetch('/api/tasks', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...task,
+            assignedTo:  task.assignedTo  || currentUser.id,
+            created_by:  task.created_by  || currentUser.id,
+            updated_by:  currentUser.id,
+          }),
+        }).catch(() => null)
+      )
+    );
 
-  if (_coldStarts > 0 && _coldStarts === TASKS_DATA.length) {
-    // TODOS os uploads falharam por cold-start: o servidor está acordando.
-    // Cancelamos o GET para evitar que dados stale do Atlas (antes dos POSTs chegarem)
-    // sobrescrevam tasks locais recentes — ex: tarefas recém marcadas como Pronto.
-    // O próximo ciclo de sync (ao navegar ou clicar Sincronizar) tentará novamente.
-    console.warn(`[Tasks] _autoSyncAndLoad: todos os uploads retornaram cold-start — fetch cancelado para proteger dados locais.`);
-    return;
-  }
-  if (_coldStarts > 0) {
-    console.warn(`[Tasks] _autoSyncAndLoad: ${_coldStarts}/${TASKS_DATA.length} upload(s) não confirmado(s) (cold-start parcial).`);
+    const _coldStarts = _uploadResults.filter(r => {
+      const v = r.status === 'fulfilled' ? r.value : null;
+      return !v || v._coldStart || v.error;
+    }).length;
+
+    if (_coldStarts > 0 && _coldStarts === dirtyTasks.length) {
+      console.warn(`[Tasks] _autoSyncAndLoad: todos os uploads retornaram cold-start — fetch cancelado para proteger dados locais.`);
+      return;
+    }
+    if (_coldStarts > 0) {
+      console.warn(`[Tasks] _autoSyncAndLoad: ${_coldStarts}/${dirtyTasks.length} upload(s) não confirmado(s) (cold-start parcial).`);
+    }
   }
 
   // Busca do servidor — merge usa Regra 2 (Pronto imutável) como proteção adicional.
