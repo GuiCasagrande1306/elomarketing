@@ -5404,6 +5404,13 @@
           <label class="form-label">📅 Próximo Follow-up</label>
           <input type="date" id="crm-f-followup" class="form-input">
         </div>
+        <div class="form-group">
+          <label class="form-label">Responsável *</label>
+          <select id="crm-f-responsavel" class="form-select">
+            <option value="Guilherme">Guilherme</option>
+            <option value="Caio">Caio</option>
+          </select>
+        </div>
         <div class="form-group" id="crm-f-resultado-group" style="display:none">
           <label class="form-label">Resultado</label>
           <select id="crm-f-resultado" class="form-select">
@@ -20434,6 +20441,7 @@ function _crmBuildCard(c) {
       <span class="crm-card-date"><i class="ti ti-clock" style="font-size:10px"></i>${daysTxt}</span>
       ${resultBadge}
     </div>
+    ${c.responsavel ? `<div style="font-size:10px;color:var(--text3);margin-top:5px"><i class="ti ti-user-check" style="font-size:10px;margin-right:3px"></i>${c.responsavel}</div>` : ''}
     ${fuBadgeHtml}
     ${c.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.5;border-top:1px solid var(--border);padding-top:7px">${c.obs}</div>` : ''}
     <div class="crm-card-actions">
@@ -20523,9 +20531,10 @@ function openCrmModal(editId, focusResultado = false) {
   document.getElementById('crm-f-valor').value     = '';
   document.getElementById('crm-f-origem').value     = 'Meta Ads';
   document.getElementById('crm-f-coluna').value     = 'lead';
-  document.getElementById('crm-f-resultado').value  = '';
-  document.getElementById('crm-f-followup').value   = '';
-  document.getElementById('crm-f-id').value         = '';
+  document.getElementById('crm-f-resultado').value    = '';
+  document.getElementById('crm-f-followup').value     = '';
+  document.getElementById('crm-f-responsavel').value  = 'Guilherme';
+  document.getElementById('crm-f-id').value           = '';
 
   const resultGrp = document.getElementById('crm-f-resultado-group');
 
@@ -20544,8 +20553,9 @@ function openCrmModal(editId, focusResultado = false) {
     document.getElementById('crm-f-valor').value   = card.valor > 0 ? 'R$ ' + Number(card.valor).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '';
     document.getElementById('crm-f-origem').value  = card.origem;
     document.getElementById('crm-f-coluna').value  = card.coluna;
-    document.getElementById('crm-f-resultado').value  = card.resultado    || '';
-    document.getElementById('crm-f-followup').value   = card.nextFollowUp || '';
+    document.getElementById('crm-f-resultado').value    = card.resultado    || '';
+    document.getElementById('crm-f-followup').value     = card.nextFollowUp || '';
+    document.getElementById('crm-f-responsavel').value  = card.responsavel  || 'Guilherme';
     resultGrp.style.display = card.coluna === 'fechado' ? '' : 'none';
     /* Edit mode — show delete button, update save label */
     if (deleteBtn) deleteBtn.style.display = 'flex';
@@ -20615,7 +20625,8 @@ async function saveCrmOportunidade(e) {
   const origem       = document.getElementById('crm-f-origem').value;
   const coluna       = document.getElementById('crm-f-coluna').value || 'lead';
   const resultado    = document.getElementById('crm-f-resultado').value || null;
-  const nextFollowUp = document.getElementById('crm-f-followup').value  || null;
+  const nextFollowUp = document.getElementById('crm-f-followup').value     || null;
+  const responsavel  = document.getElementById('crm-f-responsavel').value  || 'Guilherme';
   const valorRaw     = document.getElementById('crm-f-valor').value.replace(/[R$\s.]/g, '').replace(',', '.');
   const valor        = parseFloat(valorRaw) || 0;
 
@@ -20628,11 +20639,11 @@ async function saveCrmOportunidade(e) {
   if (id) {
     card = CRM_DATA.find(c => c.id === id);
     if (card) Object.assign(card, { empresa, contato, telefone, obs, origem, coluna,
-                                     resultado, valor, nextFollowUp,
+                                     resultado, valor, nextFollowUp, responsavel,
                                      data: new Date().toISOString().slice(0,10) });
   } else {
     card = { id: _crmGenId(), empresa, contato, telefone, obs, origem,
-             coluna, resultado, valor, nextFollowUp,
+             coluna, resultado, valor, nextFollowUp, responsavel,
              data: new Date().toISOString().slice(0,10) };
     CRM_DATA.push(card);
   }
