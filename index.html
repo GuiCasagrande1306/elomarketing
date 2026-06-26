@@ -2742,6 +2742,41 @@
 .cprod-prazo-late{font-size:12px;color:var(--red);font-weight:600}
 .cprod-prazo-soon{font-size:12px;color:var(--amber);font-weight:600}
 .cprod-empty{padding:52px 16px;text-align:center;color:var(--text3);font-size:13px}
+/* ── TASKS VIEW TOGGLE ────────────────────────────────────────────── */
+.task-view-toggle{display:flex;gap:2px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0}
+.task-view-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border:none;background:transparent;transition:all .15s;font-family:var(--font)}
+.task-view-btn:hover{color:var(--text);background:var(--bg4)}
+.task-view-btn.active{background:var(--bg2);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+/* ── TASKS KANBAN ──────────────────────────────────────────────────── */
+.tk-kanban{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.tk-col{flex:0 0 264px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;transition:border-color .15s}
+.tk-col.drag-over{border-color:var(--accent2);background:rgba(108,99,255,.05)}
+.tk-col-hdr{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.tk-col-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.tk-col-name{font-size:13px;font-weight:700;color:var(--text);flex:1}
+.tk-col-cnt{font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px}
+.tk-cards{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:60px;max-height:calc(100vh - 300px)}
+.tk-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px 12px;cursor:grab;transition:box-shadow .15s,transform .1s;user-select:none}
+.tk-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.2);transform:translateY(-1px)}
+.tk-card.dragging{opacity:.45;cursor:grabbing;transform:rotate(1deg)}
+.tk-card-title{font-size:12px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:7px;cursor:pointer}
+.tk-card-title:hover{color:var(--accent2)}
+.tk-card-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.tk-col-empty{padding:20px 14px;text-align:center;color:var(--text3);font-size:12px;opacity:.5}
+/* ── TASKS CALENDAR ────────────────────────────────────────────────── */
+.tk-cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.tk-cal-nav-title{font-size:15px;font-weight:700;color:var(--text)}
+.tk-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--border);border-radius:10px;overflow:hidden}
+.tk-cal-weekday{background:var(--bg3);padding:8px 4px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+.tk-cal-day{background:var(--bg2);min-height:90px;padding:6px;transition:background .1s}
+.tk-cal-day:hover{background:var(--bg3)}
+.tk-cal-day.cal-today{background:rgba(108,99,255,.07)}
+.tk-cal-day.cal-other{background:var(--bg1);opacity:.55}
+.tk-cal-day-num{font-size:12px;font-weight:700;color:var(--text3);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.tk-cal-day.cal-today .tk-cal-day-num{background:var(--accent2);color:#fff;font-size:11px}
+.tk-cal-task{font-size:10px;font-weight:600;padding:2px 5px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;margin-bottom:2px;transition:opacity .1s}
+.tk-cal-task:hover{opacity:.7}
+.tk-cal-more{font-size:10px;color:var(--accent2);cursor:pointer;padding:1px 3px;font-weight:600}
 .monday-add-row{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:12px;color:var(--text3);cursor:pointer;border-top:1px solid var(--border);transition:background .1s,color .1s}
 .monday-add-row:hover{background:var(--bg3);color:var(--text)}
 .m-dropdown{position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9999;min-width:155px;overflow:hidden;animation:fadeIn .1s ease}
@@ -4026,7 +4061,12 @@
             <option value="Pronto">Pronto</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="task-view-toggle" id="task-view-toggle">
+            <button class="task-view-btn active" data-view="lista" onclick="setTasksView('lista')"><i class="ti ti-list"></i> Lista</button>
+            <button class="task-view-btn" data-view="kanban" onclick="setTasksView('kanban')"><i class="ti ti-layout-kanban"></i> Kanban</button>
+            <button class="task-view-btn" data-view="calendar" onclick="setTasksView('calendar')"><i class="ti ti-calendar"></i> Calendário</button>
+          </div>
           <button class="btn btn-ghost btn-sm" id="task-sync-btn"
             onclick="syncTasksToDB()"
             title="Envia todas as tarefas salvas localmente para o servidor (sincroniza equipe)">
@@ -19229,7 +19269,10 @@ function normalizeTaskPriority(t) {
  * TASK_SORT.field : 'dueDate' | 'priority' | 'status' | null
  * TASK_SORT.dir   : 1 = crescente (mais urgente/alto primeiro) | -1 = decrescente
  */
-let TASK_SORT = { field: null, dir: 1 };
+let TASK_SORT  = { field: null, dir: 1 };
+let TASKS_VIEW = 'lista';
+let _calYear   = null;
+let _calMonth  = null;
 
 // Pesos internos para comparação
 const _PRIO_W   = { 'Crítica': 4, 'Alta': 3, 'Média': 2, 'Baixa': 1 };
@@ -19292,6 +19335,9 @@ function renderTasksGrid() {
 
   // Populate filter dropdowns
   _populateTaskFilters();
+
+  if (TASKS_VIEW === 'kanban')   { _renderTasksKanban(board);   return; }
+  if (TASKS_VIEW === 'calendar') { _renderTasksCalendar(board); return; }
 
   const search  = (document.getElementById('task-search')?.value || '').toLowerCase();
   // Colaboradores só veem as próprias tarefas; admins usam o filtro do dropdown
@@ -19634,6 +19680,242 @@ function openPriorityDD(taskId, el) {
     _ddClickListener = () => _closeDD();
     document.addEventListener('click', _ddClickListener);
   }, 10);
+}
+
+/* ── View toggle ───────────────────────────────────────────────────── */
+function setTasksView(v) {
+  TASKS_VIEW = v;
+  document.querySelectorAll('.task-view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  renderTasksGrid();
+}
+
+/* ── Filtragem comum (Kanban + Calendário reusam a mesma lógica do Lista) ── */
+function _getFilteredTasks() {
+  const search  = (document.getElementById('task-search')?.value || '').toLowerCase();
+  const ownerF  = currentUser?.isAdmin
+    ? (document.getElementById('task-filter-owner')?.value  || '')
+    : (currentUser?.id || '');
+  const clientF = document.getElementById('task-filter-client')?.value || '';
+  const statusF = document.getElementById('task-filter-status')?.value || '';
+
+  let tasks = TASKS_DATA.map(t => ({
+    ...t,
+    status:     normalizeTaskStatus(t.status),
+    priority:   normalizeTaskPriority(t),
+    assignedTo: t.assignedTo || t.owner || '',
+  }));
+  if (search)  tasks = tasks.filter(t => t.title.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search));
+  if (ownerF)  tasks = tasks.filter(t =>
+    t.assignedTo === ownerF || t.created_by === ownerF || t.owner === ownerF ||
+    (Array.isArray(t.assignedToList) && t.assignedToList.includes(ownerF))
+  );
+  if (clientF) tasks = tasks.filter(t => t.client === clientF);
+  if (statusF) tasks = tasks.filter(t => t.status === statusF);
+  return tasks;
+}
+
+/* ── KANBAN VIEW ──────────────────────────────────────────────────────────── */
+function _renderTasksKanban(board) {
+  const tasks = _getFilteredTasks();
+  board.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'tk-kanban';
+
+  Object.entries(TASK_STATUS_CFG).forEach(([status, cfg]) => {
+    const colTasks = tasks.filter(t => t.status === status);
+
+    const col = document.createElement('div');
+    col.className = 'tk-col';
+    col.dataset.status = status;
+
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', e => { if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over'); });
+    col.addEventListener('drop', e => {
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      const taskId = e.dataTransfer.getData('tk-task-id');
+      if (taskId) setMondayStatus(taskId, status);
+    });
+
+    col.innerHTML = `
+      <div class="tk-col-hdr">
+        <div class="tk-col-dot" style="background:${cfg.color}"></div>
+        <div class="tk-col-name">${status}</div>
+        <div class="tk-col-cnt">${colTasks.length}</div>
+      </div>
+      <div class="tk-cards" id="tk-cards-${status.replace(/[^a-z]/gi,'_')}"></div>
+    `;
+    wrap.appendChild(col);
+
+    const cardsEl = col.querySelector('.tk-cards');
+    if (!colTasks.length) {
+      cardsEl.innerHTML = '<div class="tk-col-empty"><i class="ti ti-inbox" style="display:block;font-size:18px;margin-bottom:4px;opacity:.4"></i>Sem tarefas</div>';
+    } else {
+      colTasks.forEach(t => cardsEl.appendChild(_buildKanbanCard(t)));
+    }
+  });
+
+  board.appendChild(wrap);
+}
+
+function _buildKanbanCard(task) {
+  const el = document.createElement('div');
+  el.className = 'tk-card';
+  el.draggable = true;
+
+  let _dragged = false;
+  el.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('tk-task-id', task.id);
+    el.classList.add('dragging');
+    _dragged = true;
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging');
+    setTimeout(() => { _dragged = false; }, 80);
+  });
+  el.addEventListener('click', () => { if (!_dragged) openEditTaskModal(task.id); });
+
+  const client = (CLIENTS.list||[]).find(c => c.id === task.client);
+  const pc = TASK_PRIORITY_CFG[task.priority] || TASK_PRIORITY_CFG['Média'];
+
+  // Owner avatars
+  const ownerIds = task.assignedToList?.length ? task.assignedToList : (task.assignedTo ? [task.assignedTo] : []);
+  const avatarsHtml = ownerIds.map(uid => {
+    const u = USERS.find(u => u.id === uid);
+    return u ? `<span class="m-avatar" style="background:${u.color||'var(--accent)'}" title="${u.name}">${u.photo?`<img src="${u.photo}">`:`${u.initials}`}</span>` : '';
+  }).join('');
+
+  // Due date
+  const due = (task.dueDate || task.deadline || '').slice(0,10);
+  let dueHtml = '';
+  if (due) {
+    const [dy,dm,dd] = due.split('-').map(Number);
+    const diff = (new Date(dy,dm-1,dd) - new Date()) / 86400000;
+    const fmt = new Date(dy,dm-1,dd).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+    const cls = diff < 0 ? 'color:var(--red);font-weight:600' : diff < 3 ? 'color:var(--amber);font-weight:600' : 'color:var(--text3)';
+    dueHtml = `<span style="font-size:10px;${cls};margin-left:auto"><i class="ti ti-calendar" style="font-size:9px;margin-right:2px"></i>${fmt}</span>`;
+  }
+
+  el.innerHTML = `
+    <div class="tk-card-title" onclick="event.stopPropagation();openEditTaskModal('${task.id}')">${tkEscape(task.title)}</div>
+    <div class="tk-card-meta">
+      ${client ? `<span class="m-client">${tkEscape(client.name)}</span>` : ''}
+      <span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;background:${pc.bg};color:${pc.color}">${pc.icon} ${task.priority}</span>
+      ${avatarsHtml ? `<div style="display:inline-flex;align-items:center">${avatarsHtml}</div>` : ''}
+      ${dueHtml}
+    </div>
+  `;
+  return el;
+}
+
+/* ── CALENDAR VIEW ────────────────────────────────────────────────────────── */
+function _renderTasksCalendar(board) {
+  const tasks = _getFilteredTasks();
+  const now   = new Date();
+  if (_calYear  === null) _calYear  = now.getFullYear();
+  if (_calMonth === null) _calMonth = now.getMonth();
+
+  board.innerHTML = '';
+
+  const todayKey  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  // Agrupa tarefas por prazo
+  const byDate = {};
+  tasks.forEach(t => {
+    const due = (t.dueDate || t.deadline || '').slice(0,10);
+    if (!due) return;
+    if (!byDate[due]) byDate[due] = [];
+    byDate[due].push(t);
+  });
+
+  const firstDay   = new Date(_calYear, _calMonth, 1);
+  const lastDay    = new Date(_calYear, _calMonth + 1, 0);
+  const startDow   = firstDay.getDay(); // 0=Dom
+  const prevLast   = new Date(_calYear, _calMonth, 0).getDate();
+
+  // Nav
+  const nav = document.createElement('div');
+  nav.className = 'tk-cal-nav';
+  nav.innerHTML = `
+    <button class="btn btn-ghost btn-sm" onclick="_calNav(-1)"><i class="ti ti-chevron-left"></i></button>
+    <div class="tk-cal-nav-title">${monthNames[_calMonth]} ${_calYear}</div>
+    <button class="btn btn-ghost btn-sm" onclick="_calNav(1)"><i class="ti ti-chevron-right"></i></button>
+  `;
+  board.appendChild(nav);
+
+  const gridWrap = document.createElement('div');
+  gridWrap.style.overflowX = 'auto';
+  board.appendChild(gridWrap);
+
+  const grid = document.createElement('div');
+  grid.className = 'tk-cal-grid';
+  grid.style.minWidth = '560px';
+  gridWrap.appendChild(grid);
+
+  // Cabeçalho dias da semana
+  ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach(d => {
+    const h = document.createElement('div');
+    h.className = 'tk-cal-weekday';
+    h.textContent = d;
+    grid.appendChild(h);
+  });
+
+  const MAX_PER_DAY = 3;
+
+  // Dias do mês anterior
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = document.createElement('div');
+    d.className = 'tk-cal-day cal-other';
+    d.innerHTML = `<div class="tk-cal-day-num">${prevLast - i}</div>`;
+    grid.appendChild(d);
+  }
+
+  // Dias do mês atual
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const dateKey = `${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const isToday = dateKey === todayKey;
+    const d = document.createElement('div');
+    d.className = `tk-cal-day${isToday ? ' cal-today' : ''}`;
+    d.innerHTML = `<div class="tk-cal-day-num">${day}</div>`;
+
+    (byDate[dateKey] || []).slice(0, MAX_PER_DAY).forEach(t => {
+      const sc  = TASK_STATUS_CFG[t.status] || TASK_STATUS_CFG['Não Iniciada'];
+      const pill = document.createElement('div');
+      pill.className = 'tk-cal-task';
+      pill.style.cssText = `background:${sc.bg};color:${sc.color};border:1px solid ${sc.border}`;
+      pill.title = t.title;
+      pill.textContent = t.title;
+      pill.addEventListener('click', e => { e.stopPropagation(); openEditTaskModal(t.id); });
+      d.appendChild(pill);
+    });
+    if ((byDate[dateKey]||[]).length > MAX_PER_DAY) {
+      const more = document.createElement('div');
+      more.className = 'tk-cal-more';
+      more.textContent = `+${byDate[dateKey].length - MAX_PER_DAY} mais`;
+      d.appendChild(more);
+    }
+    grid.appendChild(d);
+  }
+
+  // Dias do próximo mês
+  const total = startDow + lastDay.getDate();
+  const trailing = (7 - (total % 7)) % 7;
+  for (let i = 1; i <= trailing; i++) {
+    const d = document.createElement('div');
+    d.className = 'tk-cal-day cal-other';
+    d.innerHTML = `<div class="tk-cal-day-num">${i}</div>`;
+    grid.appendChild(d);
+  }
+}
+
+function _calNav(delta) {
+  if (_calYear === null) { const n = new Date(); _calYear = n.getFullYear(); _calMonth = n.getMonth(); }
+  _calMonth += delta;
+  if (_calMonth > 11) { _calMonth = 0; _calYear++; }
+  if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+  renderTasksGrid();
 }
 
 function setMondayStatus(taskId, status) {
