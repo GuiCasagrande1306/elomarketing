@@ -3996,14 +3996,14 @@
           <!-- Filtro de Colaborador — visível apenas para admins (loginUser controla display) -->
           <div id="task-collab-filter-wrap" style="display:flex;align-items:center;gap:6px">
             <span class="esteira-filter-label"><i class="ti ti-users" style="font-size:11px;margin-right:3px"></i>Colaborador</span>
-            <select class="esteira-filter-select" id="task-filter-owner" onchange="renderTasksGrid()" style="min-width:185px">
+            <select class="esteira-filter-select" id="task-filter-owner" onchange="_onTaskFilterChange()" style="min-width:185px">
               <option value="">Todos os Colaboradores</option>
             </select>
           </div>
-          <select class="monday-filter-sel" id="task-filter-client" onchange="renderTasksGrid()">
+          <select class="monday-filter-sel" id="task-filter-client" onchange="_onTaskFilterChange()">
             <option value="">Todos os clientes</option>
           </select>
-          <select class="monday-filter-sel" id="task-filter-status" onchange="renderTasksGrid()">
+          <select class="monday-filter-sel" id="task-filter-status" onchange="_onTaskFilterChange()">
             <option value="">Todos os status</option>
             <option value="Não Iniciada">Não Iniciada</option>
             <option value="Em Andamento">Em Andamento</option>
@@ -5721,7 +5721,7 @@ function navigate(page, el) {
   if (page === 'configuracoes') renderTeamPermissions();
   if (page === 'campanhas')     { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
-  if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); }
+  if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); loadClientsFromDB().then(() => renderEsteira()); }
   if (page === 'crm')           _crmInitAndRender();
   if (page === 'financeiro')    renderFinanceiro();
   // Ao abrir Tarefas: dados frescos + inicia polling de 10s
@@ -7209,96 +7209,50 @@ async function saveTask() {
     timerStartedAt,
   };
 
-  // ── Cloud-first: aguarda confirmação do Atlas antes de atualizar a UI ────────
-  // Fonte de verdade = servidor. localStorage é apenas cache, gravado após confirmação.
-  const saveBtn  = document.querySelector('#task-form button[type="submit"]');
-  const origLabel = saveBtn?.innerHTML || '<i class="ti ti-check"></i> Salvar Tarefa';
+  // ── Local-first: fecha modal IMEDIATAMENTE, sincroniza em background ──────────
+  // Fluxo: salva local → fecha modal → POST ao servidor em background.
+  // Se o servidor confirmar: marca _localUpdatedAt=null (limpa dirty flag).
+  // Se falhar (cold-start): _localUpdatedAt permanece → _autoSyncAndLoad re-envia.
+  taskObj._localUpdatedAt = Date.now(); // marca como pendente de confirmação
 
-  // Limpa banner de erro anterior
-  const _eb = document.getElementById('task-save-error-banner');
-  if (_eb) _eb.style.display = 'none';
-
-  const _setBtnState = (label) => {
-    if (!saveBtn) return;
-    saveBtn.disabled = !!label;
-    saveBtn.innerHTML = label || origLabel;
-  };
-  _setBtnState('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Salvando na nuvem…');
-
-  // Mensagens progressivas — cold-start do Render pode demorar até ~45s
-  const _t1 = setTimeout(() => _setBtnState('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Conectando ao servidor…'), 6000);
-  const _t2 = setTimeout(() => _setBtnState('<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Servidor acordando, aguarde…'), 18000);
-
-  const _clearTimers = () => { clearTimeout(_t1); clearTimeout(_t2); };
-
-  const _showError = (msg) => {
-    _clearTimers();
-    _setBtnState(null); // restaura botão
-    let banner = document.getElementById('task-save-error-banner');
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'task-save-error-banner';
-      banner.style.cssText = 'margin:8px 0;padding:10px 14px;background:#ff4d4d22;border:1px solid #ff4d4d66;border-radius:8px;color:#ff4d4d;font-size:12px;';
-      const form = document.getElementById('task-form');
-      if (form) form.prepend(banner);
-    }
-    banner.textContent = msg;
-    banner.style.display = 'block';
-  };
-
-  try {
-    const r = await _apiFetch('/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify(taskObj),
-    });
-    _clearTimers();
-
-    const serverOk    = r && !r._coldStart && !r.error && (r.ok || r.task);
-    const serverError = r && r.error && !r._coldStart;
-
-    if (serverOk) {
-      // ✅ Atlas confirmou — agora atualiza estado local e cache
-      if (isEdit) {
-        const idx = TASKS_DATA.findIndex(t => t.id === taskId);
-        if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
-        else            TASKS_DATA.unshift(taskObj);
-      } else {
-        const exists = TASKS_DATA.findIndex(t => t.id === taskId);
-        if (exists !== -1) TASKS_DATA[exists] = { ...TASKS_DATA[exists], ...taskObj };
-        else               TASKS_DATA.unshift(taskObj);
-      }
-      saveTasks();          // cache local (lido no próximo F5 antes do servidor responder)
-      renderTasksGrid();
-      updateNavBadges();
-      closeModal();
-      resetTaskForm();
-      console.log('[Tasks] ✅ salvo no Atlas:', taskId);
-      showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada com sucesso!', 'ok');
-      // 🔄 Recarrega do servidor para refletir os filtros reais de cada usuário
-      // (garante que Jaqueline veja no computador dela a tarefa criada para ela)
-      loadTasksFromDB().catch(() => {});
-
-    } else if (serverError) {
-      // ❌ Erro real (4xx/5xx) — mantém modal aberto
-      const msg = r.error || 'Erro desconhecido no servidor.';
-      console.error('[Tasks] ❌ erro servidor:', taskId, msg);
-      _showError('❌ Erro ao guardar: ' + msg + ' — verifique e tente novamente.');
-
-    } else {
-      // ⚠️ Cold-start / sem resposta JSON — servidor ainda acordando
-      console.warn('[Tasks] ⚠️ sem resposta do servidor:', taskId, r);
-      _showError('⚠️ Servidor sem resposta. Aguarde alguns segundos e tente novamente.');
-    }
-
-  } catch(e) {
-    // Erro de rede (sem conexão, etc.)
-    console.warn('[Tasks] ⚠️ erro de rede:', e.message);
-    _showError('⚠️ Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+  if (isEdit) {
+    const idx = TASKS_DATA.findIndex(t => t.id === taskId);
+    if (idx !== -1) TASKS_DATA[idx] = { ...TASKS_DATA[idx], ...taskObj };
+    else            TASKS_DATA.unshift(taskObj);
+  } else {
+    const exists = TASKS_DATA.findIndex(t => t.id === taskId);
+    if (exists !== -1) TASKS_DATA[exists] = { ...TASKS_DATA[exists], ...taskObj };
+    else               TASKS_DATA.unshift(taskObj);
   }
+  saveTasks();
+  renderTasksGrid();
+  updateNavBadges();
+  closeModal();
+  resetTaskForm();
+  showNotification(isEdit ? 'Tarefa atualizada!' : 'Tarefa criada!', 'ok');
+
+  // Background: persiste no servidor sem travar a UI
+  _apiFetch('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ ...taskObj, assignedTo: taskObj.assignedTo || currentUser?.id, created_by: taskObj.created_by || currentUser?.id, updated_by: currentUser?.id }),
+  }).then(r => {
+    if (r && !r._coldStart && !r.error && (r.ok || r.task)) {
+      const t = TASKS_DATA.find(x => x.id === taskId);
+      if (t) { delete t._localUpdatedAt; saveTasks(); }
+      console.log('[Tasks] ✅ salvo no servidor:', taskId);
+      loadTasksFromDB().catch(() => {});
+    } else if (r && r.error && !r._coldStart) {
+      console.error('[Tasks] POST erro servidor:', r.error);
+      showNotification(`⚠️ Erro ao salvar: ${r.error}`, 'warn');
+    }
+    // _coldStart ou null → _localUpdatedAt permanece → próximo _autoSyncAndLoad re-envia
+  }).catch(() => {
+    console.warn('[Tasks] POST falhou (rede) — tarefa pendente de sync:', taskId);
+  });
+
 }
 
-// _scheduleTaskRetry removido: com cloud-first, o modal fica aberto até o servidor
-// confirmar. O usuário clica "Salvar" de novo se quiser tentar novamente.
+// saveTask é local-first: modal fecha imediatamente, POST vai em background.
 
 /* ==========================================================================
    PROD_CONFIG — preencha antes de cada deploy
@@ -7441,12 +7395,18 @@ function deleteClientFromDB(id) {
 // Fonte de verdade compartilhada entre todos os usuários.
 // localStorage é usado como cache local para UX rápida.
 
-async function loadTasksFromDB() {
+async function loadTasksFromDB(extraParams = {}) {
   // Sempre envia o userId — o backend decide o filtro com base na role (ADMIN_IDS).
   // Admin → backend retorna todas as tarefas da agência.
   // Colaborador → backend filtra apenas as suas.
-  const uid    = currentUser?.id || '';
-  const apiUrl = uid ? `/api/tasks?userId=${encodeURIComponent(uid)}` : '/api/tasks';
+  const uid = currentUser?.id || '';
+  const qs  = new URLSearchParams();
+  if (uid)                    qs.set('userId',      uid);
+  if (extraParams.client)     qs.set('client',      extraParams.client);
+  if (extraParams.status)     qs.set('status',      extraParams.status);
+  if (extraParams.colaborador) qs.set('colaborador', extraParams.colaborador);
+  if (extraParams.data)       qs.set('data',        extraParams.data);
+  const apiUrl = `/api/tasks?${qs.toString()}`;
   const data = await _apiFetch(apiUrl);
   if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
 
@@ -7655,7 +7615,11 @@ async function syncTasksToDB() {
   if (!currentUser) { showNotification('Faça login antes de sincronizar.', 'warn'); return; }
   const btn = document.getElementById('task-sync-btn');
   const restore = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Verificando alertas…'; }
+
+  // Dispara run-monitor em background: verifica contas de anúncio e cria tarefas-alerta
+  // no Supabase (ex: "🚨 ALERTA: Saldo Crítico — Cliente X"). Não bloqueia o sync.
+  _apiFetch('/api/alerts/run-monitor', { method: 'POST' }).catch(() => {});
 
   // Para admins: reseta o filtro de owner para "todos" antes de buscar,
   // garantindo visão completa de toda a agência após o sync.
@@ -7663,6 +7627,8 @@ async function syncTasksToDB() {
     const ownerSel = document.getElementById('task-filter-owner');
     if (ownerSel) ownerSel.value = '';
   }
+
+  if (btn) btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando tarefas…';
 
   const before = TASKS_DATA.length;
   await _autoSyncAndLoad();
@@ -10549,7 +10515,7 @@ function renderEsteira() {
       : clients.map(c => {
           const st      = getOtimStatus(c);
           const lastStr = c.ultima_otimizacao
-            ? new Date(c.ultima_otimizacao).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' })
+            ? new Date(c.ultima_otimizacao).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' })
             : '—';
           const ownerU  = USERS.find(u => u.id === c.owner);
           const ownerLbl = ownerU ? ownerU.name : (c.owner || '—');
@@ -10685,6 +10651,8 @@ async function _syncOptimization(clientId, method, url, payload, attempt = 0) {
     if (idx !== -1) {
       CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
       localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+      renderEsteira();
+      if (OTIM_CLIENT_ID === updated.id) renderOtimHistory(CLIENTS.list[idx]);
     }
     console.log(`[Esteira] ${method} ${url} confirmado pelo servidor (tentativa ${attempt + 1})`);
     if (attempt > 0) showNotification('✅ Otimização sincronizada com sucesso!', 'ok');
@@ -19088,6 +19056,29 @@ function _populateTaskFilters() {
   }
 }
 
+/* Lida com mudança nos 3 selects de filtro (colaborador, cliente, status).
+   1) Re-renderiza imediatamente com dados locais (UX instantânea).
+   2) Dispara fetch ao servidor com os filtros como query params (dados frescos).
+   Flag _tasksFetching evita concorrência — a última mudança vence. */
+let _tasksFetching = false;
+function _onTaskFilterChange() {
+  renderTasksGrid(); // render local imediato
+  if (_tasksFetching) return; // já há fetch em andamento — o atual ainda vai re-renderizar
+  _tasksFetching = true;
+  const ownerF  = document.getElementById('task-filter-owner')?.value  || '';
+  const clientF = document.getElementById('task-filter-client')?.value || '';
+  const statusF = document.getElementById('task-filter-status')?.value || '';
+  const params  = {};
+  if (clientF) params.client      = clientF;
+  if (statusF) params.status      = statusF;
+  // colaborador só para admins; não-admins sempre filtram pelo próprio userId
+  if (currentUser?.isAdmin && ownerF) params.colaborador = ownerF;
+  loadTasksFromDB(params)
+    .then(() => renderTasksGrid())
+    .catch(() => {})
+    .finally(() => { _tasksFetching = false; });
+}
+
 function _buildTaskGroup(group, tasks) {
   const section = document.createElement('div');
   section.className = 'monday-group';
@@ -19394,7 +19385,21 @@ function setMondayStatus(taskId, status) {
 
   // Pronto → falha não reverte (re-sincroniza); demais status mantêm rollback normal.
   const _onFail = (status === 'Pronto') ? _onDoneFailSoft : _rollback;
-  updateTaskInDB(taskId, patch, 1, _onFail);
+  // PATCH /status é caminho rápido (envia só os campos necessários).
+  // Qualquer falha (rota inexistente, cold-start, 404) cai no PUT com retry completo.
+  _apiFetch(`/api/tasks/${taskId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ...patch, updated_by: currentUser?.id }),
+  }).then(r => {
+    if (r?.ok && r?.task) {
+      // ✅ PATCH confirmado — limpa dirty flag
+      const task = TASKS_DATA.find(x => x.id === taskId);
+      if (task?._localUpdatedAt) { delete task._localUpdatedAt; saveTasks(); }
+    } else {
+      // Qualquer outro resultado (cold-start, 404 rota, 404 task, 500) → fallback PUT
+      updateTaskInDB(taskId, patch, 1, _onFail);
+    }
+  }).catch(() => updateTaskInDB(taskId, patch, 1, _onFail));
   saveTasks(); renderTasksGrid(); updateNavBadges();
   showNotification(`Status → ${status}`, 'ok');
 }
