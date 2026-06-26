@@ -20873,12 +20873,24 @@ async function _crmApiLoad() {
       console.warn('[CRM API] Carregamento falhou ou cold-start — usando localStorage.');
       return false;
     }
-    const data = res;
+    // ── Purga leads de demonstração do Supabase (run-once automático) ───────
+    const data = res.filter(c => {
+      if (_CRM_MOCK_IDS.has(c.id)) {
+        console.log(`[CRM] Purgando lead de demo do Supabase: ${c.id} (${c.empresa})`);
+        _crmApiDelete(c.id);
+        return false;
+      }
+      return true;
+    });
 
     // ── GUARD: API vazia ─────────────────────────────────────────────────
     if (data.length === 0 && CRM_DATA.length > 0) {
-      console.warn(`[CRM] API retornou 0 leads mas há ${CRM_DATA.length} card(s) local(is) — bulk sync disparado.`);
-      _crmApiBulkSync();
+      // Apenas dispara re-sync se há cards reais locais (não mocks)
+      const realLocal = CRM_DATA.filter(c => !_CRM_MOCK_IDS.has(c.id));
+      if (realLocal.length > 0) {
+        console.warn(`[CRM] API retornou 0 leads mas há ${realLocal.length} card(s) real(is) local(is) — bulk sync disparado.`);
+        _crmApiBulkSync();
+      }
       return false;
     }
 
@@ -20893,10 +20905,10 @@ async function _crmApiLoad() {
       localOnly.forEach(card => _crmApiPut(card)); // corrige o servidor
     }
 
-    // Mescla: dados do servidor + cards locais não confirmados
-    CRM_DATA = [...data, ...localOnly];
+    // Mescla: dados do servidor + cards locais não confirmados (sem mocks)
+    CRM_DATA = [...data, ...localOnly].filter(c => !_CRM_MOCK_IDS.has(c.id));
     _crmSave();
-    return CRM_DATA.length > 0;
+    return true; // retorna true mesmo se vazio — CRM real pode estar vazio
   } catch (e) {
     console.warn('[CRM API] Carregamento falhou:', e.message);
     return false;
@@ -20914,9 +20926,6 @@ async function _crmInitAndRender() {
   const ok = await _crmApiLoad();
   if (ok) {
     renderCRM(); // re-renderiza com dados frescos do servidor
-  } else if (_crmIsFirstTime) {
-    // Primeira vez E API disponível → envia mock para o Atlas
-    _crmApiBulkSync();
   }
 }
 
@@ -20928,23 +20937,14 @@ async function _crmInitAndRender() {
    OBS: o caso [] = bug-overwrite é protegido pelo guard em _crmApiLoad().
 ── */
 const _crmStored = _crmLoad();
-const _crmIsFirstTime = _crmStored === null || _crmStored.length === 0;
 
-const _today_crm = new Date().toISOString().slice(0, 10);
-const _ago_crm   = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+// IDs dos leads de demonstração injetados na primeira versão — devem ser purgados
+// do Supabase caso ainda existam lá
+const _CRM_MOCK_IDS = new Set(['crm-1','crm-2','crm-3','crm-4','crm-5','crm-6','crm-7']);
 
-let CRM_DATA = _crmIsFirstTime ? [
-  { id:'crm-1', empresa:'Academia Prime Fit',    contato:'João Silva',    valor:2800,  origem:'Meta Ads',   coluna:'lead',       resultado:null,      telefone:'(11) 99100-0001', obs:'',                             nextFollowUp: _ago_crm(3),  data: _ago_crm(2) },
-  { id:'crm-2', empresa:'Clínica Estética Glow', contato:'Ana Ferreira',  valor:4500,  origem:'Indicação',  coluna:'contato',    resultado:null,      telefone:'(11) 99200-0002', obs:'Reunião agendada p/ 5ª',       nextFollowUp: _today_crm,   data: _ago_crm(1) },
-  { id:'crm-3', empresa:'Loja Villa Casa',        contato:'Pedro Mota',   valor:3200,  origem:'Inbound',    coluna:'proposta',   resultado:null,      telefone:'',                obs:'Proposta enviada por e-mail',  nextFollowUp: _ago_crm(-2), data: _ago_crm(3) },
-  { id:'crm-4', empresa:'Burger & Co.',           contato:'Lia Santos',   valor:1900,  origem:'Meta Ads',   coluna:'negociacao', resultado:null,      telefone:'(11) 99400-0004', obs:'Negociando prazo de contrato', nextFollowUp: _ago_crm(1),  data: _ago_crm(1) },
-  { id:'crm-5', empresa:'Studio Pilates Viva',    contato:'Carla Nunes',  valor:2200,  origem:'Orgânico',   coluna:'fechado',    resultado:'ganho',   telefone:'',                obs:'',                             nextFollowUp: null,         data: _ago_crm(5) },
-  { id:'crm-6', empresa:'Tech Soluções LTDA',     contato:'Marcos Costa', valor:6000,  origem:'Google Ads', coluna:'fechado',    resultado:'perdido', telefone:'(11) 99600-0006', obs:'Optaram por concorrente',      nextFollowUp: null,         data: _ago_crm(8) },
-  { id:'crm-7', empresa:'Restaurante Bella',      contato:'Sofia Lima',   valor:1500,  origem:'Indicação',  coluna:'lead',       resultado:null,      telefone:'',                obs:'',                             nextFollowUp: _today_crm,   data: _today_crm  },
-] : _crmStored;
-
-/* Grava o mock na primeira execução */
-if (_crmIsFirstTime) _crmSave();
+let CRM_DATA = (_crmStored !== null && _crmStored.length > 0)
+  ? _crmStored.filter(c => !_CRM_MOCK_IDS.has(c.id))  // filtra mocks do cache local
+  : [];
 
 /* ── Helpers ── */
 function _crmFmtBRL(v) {
