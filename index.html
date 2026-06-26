@@ -2727,6 +2727,21 @@
 .m-due{font-size:12px;color:var(--text3);white-space:nowrap}
 .m-due.overdue{color:var(--red);font-weight:600}
 .m-due.soon{color:var(--amber);font-weight:600}
+/* ── CRIATIVOS — ESTEIRA DE PRODUÇÃO ──────────────────────────── */
+.cprod-table{width:100%;border-collapse:collapse}
+.cprod-th{text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:8px 14px;background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
+.cprod-tr{border-bottom:1px solid var(--row-border);transition:background .1s;cursor:pointer}
+.cprod-tr:last-child{border-bottom:none}
+.cprod-tr:hover{background:rgba(255,255,255,0.025)}
+.cprod-td{padding:10px 14px;font-size:13px;color:var(--text2);vertical-align:middle}
+.cprod-titulo{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;display:block}
+.cprod-cliente-tag{display:inline-flex;align-items:center;margin-top:4px;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(108,99,255,.1);color:var(--accent2);border:1px solid rgba(108,99,255,.18)}
+.cprod-overdue{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(248,113,113,.18);color:#F87171;border:1px solid rgba(248,113,113,.35);animation:cprod-blink 1.4s ease-in-out infinite}
+@keyframes cprod-blink{0%,100%{opacity:1}50%{opacity:.4}}
+.cprod-prazo-ok{font-size:12px;color:var(--text3)}
+.cprod-prazo-late{font-size:12px;color:var(--red);font-weight:600}
+.cprod-prazo-soon{font-size:12px;color:var(--amber);font-weight:600}
+.cprod-empty{padding:52px 16px;text-align:center;color:var(--text3);font-size:13px}
 .monday-add-row{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:12px;color:var(--text3);cursor:pointer;border-top:1px solid var(--border);transition:background .1s,color .1s}
 .monday-add-row:hover{background:var(--bg3);color:var(--text)}
 .m-dropdown{position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9999;min-width:155px;overflow:hidden;animation:fadeIn .1s ease}
@@ -4320,8 +4335,38 @@
 
     <!-- ===== GESTÃO DE CRIATIVOS ===== -->
     <div class="page" id="page-creatives">
-      <div class="cr-summary" id="cr-summary"></div>
-      <div class="cr-grid" id="cr-grid"></div>
+      <!-- Toolbar -->
+      <div class="monday-toolbar">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input type="text" class="monday-search" id="cprod-search" placeholder="🔍 Buscar vídeo ou designer..." oninput="renderCreatives()" autocomplete="off">
+          <select class="monday-filter-sel" id="cprod-filter-client" onchange="renderCreatives()">
+            <option value="">Todos os clientes</option>
+          </select>
+          <select class="monday-filter-sel" id="cprod-filter-etapa" onchange="renderCreatives()">
+            <option value="">Todas as etapas</option>
+            <option value="Briefing">Briefing</option>
+            <option value="Roteiro/Gravação">Roteiro/Gravação</option>
+            <option value="Em Edição">Em Edição</option>
+            <option value="Aprovação Interna">Aprovação Interna</option>
+            <option value="Ajustes">Ajustes</option>
+            <option value="Aprovado">Aprovado</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="loadCreativesFromDB()" title="Recarregar do servidor">
+            <i class="ti ti-refresh"></i> Atualizar
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="openCreativeModal()">
+            <i class="ti ti-plus"></i> Novo Vídeo
+          </button>
+        </div>
+      </div>
+      <!-- KPIs -->
+      <div id="cprod-kpi" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+      <!-- Tabela -->
+      <div class="monday-group" style="overflow-x:auto">
+        <div id="cprod-board"></div>
+      </div>
     </div>
 
     <!-- ===== CONFIGURAÇÕES ===== -->
@@ -5232,6 +5277,67 @@
   </div>
 </div>
 
+<!-- ===== MODAL — CRIATIVO DE VÍDEO ===== -->
+<div class="modal-overlay" id="modal-creatives" onclick="if(event.target===this)closeCProdModal()">
+  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title"><i class="ti ti-video" style="color:var(--accent2);margin-right:6px"></i><span id="cprod-modal-title">Novo Vídeo</span></div>
+      <button class="modal-close" onclick="closeCProdModal()" aria-label="Fechar"><i class="ti ti-x"></i></button>
+    </div>
+    <form id="cprod-form" onsubmit="event.preventDefault();saveCreative()">
+      <div class="form-group">
+        <label class="form-label" for="cprod-titulo">Título do Vídeo *</label>
+        <input type="text" id="cprod-titulo" class="form-input" placeholder="Ex: Anúncio Black Friday — Produto X" autocomplete="off" required>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="cprod-cliente">Cliente</label>
+          <select id="cprod-cliente" class="form-select">
+            <option value="">Sem cliente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cprod-designer">Designer Responsável</label>
+          <input type="text" id="cprod-designer" class="form-input" placeholder="Nome do designer" autocomplete="off">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="cprod-etapa">Etapa *</label>
+          <select id="cprod-etapa" class="form-select" required>
+            <option value="Briefing">Briefing</option>
+            <option value="Roteiro/Gravação">Roteiro/Gravação</option>
+            <option value="Em Edição">Em Edição</option>
+            <option value="Aprovação Interna">Aprovação Interna</option>
+            <option value="Ajustes">Ajustes</option>
+            <option value="Aprovado">Aprovado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cprod-prazo">Prazo de Entrega</label>
+          <input type="date" id="cprod-prazo" class="form-input">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cprod-link">Link do Vídeo (Drive / Frame.io / Replay)</label>
+        <input type="url" id="cprod-link" class="form-input" placeholder="https://drive.google.com/..." autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cprod-briefing">Briefing / Ideia</label>
+        <textarea id="cprod-briefing" class="form-input" rows="3" placeholder="Conceito, referências, tom de voz, duração..."></textarea>
+      </div>
+      <div id="cprod-delete-wrap" style="display:none;margin-top:10px">
+        <button type="button" onclick="deleteCreative()" style="width:100%;padding:9px;background:rgba(248,113,113,.10);color:#F87171;border:1px solid rgba(248,113,113,.28);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px"><i class="ti ti-trash"></i> Excluir Demanda</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" class="btn btn-ghost" style="flex:1" onclick="closeCProdModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary" style="flex:1"><i class="ti ti-check"></i> Salvar</button>
+      </div>
+      <input type="hidden" id="cprod-edit-id" value="">
+    </form>
+  </div>
+</div>
+
 <!-- ===== MODAL — NOVO TEMPLATE DE RELATÓRIO ===== -->
 <div class="modal-overlay" id="modal-template-overlay" onclick="closeTemplateModalOutside(event)">
   <div class="modal" style="width:520px">
@@ -5460,7 +5566,7 @@ const pageConfig = {
   esteira:        { title: 'Esteira de Otimizações', sub: 'Rotina semanal por cliente — saiba o que otimizar cada dia' },
   contas:         { title: 'Contas de Anúncio',       sub: 'Contas Meta Ads vinculadas por cliente' },
   campanhas:      { title: 'Campanhas',            sub: 'Dados importados via CSV ou Meta API' },
-  creatives:      { title: 'Gestão de Criativos',  sub: 'Cronograma de entrega: 1 vídeo/semana' },
+  creatives:      { title: 'Gestão de Criativos',  sub: 'Esteira de produção — acompanhe prazos e etapas de cada vídeo' },
   calendar:       { title: 'Calendário Editorial', sub: 'Planeamento de Conteúdo' },
   leads:          { title: 'Leads / WhatsApp',     sub: 'Pipeline de conversas e qualificação' },
   relatorios:     { title: 'Relatórios',           sub: 'Geração de relatórios por cliente' },
@@ -5723,6 +5829,7 @@ function navigate(page, el) {
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
   if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); loadClientsFromDB().then(() => renderEsteira()); }
   if (page === 'crm')           _crmInitAndRender();
+  if (page === 'creatives')     { _populateCreativesFilters(); renderCreatives(); loadCreativesFromDB(); }
   if (page === 'financeiro')    renderFinanceiro();
   // Ao abrir Tarefas: dados frescos + inicia polling de 10s
   if (page === 'tarefas') { loadTasks(); _populateTaskFilters(); _startTasksPolling(); }
@@ -18855,6 +18962,232 @@ window.deletarCliente = async function(id) {
 
   showNotification(`Cliente "${client.name}" excluído com sucesso.`, 'warn');
 };
+
+/* ══════════════════════════════════════════════════════════════════
+   CRIATIVOS — ESTEIRA DE PRODUÇÃO DE VÍDEOS
+══════════════════════════════════════════════════════════════════ */
+let CREATIVES_DATA = [];
+
+const CPROD_ETAPA_CFG = {
+  'Briefing':           { color:'var(--text3)',   bg:'var(--badge-gray-bg)',       border:'var(--border)',              icon:'ti-file-description' },
+  'Roteiro/Gravação':   { color:'var(--blue)',    bg:'rgba(96,165,250,.14)',        border:'rgba(96,165,250,.3)',         icon:'ti-microphone'       },
+  'Em Edição':          { color:'var(--amber)',   bg:'rgba(245,158,11,.14)',        border:'rgba(245,158,11,.3)',         icon:'ti-scissors'         },
+  'Aprovação Interna':  { color:'var(--accent2)', bg:'rgba(108,99,255,.14)',        border:'rgba(108,99,255,.3)',         icon:'ti-eye'              },
+  'Ajustes':            { color:'var(--red)',     bg:'rgba(248,113,113,.14)',       border:'rgba(248,113,113,.3)',        icon:'ti-refresh-alert'    },
+  'Aprovado':           { color:'var(--green)',   bg:'rgba(34,211,160,.14)',        border:'rgba(34,211,160,.3)',         icon:'ti-circle-check'     },
+};
+
+async function loadCreativesFromDB() {
+  const data = await _apiFetch('/api/creatives');
+  if (!data || data._coldStart) return;
+  if (Array.isArray(data)) {
+    CREATIVES_DATA = data;
+    renderCreatives();
+  }
+}
+
+function _populateCreativesFilters() {
+  const clientSel = document.getElementById('cprod-filter-client');
+  if (!clientSel) return;
+  const prev = clientSel.value;
+  clientSel.innerHTML = '<option value="">Todos os clientes</option>';
+  (CLIENTS.list || []).forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.name;
+    clientSel.appendChild(o);
+  });
+  if (prev) clientSel.value = prev;
+}
+
+function renderCreatives() {
+  const board = document.getElementById('cprod-board');
+  if (!board) return;
+
+  _populateCreativesFilters();
+
+  const search  = (document.getElementById('cprod-search')?.value  || '').toLowerCase();
+  const clientF = document.getElementById('cprod-filter-client')?.value || '';
+  const etapaF  = document.getElementById('cprod-filter-etapa')?.value  || '';
+
+  let items = [...CREATIVES_DATA];
+  if (search)  items = items.filter(v =>
+    (v.tituloVideo         || '').toLowerCase().includes(search) ||
+    (v.designerResponsavel || '').toLowerCase().includes(search) ||
+    (v.briefing            || '').toLowerCase().includes(search)
+  );
+  if (clientF) items = items.filter(v => v.clienteId === clientF);
+  if (etapaF)  items = items.filter(v => v.etapa     === etapaF);
+
+  // KPIs
+  const kpiEl  = document.getElementById('cprod-kpi');
+  const todayS = new Date().toISOString().slice(0, 10);
+  if (kpiEl) {
+    const atrasados = CREATIVES_DATA.filter(v => v.prazoEntrega && v.prazoEntrega < todayS && v.etapa !== 'Aprovado').length;
+    const emEdicao  = CREATIVES_DATA.filter(v => v.etapa === 'Em Edição').length;
+    const aprovados = CREATIVES_DATA.filter(v => v.etapa === 'Aprovado').length;
+    const total     = CREATIVES_DATA.length;
+    kpiEl.innerHTML =
+      `<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);font-size:11px;font-weight:700;color:var(--red)"><i class="ti ti-clock-exclamation"></i>${atrasados} atrasado${atrasados!==1?'s':''}</div>` +
+      `<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);font-size:11px;font-weight:700;color:var(--amber)"><i class="ti ti-scissors"></i>${emEdicao} em edição</div>` +
+      `<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:rgba(34,211,160,.1);border:1px solid rgba(34,211,160,.25);font-size:11px;font-weight:700;color:var(--green)"><i class="ti ti-circle-check"></i>${aprovados} aprovado${aprovados!==1?'s':''}</div>` +
+      `<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:var(--bg3);border:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text2)"><i class="ti ti-video"></i>${total} total</div>`;
+  }
+
+  if (items.length === 0) {
+    board.innerHTML = `<div class="cprod-empty"><i class="ti ti-video-off" style="font-size:36px;opacity:.25;display:block;margin-bottom:10px"></i>Nenhum vídeo encontrado.<br><span style="font-size:11px;margin-top:4px;display:block">Clique em <strong>+ Novo Vídeo</strong> para cadastrar a primeira demanda.</span></div>`;
+    return;
+  }
+
+  const in2days = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+
+  const rows = items.map(v => {
+    const cliente    = (CLIENTS.list || []).find(c => c.id === v.clienteId);
+    const clienteNm  = cliente ? tkEscape(cliente.name) : (v.clienteId ? tkEscape(v.clienteId) : '');
+    const etapaCfg   = CPROD_ETAPA_CFG[v.etapa] || CPROD_ETAPA_CFG['Briefing'];
+    const isLate     = v.prazoEntrega && v.prazoEntrega < todayS && v.etapa !== 'Aprovado';
+    const isSoon     = !isLate && v.prazoEntrega && v.prazoEntrega <= in2days;
+    const prazoFmt   = v.prazoEntrega
+      ? new Date(v.prazoEntrega + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : null;
+
+    const prazoHtml = prazoFmt
+      ? `<span class="${isLate ? 'cprod-prazo-late' : isSoon ? 'cprod-prazo-soon' : 'cprod-prazo-ok'}">${prazoFmt}</span>`
+      : `<span style="font-size:12px;color:var(--text3)">—</span>`;
+
+    const overdueHtml = isLate
+      ? `<span class="cprod-overdue"><i class="ti ti-alert-triangle" style="font-size:10px"></i> ATRASADO — COBRAR</span>`
+      : '';
+
+    const linkHtml = v.linkVideo
+      ? `<a href="${tkEscape(v.linkVideo)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;white-space:nowrap"><i class="ti ti-external-link"></i> Abrir</a>`
+      : `<span style="font-size:11px;color:var(--text3)">—</span>`;
+
+    return `<tr class="cprod-tr" onclick="openCreativeModal('${tkEscape(v.id)}')">
+      <td class="cprod-td">
+        <span class="cprod-titulo" title="${tkEscape(v.tituloVideo)}">${tkEscape(v.tituloVideo)}</span>
+        ${clienteNm ? `<span class="cprod-cliente-tag">${clienteNm}</span>` : ''}
+      </td>
+      <td class="cprod-td" style="font-size:12px;color:var(--text2)">${v.designerResponsavel ? `<i class="ti ti-user" style="font-size:11px;margin-right:3px;color:var(--text3)"></i>${tkEscape(v.designerResponsavel)}` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="cprod-td">
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;background:${etapaCfg.bg};color:${etapaCfg.color};border:1px solid ${etapaCfg.border};white-space:nowrap">
+          <i class="ti ${etapaCfg.icon}" style="font-size:11px"></i>${tkEscape(v.etapa)}
+        </span>
+      </td>
+      <td class="cprod-td" onclick="event.stopPropagation()">
+        <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
+          ${prazoHtml}${overdueHtml}
+        </div>
+      </td>
+      <td class="cprod-td" onclick="event.stopPropagation()">${linkHtml}</td>
+    </tr>`;
+  }).join('');
+
+  board.innerHTML = `<table class="cprod-table">
+    <thead><tr>
+      <th class="cprod-th">Vídeo / Cliente</th>
+      <th class="cprod-th">Designer</th>
+      <th class="cprod-th">Etapa</th>
+      <th class="cprod-th">Prazo</th>
+      <th class="cprod-th">Link</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function openCreativeModal(id) {
+  const modal = document.getElementById('modal-creatives');
+  if (!modal) return;
+
+  // Popula select de cliente
+  const clientSel = document.getElementById('cprod-cliente');
+  if (clientSel) {
+    clientSel.innerHTML = '<option value="">Sem cliente</option>';
+    (CLIENTS.list || []).forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      clientSel.appendChild(o);
+    });
+  }
+
+  const editId     = document.getElementById('cprod-edit-id');
+  const deleteWrap = document.getElementById('cprod-delete-wrap');
+  const titleEl    = document.getElementById('cprod-modal-title');
+
+  if (id) {
+    const v = CREATIVES_DATA.find(x => x.id === id);
+    if (!v) return;
+    titleEl.textContent = 'Editar Vídeo';
+    editId.value = id;
+    document.getElementById('cprod-titulo').value    = v.tituloVideo         || '';
+    document.getElementById('cprod-designer').value  = v.designerResponsavel || '';
+    document.getElementById('cprod-etapa').value     = v.etapa               || 'Briefing';
+    document.getElementById('cprod-prazo').value     = v.prazoEntrega        || '';
+    document.getElementById('cprod-link').value      = v.linkVideo           || '';
+    document.getElementById('cprod-briefing').value  = v.briefing            || '';
+    if (clientSel) clientSel.value = v.clienteId || '';
+    if (deleteWrap) deleteWrap.style.display = 'block';
+  } else {
+    titleEl.textContent = 'Novo Vídeo';
+    editId.value = '';
+    document.getElementById('cprod-form').reset();
+    if (deleteWrap) deleteWrap.style.display = 'none';
+  }
+
+  modal.classList.add('open');
+}
+
+function closeCProdModal() {
+  document.getElementById('modal-creatives')?.classList.remove('open');
+}
+
+async function saveCreative() {
+  const editId = document.getElementById('cprod-edit-id').value;
+  const obj = {
+    id:                  editId || crypto.randomUUID(),
+    tituloVideo:         document.getElementById('cprod-titulo').value.trim(),
+    clienteId:           document.getElementById('cprod-cliente').value     || null,
+    designerResponsavel: document.getElementById('cprod-designer').value.trim() || null,
+    etapa:               document.getElementById('cprod-etapa').value,
+    prazoEntrega:        document.getElementById('cprod-prazo').value       || null,
+    linkVideo:           document.getElementById('cprod-link').value.trim() || null,
+    briefing:            document.getElementById('cprod-briefing').value.trim() || null,
+    createdBy:           currentUser?.id,
+    updatedBy:           currentUser?.id,
+  };
+  if (!obj.tituloVideo) { showNotification('Título é obrigatório.', 'warn'); return; }
+
+  // Optimistic update
+  const idx = CREATIVES_DATA.findIndex(x => x.id === obj.id);
+  if (idx !== -1) CREATIVES_DATA[idx] = { ...CREATIVES_DATA[idx], ...obj };
+  else            CREATIVES_DATA.unshift(obj);
+
+  renderCreatives();
+  closeCProdModal();
+  showNotification(editId ? 'Vídeo atualizado!' : 'Vídeo criado!', 'ok');
+
+  _apiFetch('/api/creatives', { method: 'POST', body: JSON.stringify(obj) }).then(r => {
+    if (r && !r._coldStart && r.ok && r.creative) {
+      const i2 = CREATIVES_DATA.findIndex(x => x.id === obj.id);
+      if (i2 !== -1) CREATIVES_DATA[i2] = r.creative;
+      renderCreatives();
+      console.log('[Creatives] ✅ salvo no servidor:', obj.id);
+    } else if (r?.error && !r._coldStart) {
+      showNotification(`⚠️ Erro ao salvar: ${r.error}`, 'warn');
+    }
+  }).catch(() => {});
+}
+
+async function deleteCreative() {
+  const id = document.getElementById('cprod-edit-id').value;
+  if (!id) return;
+  const v = CREATIVES_DATA.find(x => x.id === id);
+  if (!confirm(`Excluir "${v?.tituloVideo}"?`)) return;
+  CREATIVES_DATA = CREATIVES_DATA.filter(x => x.id !== id);
+  renderCreatives();
+  closeCProdModal();
+  showNotification('Demanda excluída.', 'warn');
+  _apiFetch(`/api/creatives/${id}`, { method: 'DELETE' }).catch(() => {});
+}
 
 /* ══════════════════════════════════════════════════════════════════
    MONDAY-STYLE TASK BOARD
