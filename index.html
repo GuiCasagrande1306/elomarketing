@@ -5905,7 +5905,7 @@ function navigate(page, el) {
   if (page === 'configuracoes') renderTeamPermissions();
   if (page === 'campanhas')     { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
-  if (page === 'esteira')       { const _eu = _collabUid(); ESTEIRA_COLABORADOR = _eu === 'all' ? 'todos' : _eu; renderEsteira(); loadClientsFromDB().then(() => renderEsteira()); }
+  if (page === 'esteira')       { ESTEIRA_COLABORADOR = 'todos'; renderEsteira(); loadClientsFromDB().then(() => renderEsteira()); }
   if (page === 'crm')           _crmInitAndRender();
   if (page === 'creatives')     { _populateCreativesFilters(); renderCreatives(); loadCreativesFromDB(); }
   if (page === 'financeiro')    renderFinanceiro();
@@ -7581,12 +7581,9 @@ function deleteClientFromDB(id) {
 // localStorage é usado como cache local para UX rápida.
 
 async function loadTasksFromDB(extraParams = {}) {
-  // Sempre envia o userId — o backend decide o filtro com base na role (ADMIN_IDS).
-  // Admin → backend retorna todas as tarefas da agência.
-  // Colaborador → backend filtra apenas as suas.
-  const uid = currentUser?.id || '';
-  const qs  = new URLSearchParams();
-  if (uid)                    qs.set('userId',      uid);
+  // Todos os colaboradores recebem todas as tarefas — isolamento removido.
+  // O filtro por colaborador é aplicado apenas quando o dropdown envia `colaborador`.
+  const qs = new URLSearchParams();
   if (extraParams.client)     qs.set('client',      extraParams.client);
   if (extraParams.status)     qs.set('status',      extraParams.status);
   if (extraParams.colaborador) qs.set('colaborador', extraParams.colaborador);
@@ -7712,7 +7709,6 @@ async function loadTasksFromDB(extraParams = {}) {
   if (_hasRunningTimers()) _startTimerTick();
   renderTasksGrid();
   updateNavBadges();
-  if (currentUser) filterByCollaborator(_collabUid());
   return true;
 }
 
@@ -8295,25 +8291,24 @@ function loginUser(user) {
   document.getElementById('login-screen').classList.add('hidden');
   updateSidebarUser(user);
   const filterWrap = document.getElementById('collab-filter-wrap');
-  // Admins veem o seletor de colaborador; não-admins têm visão travada no próprio ID
-  if (filterWrap) filterWrap.style.display = user.isAdmin ? 'flex' : 'none';
+  // Todos os colaboradores veem o seletor — isolamento de dados removido
+  if (filterWrap) filterWrap.style.display = 'flex';
   const exportBtn = document.getElementById('topbar-export-btn');
   if (exportBtn) exportBtn.style.display = user.isAdmin ? '' : 'none';
   updateBackupLastInfo();
   // Carrega tokens centralizados do servidor (compartilhados entre dispositivos)
   loadAppConfig();
-  // Popula as opções dinamicamente a partir de USERS (só relevante para admins)
+  // Popula as opções dinamicamente a partir de USERS
   const sel = document.getElementById('collab-filter');
   if (sel) {
     sel.innerHTML = '<option value="all">Todos os Colaboradores</option>' +
       USERS.map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
-    // Admins começam com visão geral; colaboradores ficam travados no próprio ID
-    sel.value = user.isAdmin ? 'all' : user.id;
+    sel.value = 'all';
   }
-  // Esconde filtro de colaborador nas Tarefas para não-admins (visão travada no próprio ID)
+  // Mostra filtro de colaborador nas Tarefas para todos
   const taskCollabWrap = document.getElementById('task-collab-filter-wrap');
-  if (taskCollabWrap) taskCollabWrap.style.display = user.isAdmin ? '' : 'none';
-  filterByCollaborator(user.isAdmin ? 'all' : user.id);
+  if (taskCollabWrap) taskCollabWrap.style.display = '';
+  filterByCollaborator('all');
   refreshTaskOwnerChips();
   resetTaskForm();
   showWelcomeToast(user);
@@ -8695,8 +8690,6 @@ function showWelcomeToast(user) {
 
 // Retorna o uid do filtro ativo (lido do select do topbar)
 function _collabUid() {
-  // Colaboradores (não-admin) sempre veem apenas os próprios dados
-  if (currentUser && !currentUser.isAdmin) return currentUser.id;
   return document.getElementById('collab-filter')?.value || 'all';
 }
 
@@ -8923,8 +8916,7 @@ async function _pollTasks() {
     return;
   }
   try {
-    const uid    = currentUser.id || '';
-    const apiUrl = uid ? `/api/tasks?userId=${encodeURIComponent(uid)}` : '/api/tasks';
+    const apiUrl = '/api/tasks';
     const data   = await _apiFetch(apiUrl);
     if (!data || !Array.isArray(data)) return;   // silencia erros de rede / cold-start
 
