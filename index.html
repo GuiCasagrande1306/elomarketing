@@ -7798,13 +7798,15 @@ async function _autoSyncAndLoad() {
  */
 async function syncTasksToDB() {
   if (!currentUser) { showNotification('Faça login antes de sincronizar.', 'warn'); return; }
+
+  // ── Monitor de alertas desativado temporariamente ────────────────────────
+  // Reativar o bloco abaixo quando o token Meta estiver aprovado.
+  // _apiFetch('/api/alerts/run-monitor', { method: 'POST' }).catch(() => {});
+  // ── FIM DO BLOCO TEMPORÁRIO ───────────────────────────────────────────────
+
   const btn = document.getElementById('task-sync-btn');
   const restore = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Verificando alertas…'; }
-
-  // Dispara run-monitor em background: verifica contas de anúncio e cria tarefas-alerta
-  // no Supabase (ex: "🚨 ALERTA: Saldo Crítico — Cliente X"). Não bloqueia o sync.
-  _apiFetch('/api/alerts/run-monitor', { method: 'POST' }).catch(() => {});
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando…'; }
 
   // Para admins: reseta o filtro de owner para "todos" antes de buscar,
   // garantindo visão completa de toda a agência após o sync.
