@@ -10652,6 +10652,21 @@ function renderEsteira() {
   });
   const lateClients = baseList.filter(c => c.dia_otimizacao && getOtimStatus(c).cls === 'overdue');
 
+  // Auto-cria tarefa de otimização para cada cliente de hoje ainda não otimizado
+  if (currentUser) {
+    todayClients.forEach(c => {
+      if (!doneToday.some(d => d.id === c.id)) {
+        _gerarTarefaAlerta(
+          c,
+          'otimizacao',
+          `📊 Otimizar: ${c.name}`,
+          `Hoje é dia de otimização de ${c.name}. Acesse a Esteira para registrar as otimizações realizadas.`,
+          'Média'
+        );
+      }
+    });
+  }
+
   const statsEl = document.getElementById('esteira-stats');
   if (statsEl) {
     statsEl.innerHTML = `
@@ -10686,16 +10701,22 @@ function renderEsteira() {
     dayDate.setDate(today.getDate() + (dia.jsDay - todayDay));
     const dateStr = dayDate.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
 
-    /* apply collaborator filter */
-    const clients = baseList.filter(c => c.dia_otimizacao === dia.key);
+    /* apply collaborator filter + sort: overdue/never primeiro, feitos por último */
+    const clients = baseList
+      .filter(c => c.dia_otimizacao === dia.key)
+      .sort((a, b) => {
+        const order = { overdue: 0, never: 1, warning: 2, done: 3 };
+        return (order[getOtimStatus(a).cls] ?? 2) - (order[getOtimStatus(b).cls] ?? 2);
+      });
 
     const tableRows = clients.length === 0
       ? `<tr class="esteira-empty-row"><td colspan="4">Nenhum cliente neste dia</td></tr>`
       : clients.map(c => {
-          const st      = getOtimStatus(c);
-          const lastStr = c.ultima_otimizacao
+          const st        = getOtimStatus(c);
+          const _nextDia  = DIAS_SEMANA.find(d => d.key === c.dia_otimizacao);
+          const lastStr   = c.ultima_otimizacao
             ? new Date(c.ultima_otimizacao).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' })
-            : '—';
+            : (_nextDia ? `<span style="color:var(--text3);font-style:italic">Próxima: ${_nextDia.short}</span>` : '—');
           const ownerU  = USERS.find(u => u.id === c.owner);
           const ownerLbl = ownerU ? ownerU.name : (c.owner || '—');
           return `
@@ -14737,7 +14758,7 @@ function dateAddDays(days) {
 // ── Gera tarefa automática de alerta (com dedup por cliente+motivo+dia) ──────
 // Evita spam: só cria 1 tarefa por cliente+motivo a cada dia. Marca o id de forma
 // determinística (auto-alert-<clientId>-<motivo>-<YYYY-MM-DD>) para idempotência.
-function _gerarTarefaAlerta(client, motivo, titulo, descricao) {
+function _gerarTarefaAlerta(client, motivo, titulo, descricao, priority = 'Alta') {
   if (!currentUser) return;
   const hoje = new Date();
   const diaKey = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
@@ -14753,7 +14774,7 @@ function _gerarTarefaAlerta(client, motivo, titulo, descricao) {
     title:       titulo,
     description: descricao,
     status:      'Não Iniciada',
-    priority:    'Alta',
+    priority:    priority,
     group:       'semana',
     client:      client.id,
     assignedTo:  client.owner || currentUser.id,
@@ -15374,7 +15395,7 @@ async function renderBalanceMonitor() {
 
   container.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:12px">
     <i class="ti ti-loader-2" style="font-size:24px;animation:spin 1s linear infinite;display:block;margin-bottom:10px"></i>
-    Verificando contas...
+    Carregando dados do cache...
   </div>`;
 
   const clients = _filterClientsByCollab(CLIENTS.list, _collabUid()).filter(c => c.status !== 'churn');
@@ -15441,27 +15462,26 @@ async function renderBalanceMonitor() {
         }
       }
     } else {
-      // Fetch Meta, GA4 e Google Ads em paralelo
-      [metaData, ga4Data, gadsData] = await Promise.all([
-        fetchMetaAccountStatus(c),
-        c.ga4_property_id ? fetchGA4Stats(c) : Promise.resolve(null),
-        fetchGadsAccountStatus(c)
-      ]);
-
-      // ── Faturamento para delivery / e-commerce ────────────────────────────
-      // Prioridade: Meta Ads action_values (pixel purchase) > GA4 purchaseRevenue
-      // IMPORTANTE: synca MESMO quando faturamentoMetaAds = 0 (início do mês sem vendas).
-      // O guard `faturamentoMetaAds > 0` foi removido para garantir reset automático mensal.
-      const isEntregaSeg = c.segment === 'delivery' || c.segment === 'ecommerce';
-      if (isEntregaSeg && metaData !== null && metaData !== undefined) {
-        // Synca com o valor real da API (pode ser 0 no início do mês — isso é correto)
-        syncMetaRevenueToClient(c, metaData.faturamentoMetaAds || 0, {
-          purchaseCount:    metaData.purchaseCount    || 0,
-          addToCartCount:   metaData.addToCartCount   || 0,
-          landingPageViews: metaData.landingPageViews || 0,
-        });
-      } else if (ga4Data && !ga4Data.error) {
-        syncGA4RevenueToClient(c, ga4Data.purchaseRevenue || 0);
+      // Lê dados do cache do banco (meta_balance, meta_spend7d, meta_account_status).
+      // Para atualizar via API use o botão "Sincronizar Saldos" → POST /api/meta/sync-balances.
+      if (c.meta_ad_account_id) {
+        const daysPassed  = Math.max(1, new Date().getDate());
+        const gastoDiario = c.investment > 0 ? c.investment / daysPassed : 0;
+        metaData = {
+          balance:       c.meta_balance          || 0,
+          dailySpend:    gastoDiario,
+          spend7d:       c.meta_spend7d          || 0,
+          gastoTotal7d:  c.meta_spend7d          || 0,
+          amountSpent:   c.investment            || 0,
+          status:        c.meta_account_status   != null ? c.meta_account_status : 1,
+          payType:       c.metodo_pagamento === 'pre_pago' ? 'prepaid' : 'postpaid',
+          budgetPct:     c.budget > 0 && c.investment > 0 ? (c.investment / c.budget) * 100 : 0,
+          _fromCache:    true,
+        };
+        // Se token foi marcado como inválido, exibe banner de aviso
+        if (c.meta_token_valido === false && !BAL_SYNC_ERROR) {
+          BAL_SYNC_ERROR = 'META_TOKEN_EXPIRED';
+        }
       }
     }
 
@@ -15620,6 +15640,29 @@ async function renderBalanceMonitor() {
   }
 }
 
+// ── Sincroniza saldos Meta via backend e re-renderiza o monitor ───────────────
+async function syncClientBalances() {
+  const btn = document.getElementById('btn-sync-balances');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;margin-right:5px"></i>Sincronizando...'; }
+  try {
+    const result = await _apiFetch('/api/meta/sync-balances', { method: 'POST' });
+    if (result && result.ok !== false) {
+      localStorage.setItem('_balSyncedAt', String(Date.now()));
+      // Recarrega clientes (com meta_balance frescos do banco) e re-renderiza
+      await loadClientsFromDB();
+      BAL_SYNC_ERROR = null;
+      renderBalanceMonitor();
+    } else {
+      console.warn('[syncClientBalances] Backend retornou erro:', result);
+    }
+  } catch (e) {
+    console.error('[syncClientBalances]', e.message);
+  } finally {
+    const b = document.getElementById('btn-sync-balances');
+    if (b) { b.disabled = false; b.innerHTML = '<i class="ti ti-refresh"></i> Sincronizar Saldos'; }
+  }
+}
+
 // ── Popula o dropdown de Colaboradores com os owners reais das contas ────────
 // Preserva a seleção atual. Chamado a cada renderBalanceMonitor.
 function _populateBalOwnerFilter(blocks) {
@@ -15687,7 +15730,17 @@ function applyFiltroToContainer() {
   const prepaidBlocks  = sortBlocks(filteredBlocks.filter(b => b.payType !== 'postpaid'));
   const postpaidBlocks = sortBlocks(filteredBlocks.filter(b => b.payType === 'postpaid'));
 
-  let finalHtml = '';
+  const _syncTs = Number(localStorage.getItem('_balSyncedAt') || '0');
+  const _syncLabel = _syncTs
+    ? `atualizado ${new Date(_syncTs).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} às ${new Date(_syncTs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`
+    : 'dados do banco — clique para sincronizar';
+  let finalHtml = `
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--text3)">${_syncLabel}</span>
+      <button id="btn-sync-balances" class="btn btn-ghost btn-sm" onclick="syncClientBalances()" style="font-size:11px;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-refresh"></i> Sincronizar Saldos
+      </button>
+    </div>`;
 
   if (prepaidBlocks.length > 0) {
     finalHtml += `
