@@ -2816,6 +2816,11 @@
 .m-dd-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .m-timer{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap;font-family:monospace;letter-spacing:.02em}
 .m-timer-running{color:#60A5FA;font-weight:700}
+.m-timer-btn{background:none;border:none;cursor:pointer;padding:2px 3px;border-radius:3px;font-size:10px;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:opacity .15s}
+.m-timer-btn:hover{opacity:.75}
+.m-timer-play{color:#22c55e}
+.m-timer-pause{color:#f59e0b;animation:timerPulse 1.2s ease-in-out infinite}
+@keyframes timerPulse{0%,100%{opacity:1}50%{opacity:.45}}
 
 /* ═══════════════════════════════════════════════════════════════════
    MOBILE RESPONSIVENESS  ≤ 768px
@@ -19676,13 +19681,15 @@ function _buildTaskRow(task, groupKey = 'semana') {
       ? `<span class="m-timer">${_formatTaskTime(frozenSecs)}</span>`
       : `<span class="m-timer" style="opacity:.35">—</span>`;
   } else {
-    // Grupos ativos: timer vivo com data-timer-id para o tick do cronômetro
+    // Grupos ativos: timer vivo com data-timer-id + botão Play/Pause
     const timerSecs = task.timerStartedAt
       ? (task.timeSpent || 0) + (Date.now() - new Date(task.timerStartedAt).getTime()) / 1000
       : (task.timeSpent || 0);
-    timerHtml = timerSecs > 0 || task.timerStartedAt
-      ? `<span class="m-timer${task.timerStartedAt ? ' m-timer-running' : ''}" data-timer-id="${task.id}">${_formatTaskTime(timerSecs)}</span>`
-      : `<span class="m-timer" data-timer-id="${task.id}" style="opacity:.35">—</span>`;
+    const timerSpan = `<span class="m-timer${task.timerStartedAt ? ' m-timer-running' : ''}" data-timer-id="${task.id}">${_formatTaskTime(timerSecs)}</span>`;
+    const timerBtn = task.timerStartedAt
+      ? `<button class="m-timer-btn m-timer-pause" onclick="pauseTaskTimer('${task.id}')" title="Pausar timer"><i class="ti ti-player-pause-filled"></i></button>`
+      : `<button class="m-timer-btn m-timer-play" onclick="startTaskTimer('${task.id}')" title="Iniciar timer"><i class="ti ti-player-play-filled"></i></button>`;
+    timerHtml = `<div style="display:flex;align-items:center;gap:4px;justify-content:center">${timerSpan}${timerBtn}</div>`;
   }
 
   tr.innerHTML = `
@@ -20236,13 +20243,11 @@ function _autoPauseRunawayTimer(t) {
 
 function _formatTaskTime(secs) {
   secs = Math.floor(secs || 0);
-  if (secs <= 0) return '0s';
+  if (secs < 0) secs = 0;
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
-  if (m > 0) return `${m}m ${String(s).padStart(2,'0')}s`;
-  return `${s}s`;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
 function _startTimerTick() {
@@ -20284,7 +20289,7 @@ function _persistTimerCheckpoint() {
   const now = Date.now();
   let changed = false;
   TASKS_DATA.forEach(t => {
-    if (!t.timerStartedAt || normalizeTaskStatus(t.status) !== 'Em Andamento') return;
+    if (!t.timerStartedAt || normalizeTaskStatus(t.status) === 'Pronto') return;
     if (_autoPauseRunawayTimer(t)) { changed = true; return; } // timer esquecido → pausa e trunca
     const elapsed    = _safeGapSecs(t.timerStartedAt);
     const totalSpent = (Number(t.timeSpent) || 0) + elapsed;
@@ -20313,7 +20318,37 @@ function _persistTimerCheckpoint() {
 }
 
 function _hasRunningTimers() {
-  return TASKS_DATA.some(t => t.timerStartedAt && normalizeTaskStatus(t.status) === 'Em Andamento');
+  return TASKS_DATA.some(t => t.timerStartedAt && normalizeTaskStatus(t.status) !== 'Pronto');
+}
+
+async function startTaskTimer(taskId) {
+  const t = TASKS_DATA.find(x => x.id === taskId);
+  if (!t || t.timerStartedAt) return;
+  t.timerStartedAt = new Date().toISOString();
+  t._localUpdatedAt = Date.now();
+  saveTasks();
+  renderTasksGrid();
+  _startTimerTick();
+  const r = await _apiFetch(`/api/tasks/${taskId}/timer/start`, { method: 'PATCH' });
+  if (r?.timerStartedAt) { t.timerStartedAt = r.timerStartedAt; saveTasks(); }
+}
+
+async function pauseTaskTimer(taskId) {
+  const t = TASKS_DATA.find(x => x.id === taskId);
+  if (!t || !t.timerStartedAt) return;
+  const elapsed = _safeGapSecs(t.timerStartedAt);
+  t.timeSpent = Math.min((Number(t.timeSpent) || 0) + elapsed, MAX_TIMER_SECS);
+  t.timerStartedAt = null;
+  t._localUpdatedAt = Date.now();
+  saveTasks();
+  renderTasksGrid();
+  if (!_hasRunningTimers()) _stopTimerTick();
+  _apiFetch(`/api/tasks/${taskId}/timer/pause`, { method: 'PATCH' }).catch(() => {
+    _apiFetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ timeSpent: t.timeSpent, timerStartedAt: null, updated_by: currentUser?.id }),
+    }).catch(() => {});
+  });
 }
 /* ══ fim Monday Board ═══════════════════════════════════════════════ */
 
