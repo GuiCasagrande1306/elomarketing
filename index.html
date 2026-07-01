@@ -20942,30 +20942,38 @@ async function _crmApiLoad(_retry = 0) {
 
     // ── GUARD: API vazia ─────────────────────────────────────────────────
     if (data.length === 0 && CRM_DATA.length > 0) {
-      // Apenas dispara re-sync se há cards reais locais (não mocks)
       const realLocal = CRM_DATA.filter(c => !_CRM_MOCK_IDS.has(c.id));
       if (realLocal.length > 0) {
-        console.warn(`[CRM] API retornou 0 leads mas há ${realLocal.length} card(s) real(is) local(is) — bulk sync disparado.`);
-        _crmApiBulkSync();
+        console.warn(`[CRM] API retornou 0 leads — bulk sync aguardado (${realLocal.length} card(s))...`);
+        await _apiFetch('/api/crm/bulk/sync', { method:'PUT', body: JSON.stringify(realLocal) })
+          .catch(e => console.warn('[CRM] bulk/sync falhou:', e?.message));
       }
       return false;
     }
 
     // ── MERGE seguro: server + local-only ────────────────────────────────
-    // Cards que existem localmente mas NÃO no servidor (PUT ainda não confirmado,
-    // cold-start na criação, etc.) são preservados e re-enviados ao Atlas.
+    // Cards que existem localmente mas NÃO no servidor são enviados via
+    // bulk/sync aguardado — garante que chegam antes do próximo GET.
     const serverIds = new Set(data.map(c => c.id).filter(Boolean));
     const localOnly = CRM_DATA.filter(c => c.id && !serverIds.has(c.id));
 
     if (localOnly.length > 0) {
-      console.warn(`[CRM] ${localOnly.length} card(s) local(is) ausente(s) no Atlas — preservando e re-enviando.`);
-      localOnly.forEach(card => _crmApiPut(card)); // corrige o servidor
+      console.warn(`[CRM] ${localOnly.length} card(s) local(is) ausente(s) no servidor — sync aguardado.`);
+      await _apiFetch('/api/crm/bulk/sync', { method:'PUT', body: JSON.stringify(localOnly) })
+        .catch(e => console.warn('[CRM] localOnly bulk/sync falhou:', e?.message));
+      // Re-fetch para obter o estado completo (inclui os cards recém enviados)
+      const res2 = await _apiFetch('/api/crm');
+      if (res2 && !res2._coldStart && Array.isArray(res2)) {
+        CRM_DATA = res2.filter(c => !_CRM_MOCK_IDS.has(c.id));
+        _crmSave();
+        return true;
+      }
     }
 
     // Mescla: dados do servidor + cards locais não confirmados (sem mocks)
     CRM_DATA = [...data, ...localOnly].filter(c => !_CRM_MOCK_IDS.has(c.id));
     _crmSave();
-    return true; // retorna true mesmo se vazio — CRM real pode estar vazio
+    return true;
   } catch (e) {
     console.warn('[CRM API] Carregamento falhou:', e.message);
     return false;
