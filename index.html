@@ -21018,21 +21018,31 @@ async function _crmForceSync() {
   if (btn) btn.disabled = false;
 }
 
-/* Auto-refresh: atualiza o CRM a cada 60s enquanto a página está visível */
+/* Auto-refresh: atualiza o CRM a cada 30s + ao retornar para a aba */
 let _crmRefreshInterval = null;
+let _crmLastRefresh = 0;
+
+async function _crmSilentRefresh() {
+  const activePage = document.querySelector('.page.active')?.id;
+  if (activePage !== 'page-crm') return;
+  if (document.visibilityState !== 'visible') return;
+  const ok = await _crmApiLoad();
+  if (ok) { renderCRM(); _crmLastRefresh = Date.now(); }
+}
+
 function _crmStartAutoRefresh() {
   _crmStopAutoRefresh();
-  _crmRefreshInterval = setInterval(async () => {
-    if (document.visibilityState !== 'visible') return;
-    const activePage = document.querySelector('.page.active')?.id;
-    if (activePage !== 'page-crm') return;
-    const ok = await _crmApiLoad();
-    if (ok) renderCRM();
-  }, 60000);
+  _crmRefreshInterval = setInterval(_crmSilentRefresh, 30000);
 }
 function _crmStopAutoRefresh() {
   if (_crmRefreshInterval) { clearInterval(_crmRefreshInterval); _crmRefreshInterval = null; }
 }
+
+// Ao voltar para a aba, sincroniza imediatamente se passaram mais de 15s
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - _crmLastRefresh > 15000) _crmSilentRefresh();
+});
 
 /* ── Dados iniciais ─────────────────────────────────────────────────────
    CRM_DATA começa sempre como [] — nunca injeta leads de demonstração.
