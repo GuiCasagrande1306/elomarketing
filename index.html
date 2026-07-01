@@ -20293,43 +20293,41 @@ function _stopTimerTick() {
   if (_timerPersistInterval) { clearInterval(_timerPersistInterval); _timerPersistInterval = null; }
 }
 
+// Ao voltar para a aba, força recálculo imediato dos timers via delta puro.
+// O setInterval pode ter sido throttled enquanto a aba estava em background;
+// este listener garante sincronia zero-erro com o relógio real ao retornar.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  document.querySelectorAll('[data-timer-id]').forEach(el => {
+    const t = TASKS_DATA.find(x => x.id === el.dataset.timerId);
+    if (!t?.timerStartedAt) return;
+    const total = (Number(t.timeSpent) || 0) + _safeGapSecs(t.timerStartedAt);
+    el.textContent = _formatTaskTime(total);
+    el.className   = 'm-timer m-timer-running';
+  });
+});
+
 /**
- * Checkpoint periódico do timer.
- * Acumula o tempo decorrido em timeSpent e reseta o timerStartedAt para "agora",
- * tanto em memória quanto no servidor (via PATCH /api/tasks/:id/timer).
- * Estratégia "rolling anchor": display continua correto como (timeSpent + (now - timerStartedAt)).
+ * Checkpoint periódico do timer (arquitetura Tempo Delta).
+ *
+ * NÃO usa mais rolling anchor — timerStartedAt é imutável durante uma sessão.
+ * O display já calcula (timeSpent + Date.now() - timerStartedAt) em cada tick,
+ * portanto não há risco de double-count mesmo sem rolar a âncora.
+ *
+ * O checkpoint apenas:
+ *   1. Auto-pausa timers esquecidos (>12h via _autoPauseRunawayTimer).
+ *   2. Salva estado no localStorage para sobreviver a F5 ou crash.
  */
 function _persistTimerCheckpoint() {
   if (!currentUser) return;
-  const now = Date.now();
   let changed = false;
   TASKS_DATA.forEach(t => {
     if (!t.timerStartedAt || normalizeTaskStatus(t.status) === 'Pronto') return;
-    if (_autoPauseRunawayTimer(t)) { changed = true; return; } // timer esquecido → pausa e trunca
-    const elapsed    = _safeGapSecs(t.timerStartedAt);
-    const totalSpent = (Number(t.timeSpent) || 0) + elapsed;
-    const newAnchor  = new Date(now).toISOString();
-    // Move tempo decorrido para timeSpent e reseta âncora para agora
-    t.timeSpent      = totalSpent;
-    t.timerStartedAt = newAnchor;
-    changed = true;
-    // Persiste ao servidor via endpoint leve (PATCH timer)
-    _apiFetch(`/api/tasks/${t.id}/timer`, {
-      method: 'PATCH',
-      body: JSON.stringify({ timeSpent: totalSpent, timerStartedAt: newAnchor }),
-    }).catch(() => {
-      // Fallback: PUT completo se PATCH falhar (Render não respondeu ao deploy ainda)
-      _apiFetch(`/api/tasks/${t.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          timeSpent: totalSpent, timerStartedAt: newAnchor,
-          updated_by: currentUser?.id || '',
-        }),
-      }).catch(() => {});
-    });
+    if (_autoPauseRunawayTimer(t)) { changed = true; }
   });
-  // Persiste checkpoint ao localStorage (sobrevive a F5 mesmo sem resposta do servidor)
-  if (changed) localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  if (changed || _hasRunningTimers()) {
+    localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  }
 }
 
 function _hasRunningTimers() {
@@ -20339,31 +20337,67 @@ function _hasRunningTimers() {
 async function startTaskTimer(taskId) {
   const t = TASKS_DATA.find(x => x.id === taskId);
   if (!t || t.timerStartedAt) return;
-  t.timerStartedAt = new Date().toISOString();
+
+  // Otimista local: pausa qualquer outro timer rodando (auto-pause único por usuário)
+  TASKS_DATA.forEach(other => {
+    if (other.id !== taskId && other.timerStartedAt) {
+      const elapsed = _safeGapSecs(other.timerStartedAt);
+      other.timeSpent      = Math.min((Number(other.timeSpent) || 0) + elapsed, MAX_TIMER_SECS);
+      other.timerStartedAt = null;
+      other._localUpdatedAt = Date.now();
+    }
+  });
+
+  t.timerStartedAt  = new Date().toISOString();
   t._localUpdatedAt = Date.now();
   saveTasks();
   renderTasksGrid();
   _startTimerTick();
-  const r = await _apiFetch(`/api/tasks/${taskId}/timer/start`, { method: 'PATCH' });
-  if (r?.timerStartedAt) { t.timerStartedAt = r.timerStartedAt; saveTasks(); }
+
+  // Chama o backend passando userId para auto-pause server-side + log
+  const r = await _apiFetch(`/api/tasks/${taskId}/timer/start`, {
+    method: 'PATCH',
+    body: JSON.stringify({ userId: currentUser?.id || '' }),
+  });
+  if (!r) return;
+  // Usa o timerStartedAt autoritativo do servidor (clock do servidor > clock local)
+  if (r.timerStartedAt) { t.timerStartedAt = r.timerStartedAt; }
+  // Sincroniza tarefa que foi auto-pausada pelo servidor
+  if (r.autoPausedTaskId && r.autoPausedTimeSpent != null) {
+    const prev = TASKS_DATA.find(x => x.id === r.autoPausedTaskId);
+    if (prev) { prev.timeSpent = r.autoPausedTimeSpent; prev.timerStartedAt = null; }
+  }
+  saveTasks();
 }
 
 async function pauseTaskTimer(taskId) {
   const t = TASKS_DATA.find(x => x.id === taskId);
   if (!t || !t.timerStartedAt) return;
-  const elapsed = _safeGapSecs(t.timerStartedAt);
-  t.timeSpent = Math.min((Number(t.timeSpent) || 0) + elapsed, MAX_TIMER_SECS);
+
+  // Otimista local: acumula elapsed imediatamente (display responde sem esperar servidor)
+  const elapsed    = _safeGapSecs(t.timerStartedAt);
+  t.timeSpent      = Math.min((Number(t.timeSpent) || 0) + elapsed, MAX_TIMER_SECS);
   t.timerStartedAt = null;
   t._localUpdatedAt = Date.now();
   saveTasks();
   renderTasksGrid();
   if (!_hasRunningTimers()) _stopTimerTick();
-  _apiFetch(`/api/tasks/${taskId}/timer/pause`, { method: 'PATCH' }).catch(() => {
+
+  // Sincroniza com servidor; usa o timeSpent autoritativo retornado
+  const r = await _apiFetch(`/api/tasks/${taskId}/timer/pause`, {
+    method: 'PATCH',
+    body: JSON.stringify({ userId: currentUser?.id || '' }),
+  }).catch(() => null);
+  if (r?.timeSpent != null) {
+    t.timeSpent = r.timeSpent; // server calculou o delta exato — sobrescreve o otimista
+    saveTasks();
+  } else if (!r) {
+    // Fallback: PUT completo se rota nova não existir ainda
     _apiFetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify({ timeSpent: t.timeSpent, timerStartedAt: null, updated_by: currentUser?.id }),
     }).catch(() => {});
-  });
+  }
 }
 /* ══ fim Monday Board ═══════════════════════════════════════════════ */
 
