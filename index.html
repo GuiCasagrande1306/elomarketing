@@ -7587,13 +7587,14 @@ function deleteClientFromDB(id) {
 // localStorage é usado como cache local para UX rápida.
 
 async function loadTasksFromDB(extraParams = {}) {
-  // Todos os colaboradores recebem todas as tarefas — isolamento removido.
-  // O filtro por colaborador é aplicado apenas quando o dropdown envia `colaborador`.
+  // userId é sempre enviado para o backend enforçar isolamento de dados por role.
+  // Admin: backend retorna tudo (pode filtrar via colaborador). Collab: só as próprias.
   const qs = new URLSearchParams();
-  if (extraParams.client)     qs.set('client',      extraParams.client);
-  if (extraParams.status)     qs.set('status',      extraParams.status);
+  if (currentUser?.id) qs.set('userId', currentUser.id);
+  if (extraParams.client)      qs.set('client',      extraParams.client);
+  if (extraParams.status)      qs.set('status',      extraParams.status);
   if (extraParams.colaborador) qs.set('colaborador', extraParams.colaborador);
-  if (extraParams.data)       qs.set('data',        extraParams.data);
+  if (extraParams.data)        qs.set('data',        extraParams.data);
   const apiUrl = `/api/tasks?${qs.toString()}`;
   const data = await _apiFetch(apiUrl);
   if (!data || !Array.isArray(data)) { renderTasksGrid(); return false; }
@@ -8311,9 +8312,9 @@ function loginUser(user) {
       USERS.map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
     sel.value = 'all';
   }
-  // Mostra filtro de colaborador nas Tarefas para todos
+  // Admins: dropdown de colaborador visível. Colaboradores: oculto (filtro travado no próprio usuário)
   const taskCollabWrap = document.getElementById('task-collab-filter-wrap');
-  if (taskCollabWrap) taskCollabWrap.style.display = '';
+  if (taskCollabWrap) taskCollabWrap.style.display = user.isAdmin ? '' : 'none';
   filterByCollaborator('all');
   refreshTaskOwnerChips();
   resetTaskForm();
@@ -8922,7 +8923,9 @@ async function _pollTasks() {
     return;
   }
   try {
-    const apiUrl = '/api/tasks';
+    const _pollQs = new URLSearchParams();
+    if (currentUser?.id) _pollQs.set('userId', currentUser.id);
+    const apiUrl = `/api/tasks?${_pollQs.toString()}`;
     const data   = await _apiFetch(apiUrl);
     if (!data || !Array.isArray(data)) return;   // silencia erros de rede / cold-start
 
@@ -19507,15 +19510,26 @@ function _populateTaskFilters() {
   const clientSel = document.getElementById('task-filter-client');
   // Reconstrói owner options sempre (pode ter novos usuários desde o último render)
   if (ownerSel) {
-    const prev = ownerSel.value; // preserva seleção atual
-    ownerSel.innerHTML = '<option value="">Todos os Colaboradores</option>';
-    USERS.forEach(u => {
+    if (!currentUser?.isAdmin) {
+      // Colaborador: dropdown bloqueado no próprio usuário (sem opção de troca)
+      ownerSel.innerHTML = '';
       const o = document.createElement('option');
-      o.value = u.id;
-      o.textContent = u.name + (u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : '');
+      o.value = currentUser?.id || '';
+      o.textContent = currentUser?.name || 'Você';
       ownerSel.appendChild(o);
-    });
-    if (prev) ownerSel.value = prev; // restaura seleção
+      ownerSel.value = currentUser?.id || '';
+    } else {
+      // Admin: todas as opções disponíveis
+      const prev = ownerSel.value;
+      ownerSel.innerHTML = '<option value="">Todos os Colaboradores</option>';
+      USERS.forEach(u => {
+        const o = document.createElement('option');
+        o.value = u.id;
+        o.textContent = u.name + (u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : '');
+        ownerSel.appendChild(o);
+      });
+      if (prev) ownerSel.value = prev;
+    }
   }
   if (clientSel && clientSel.options.length <= 1) {
     (CLIENTS.list || []).forEach(c => {
