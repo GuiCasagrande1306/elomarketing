@@ -5476,6 +5476,10 @@
           <input type="text" id="crm-f-telefone" class="form-input" placeholder="(11) 99999-9999">
         </div>
         <div class="form-group">
+          <label class="form-label"><i class="ti ti-brand-instagram" style="font-size:11px;margin-right:4px"></i>Instagram (@)</label>
+          <input type="text" id="crm-f-instagram" class="form-input" placeholder="@suaempresa">
+        </div>
+        <div class="form-group">
           <label class="form-label">Valor Estimado (R$)</label>
           <input type="text" id="crm-f-valor" class="form-input" placeholder="R$ 0,00" oninput="maskCurrencyInput(this)">
         </div>
@@ -21223,6 +21227,7 @@ function _crmBuildCard(c) {
     </div>
     <div class="crm-card-empresa">${c.empresa}</div>
     <div class="crm-card-contato"><i class="ti ti-user" style="font-size:10px;margin-right:3px"></i>${c.contato}${c.telefone ? ` · <i class="ti ti-phone" style="font-size:10px;margin-right:2px"></i>${c.telefone}` : ''}</div>
+    ${c.instagram ? `<div style="font-size:10px;margin-top:3px"><a href="https://instagram.com/${c.instagram}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="color:#E1306C;text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-brand-instagram" style="font-size:10px"></i>@${c.instagram}</a></div>` : ''}
     <div class="crm-card-valor">${_crmFmtBRL(c.valor)}</div>
     <div class="crm-card-footer">
       <span class="${tagCls}">${c.origem}</span>
@@ -21313,7 +21318,7 @@ function openCrmModal(editId, focusResultado = false) {
   if (!modal) return;
 
   // Reset form
-  ['crm-f-empresa','crm-f-contato','crm-f-telefone','crm-f-obs'].forEach(id => {
+  ['crm-f-empresa','crm-f-contato','crm-f-telefone','crm-f-instagram','crm-f-obs'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('crm-f-valor').value     = '';
@@ -21336,8 +21341,9 @@ function openCrmModal(editId, focusResultado = false) {
     document.getElementById('crm-f-id').value      = card.id;
     document.getElementById('crm-f-empresa').value = card.empresa;
     document.getElementById('crm-f-contato').value = card.contato;
-    document.getElementById('crm-f-telefone').value= card.telefone || '';
-    document.getElementById('crm-f-obs').value     = card.obs || '';
+    document.getElementById('crm-f-telefone').value  = card.telefone  || '';
+    document.getElementById('crm-f-instagram').value = card.instagram || '';
+    document.getElementById('crm-f-obs').value        = card.obs       || '';
     document.getElementById('crm-f-valor').value   = card.valor > 0 ? 'R$ ' + Number(card.valor).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '';
     document.getElementById('crm-f-origem').value  = card.origem;
     document.getElementById('crm-f-coluna').value  = card.coluna;
@@ -21409,6 +21415,7 @@ async function saveCrmOportunidade(e) {
     return;
   }
   const telefone     = document.getElementById('crm-f-telefone').value.trim();
+  const instagram    = document.getElementById('crm-f-instagram').value.trim().replace(/^@+/, '');
   const obs          = document.getElementById('crm-f-obs').value.trim();
   const origem       = document.getElementById('crm-f-origem').value;
   const coluna       = document.getElementById('crm-f-coluna').value || 'lead';
@@ -21426,11 +21433,11 @@ async function saveCrmOportunidade(e) {
   let card;
   if (id) {
     card = CRM_DATA.find(c => c.id === id);
-    if (card) Object.assign(card, { empresa, contato, telefone, obs, origem, coluna,
+    if (card) Object.assign(card, { empresa, contato, telefone, instagram, obs, origem, coluna,
                                      resultado, valor, nextFollowUp, responsavel,
                                      data: new Date().toISOString().slice(0,10) });
   } else {
-    card = { id: _crmGenId(), empresa, contato, telefone, obs, origem,
+    card = { id: _crmGenId(), empresa, contato, telefone, instagram, obs, origem,
              coluna, resultado, valor, nextFollowUp, responsavel,
              data: new Date().toISOString().slice(0,10) };
     CRM_DATA.push(card);
