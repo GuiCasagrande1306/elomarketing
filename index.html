@@ -20980,13 +20980,18 @@ function _crmApiUrl() {
    NUNCA substitui diretamente CRM_DATA pelo array do servidor:
    cards criados localmente mas ainda não confirmados no Atlas são preservados
    e re-enviados para garantir a persistência definitiva. */
-async function _crmApiLoad() {
+async function _crmApiLoad(_retry = 0) {
   const hasApi = !!_crmApiUrl();
   if (!hasApi) return false;
   try {
     const res = await _apiFetch('/api/crm');
     if (!res || res._coldStart || !Array.isArray(res)) {
-      console.warn('[CRM API] Carregamento falhou ou cold-start — usando localStorage.');
+      if (_retry < 1) {
+        console.warn('[CRM API] Cold-start detectado — nova tentativa em 6s...');
+        await new Promise(r => setTimeout(r, 6000));
+        return _crmApiLoad(1);
+      }
+      console.warn('[CRM API] Carregamento falhou — usando localStorage.');
       return false;
     }
     // ── Purga leads de demonstração do Supabase (run-once automático) ───────
@@ -21260,6 +21265,16 @@ function _crmBuildCard(c) {
     ? `<span class="${c.resultado === 'ganho' ? 'crm-result-ganho' : 'crm-result-perdido'}">${c.resultado === 'ganho' ? '✅ Ganho' : '❌ Perdido'}</span>`
     : '';
 
+  const respUser = c.responsavel ? USERS.find(u => u.name === c.responsavel) : null;
+  const respChip = c.responsavel
+    ? `<div style="display:flex;align-items:center;gap:5px;margin-top:6px">
+         <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:8px;font-weight:700;color:#fff;background:${respUser ? respUser.color : 'var(--bg4)'}">
+           ${respUser ? respUser.initials : c.responsavel.slice(0,2).toUpperCase()}
+         </span>
+         <span style="font-size:10px;color:var(--text3)">${c.responsavel}</span>
+       </div>`
+    : '';
+
   el.innerHTML = `
     <button class="crm-card-menu-btn" onclick="event.stopPropagation();_crmToggleMenu('${c.id}',this)" title="Opções">
       <i class="ti ti-dots"></i>
@@ -21287,7 +21302,7 @@ function _crmBuildCard(c) {
       <span class="crm-card-date"><i class="ti ti-clock" style="font-size:10px"></i>${daysTxt}</span>
       ${resultBadge}
     </div>
-    ${c.responsavel ? `<div style="font-size:10px;color:var(--text3);margin-top:5px"><i class="ti ti-user-check" style="font-size:10px;margin-right:3px"></i>${c.responsavel}</div>` : ''}
+    ${respChip}
     ${fuBadgeHtml}
     ${c.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.5;border-top:1px solid var(--border);padding-top:7px">${c.obs}</div>` : ''}
     <div class="crm-card-actions">
@@ -21379,7 +21394,7 @@ function openCrmModal(editId, focusResultado = false) {
   document.getElementById('crm-f-coluna').value     = 'lead';
   document.getElementById('crm-f-resultado').value    = '';
   document.getElementById('crm-f-followup').value     = '';
-  document.getElementById('crm-f-responsavel').value  = 'Guilherme';
+  document.getElementById('crm-f-responsavel').value  = currentUser?.name || '';
   document.getElementById('crm-f-id').value           = '';
 
   const resultGrp = document.getElementById('crm-f-resultado-group');
@@ -21401,7 +21416,7 @@ function openCrmModal(editId, focusResultado = false) {
     document.getElementById('crm-f-coluna').value  = card.coluna;
     document.getElementById('crm-f-resultado').value    = card.resultado    || '';
     document.getElementById('crm-f-followup').value     = card.nextFollowUp || '';
-    document.getElementById('crm-f-responsavel').value  = card.responsavel  || 'Guilherme';
+    document.getElementById('crm-f-responsavel').value  = card.responsavel  || currentUser?.name || '';
     resultGrp.style.display = card.coluna === 'fechado' ? '' : 'none';
     /* Edit mode — show delete button, update save label */
     if (deleteBtn) deleteBtn.style.display = 'flex';
@@ -21472,7 +21487,7 @@ async function saveCrmOportunidade(e) {
   const coluna       = document.getElementById('crm-f-coluna').value || 'lead';
   const resultado    = document.getElementById('crm-f-resultado').value || null;
   const nextFollowUp = document.getElementById('crm-f-followup').value     || null;
-  const responsavel  = document.getElementById('crm-f-responsavel').value  || 'Guilherme';
+  const responsavel  = document.getElementById('crm-f-responsavel').value  || currentUser?.name || '';
   const valorRaw     = document.getElementById('crm-f-valor').value.replace(/[R$\s.]/g, '').replace(',', '.');
   const valor        = parseFloat(valorRaw) || 0;
 
