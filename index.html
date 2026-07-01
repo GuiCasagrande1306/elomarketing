@@ -4706,9 +4706,14 @@
         <i class="ti ti-info-circle" style="margin-right:5px"></i>
         Arraste os cards entre colunas ou use os botões de ação para avançar etapas
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openCrmModal()">
-        <i class="ti ti-plus"></i> Nova Oportunidade
-      </button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" id="crm-sync-btn" onclick="_crmForceSync()" title="Buscar leads mais recentes do servidor">
+          <i class="ti ti-refresh" id="crm-sync-icon"></i> Sincronizar
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openCrmModal()">
+          <i class="ti ti-plus"></i> Nova Oportunidade
+        </button>
+      </div>
     </div>
 
     <!-- Kanban board -->
@@ -20976,9 +20981,49 @@ async function _crmInitAndRender() {
   if (!apiConfigured) return; // sem API → apenas localStorage
 
   const ok = await _crmApiLoad();
+  if (ok) renderCRM();
+
+  _crmStartAutoRefresh();
+}
+
+/* Sincronização manual — botão "Sincronizar" no toolbar */
+async function _crmForceSync() {
+  const icon = document.getElementById('crm-sync-icon');
+  const btn  = document.getElementById('crm-sync-btn');
+  if (btn) btn.disabled = true;
+  if (icon) icon.style.animation = 'spin 0.8s linear infinite';
+
+  const prevCount = CRM_DATA.length;
+  const ok = await _crmApiLoad();
   if (ok) {
-    renderCRM(); // re-renderiza com dados frescos do servidor
+    renderCRM();
+    const diff = CRM_DATA.length - prevCount;
+    const msg  = diff > 0
+      ? `${diff} novo(s) lead(s) carregado(s).`
+      : 'CRM atualizado.';
+    showNotification(msg, 'ok');
+  } else {
+    showNotification('Não foi possível conectar ao servidor.', 'warn');
   }
+
+  if (icon) icon.style.animation = '';
+  if (btn) btn.disabled = false;
+}
+
+/* Auto-refresh: atualiza o CRM a cada 60s enquanto a página está visível */
+let _crmRefreshInterval = null;
+function _crmStartAutoRefresh() {
+  _crmStopAutoRefresh();
+  _crmRefreshInterval = setInterval(async () => {
+    if (document.visibilityState !== 'visible') return;
+    const activePage = document.querySelector('.page.active')?.id;
+    if (activePage !== 'page-crm') return;
+    const ok = await _crmApiLoad();
+    if (ok) renderCRM();
+  }, 60000);
+}
+function _crmStopAutoRefresh() {
+  if (_crmRefreshInterval) { clearInterval(_crmRefreshInterval); _crmRefreshInterval = null; }
 }
 
 /* ── Dados iniciais ─────────────────────────────────────────────────────
