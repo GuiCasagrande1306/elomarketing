@@ -3286,11 +3286,7 @@
   </div>
 
   <div class="nav-section">
-    <div class="nav-label">Leads</div>
-    <div class="nav-item" onclick="navigate('leads', this)">
-      <i class="ti ti-brand-whatsapp"></i> Leads / WhatsApp
-      <span class="nav-badge">23</span>
-    </div>
+    <div class="nav-label">Comercial</div>
     <div class="nav-item" onclick="navigate('crm', this)">
       <i class="ti ti-layout-kanban"></i> CRM Comercial
     </div>
@@ -3824,75 +3820,6 @@
           </div>
           <button class="btn btn-ghost btn-sm"><i class="ti ti-download"></i> Baixar modelo CSV</button>
           <button class="btn btn-primary btn-sm"><i class="ti ti-upload"></i> Importar agora</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== LEADS ===== -->
-    <div class="page" id="page-leads">
-      <div class="lead-flow" style="margin-bottom:20px">
-        <div class="flow-stage active"><div class="flow-count" style="color:var(--accent)">342</div><div class="flow-label">Iniciado</div></div>
-        <div class="flow-stage"><div class="flow-count" style="color:var(--blue)">198</div><div class="flow-label">Qualificado</div></div>
-        <div class="flow-stage"><div class="flow-count" style="color:var(--green)">134</div><div class="flow-label">Orçamento</div></div>
-        <div class="flow-stage"><div class="flow-count" style="color:var(--amber)">87</div><div class="flow-label">Agendou</div></div>
-        <div class="flow-stage"><div class="flow-count" style="color:var(--pink)">52</div><div class="flow-label">Fechou</div></div>
-        <div class="flow-stage"><div class="flow-count" style="color:var(--red)">89</div><div class="flow-label">Perdido</div></div>
-        <div class="flow-stage"><div class="flow-count" style="color:var(--text3)">34</div><div class="flow-label">Sem resp.</div></div>
-      </div>
-      <div class="grid-21">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i> Leads Recentes</div>
-            <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="ti ti-plus"></i> Novo lead</button>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Contato</th><th>Cliente</th><th>Campanha</th><th>Status</th><th>Data</th></tr></thead>
-              <tbody>
-                <tr>
-                  <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="width:28px;height:28px;font-size:10px">MS</div><div><div style="font-size:12px;font-weight:500">Maria Silva</div><div style="font-size:10px;color:var(--text3)">(71) 9 9999-0001</div></div></div></td>
-                  <td style="font-size:11px;color:var(--accent2)">Inst. Lara</td>
-                  <td style="font-size:11px;color:var(--text3)">Drª Roberta</td>
-                  <td><span class="badge badge-green">Fechou</span></td>
-                  <td style="font-size:11px;color:var(--text3)">Hoje 09:14</td>
-                </tr>
-                <tr>
-                  <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="width:28px;height:28px;font-size:10px;background:linear-gradient(135deg,#22D3A0,#0D9488)">JO</div><div><div style="font-size:12px;font-weight:500">João Oliveira</div><div style="font-size:10px;color:var(--text3)">(71) 9 8888-0002</div></div></div></td>
-                  <td style="font-size:11px;color:var(--accent2)">Inst. Lara</td>
-                  <td style="font-size:11px;color:var(--text3)">Dr. Gabriel</td>
-                  <td><span class="badge badge-amber">Agendou</span></td>
-                  <td style="font-size:11px;color:var(--text3)">Hoje 08:30</td>
-                </tr>
-                <tr>
-                  <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="width:28px;height:28px;font-size:10px;background:linear-gradient(135deg,#F472B6,#DB2777)">AC</div><div><div style="font-size:12px;font-weight:500">Ana Costa</div><div style="font-size:10px;color:var(--text3)">(71) 9 7777-0003</div></div></div></td>
-                  <td style="font-size:11px;color:var(--pink)">Psicologia</td>
-                  <td style="font-size:11px;color:var(--text3)">Ansiedade</td>
-                  <td><span class="badge badge-red">Não respondeu</span></td>
-                  <td style="font-size:11px;color:var(--text3)">Ontem</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-message-circle"></i> Conversa</div>
-            <select class="form-select" style="width:120px;padding:5px 8px;font-size:11px"><option>Fechou</option><option>Agendou</option><option>Perdido</option></select>
-          </div>
-          <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:12px">
-            <div style="font-size:12px;font-weight:600">Maria Silva</div>
-            <div style="font-size:10px;color:var(--text3)">Campanha Drª Roberta • Hoje</div>
-          </div>
-          <div class="chat-area" style="max-height:200px;overflow-y:auto;margin-bottom:12px">
-            <div class="chat-bubble chat-in">Vi o anúncio sobre consulta de nutrição. Tem vaga para esta semana?<div class="chat-time">09:10</div></div>
-            <div class="chat-bubble chat-out">Oi, Maria! Sim! A Drª Roberta atende na quinta e sexta. Posso te passar os horários?<div class="chat-time">09:12</div></div>
-            <div class="chat-bubble chat-in">Quinta-feira funciona bem.<div class="chat-time">09:14</div></div>
-            <div class="chat-bubble chat-out">Perfeito! Quinta às 14h ou 16h, qual prefere?<div class="chat-time">09:15</div></div>
-          </div>
-          <div style="display:flex;gap:6px">
-            <input type="text" class="form-input" placeholder="Anotação..." style="flex:1;padding:7px 10px;font-size:12px">
-            <button class="btn btn-primary btn-sm"><i class="ti ti-send"></i></button>
-          </div>
         </div>
       </div>
     </div>
@@ -8109,7 +8036,7 @@ const _TRAFFIC_COLLAB_PAGES = [
 // Designer: tarefas + integracoes (para conectar o próprio WhatsApp)
 const _DESIGNER_COLLAB_PAGES = ['tarefas','integracoes'];
 // Vendedor: apenas CRM Comercial e Leads / WhatsApp
-const _VENDEDOR_PAGES = ['crm','leads'];
+const _VENDEDOR_PAGES = ['crm'];
 
 /* ── Organograma ───────────────────────────────────────────────────────────────
    isSuperAdmin → Guilherme (CEO): acesso irrestrito total
@@ -8134,7 +8061,7 @@ const ALL_PAGES = [
   { key:'campanhas',     label:'Campanhas',              icon:'ti-speakerphone'      },
   { key:'creatives',     label:'Criativos',              icon:'ti-video'             },
   { key:'calendar',      label:'Calendário',             icon:'ti-calendar-event'    },
-  { key:'leads',         label:'Leads / WhatsApp',       icon:'ti-brand-whatsapp'    },
+
   { key:'crm',           label:'CRM Comercial',          icon:'ti-layout-kanban'     },
   { key:'relatorios',    label:'Relatórios',             icon:'ti-file-analytics'    },
   { key:'consolidado',  label:'Consolidado',            icon:'ti-chart-pie'          },
