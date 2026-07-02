@@ -7972,23 +7972,31 @@ function setupRealtimeChannel() {
     // ── TAREFAS ───────────────────────────────────────────────────
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tarefas' }, (payload) => {
       if (payload.new?.updated_by === currentUser?.id) return;
-      const task     = payload.new;
+      const task  = payload.new;
+      // Colaboradores não-admin só recebem tarefas próprias via realtime
+      if (!currentUser?.isAdmin) {
+        const owner = task.assigned_to || task.owner || '';
+        if (owner !== currentUser?.id) return;
+      }
       const taskList = document.getElementById('task-list');
       if (taskList) {
         const item   = buildTaskItem(task);
         const header = taskList.querySelector('.card-header');
         taskList.insertBefore(item, header ? header.nextSibling : null);
         refreshTaskOwnerChips();
-        filterByCollaborator(document.getElementById('collab-filter')?.value || 'all');
+        renderTasksGrid();
       }
       showNotification(`Nova tarefa criada por <strong>${task.updated_by || 'outro utilizador'}</strong>.`, 'success');
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tarefas' }, (payload) => {
       if (payload.new?.updated_by === currentUser?.id) return;
-      const task = payload.new;
-      // Remover elemento antigo do DOM (pode estar em qualquer lista)
+      const task  = payload.new;
+      // Colaboradores não-admin só recebem atualizações de tarefas próprias
+      if (!currentUser?.isAdmin) {
+        const owner = task.assigned_to || task.owner || '';
+        if (owner !== currentUser?.id) return;
+      }
       document.querySelector(`.task-item[data-task-id="${task.id}"]`)?.remove();
-      // Reinserir na lista correcta
       const item = buildTaskItem(task);
       if (task.status === 'done') {
         document.getElementById('completed-tasks-list')?.appendChild(item);
@@ -7999,7 +8007,7 @@ function setupRealtimeChannel() {
       }
       updateCompletedCount();
       refreshTaskOwnerChips();
-      filterByCollaborator(document.getElementById('collab-filter')?.value || 'all');
+      renderTasksGrid();
       showNotification(`Tarefa actualizada por <strong>${task.updated_by || 'outro utilizador'}</strong>.`, 'success');
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tarefas' }, (payload) => {
