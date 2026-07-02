@@ -7553,16 +7553,22 @@ async function loadTasksFromDB(extraParams = {}) {
   // localStorage para sempre. O merge as mantém até o próximo _autoSyncAndLoad
   // conseguir fazer o upload com o servidor acordado.
   const serverIds  = new Set(fromServer.map(t => t.id).filter(Boolean));
-  const localOnly  = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
+  // Não-admins só preservam no localOnly tarefas que são deles — evita que
+  // tarefas de sessões anteriores de outros usuários contaminem TASKS_DATA.
+  const localOnly  = TASKS_DATA.filter(t => {
+    if (!t.id || serverIds.has(t.id)) return false;
+    if (!currentUser?.isAdmin) {
+      const uid = currentUser?.id || '';
+      return t.assignedTo === uid || t.owner === uid || t.created_by === uid;
+    }
+    return true;
+  });
 
   if (localOnly.length > 0) {
     console.warn(
       `[Tasks] loadTasksFromDB: ${localOnly.length} tarefa(s) ainda não confirmada(s) pelo servidor — sincronizando:`,
       localOnly.map(t => `"${t.title}" (id=${t.id})`).join(', ')
     );
-    // Sobe as tarefas local-only uma a uma (sem bloquear o merge).
-    // Isso cobre o caso de primeira migração onde o _autoSyncAndLoad agora só
-    // envia dirty tasks (com _localUpdatedAt), deixando estas para cá.
     localOnly.forEach(task => {
       _apiFetch('/api/tasks', {
         method: 'POST',
@@ -8221,6 +8227,15 @@ async function doLogin() {
 function loginUser(user) {
   currentUser = user;
   localStorage.setItem('tp_current_user', user.id);
+  // Não-admins: purga do localStorage tarefas de outros usuários que possam
+  // ter ficado de uma sessão anterior (ex: admin logado antes no mesmo browser).
+  if (!user.isAdmin) {
+    const uid = user.id;
+    TASKS_DATA = TASKS_DATA.filter(t =>
+      t.assignedTo === uid || t.owner === uid || t.created_by === uid
+    );
+    localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+  }
   document.body.classList.remove('pre-auth');
   document.getElementById('login-screen').classList.add('hidden');
   updateSidebarUser(user);
@@ -8898,7 +8913,14 @@ async function _pollTasks() {
 
     // Merge seguro: preserva tarefas locais pendentes de upload
     const serverIds = new Set(incoming.map(t => t.id).filter(Boolean));
-    const localOnly = TASKS_DATA.filter(t => t.id && !serverIds.has(t.id));
+    const localOnly = TASKS_DATA.filter(t => {
+      if (!t.id || serverIds.has(t.id)) return false;
+      if (!currentUser?.isAdmin) {
+        const uid = currentUser?.id || '';
+        return t.assignedTo === uid || t.owner === uid || t.created_by === uid;
+      }
+      return true;
+    });
 
     // Merge: mesmo conjunto de regras corrigidas de loadTasksFromDB.
     const mergedIncoming = incoming.map(srvTask => {
