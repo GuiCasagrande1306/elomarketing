@@ -11062,6 +11062,22 @@ function saveNewClient() {
 
   saveClients();
 
+  // ── Persistência do novo cliente na API com retry ─────────────────────────────
+  // Para clientes novos (não edições), o bulk/sync é fire-and-forget e pode falhar
+  // em cold-start. O POST direto com retry garante que o cliente chegue ao banco.
+  if (!clEditingId && _waClientId) {
+    var _newClient = CLIENTS.list.find(function(c){ return c.id === _waClientId; });
+    if (_newClient) setTimeout(function(){ _saveNewClientToAPI(_newClient); }, 400);
+  }
+
+  // ── Persistência do dia de otimização no Render API ───────────────────────────
+  // O bulk/sync de saveClients() é fire-and-forget: se o Render estiver em cold-start,
+  // o campo dia_otimizacao pode não chegar ao banco. Este PATCH com retry garante
+  // que o campo persista mesmo que o bulk/sync inicial falhe silenciosamente.
+  if (_waClientId) {
+    setTimeout(function(){ _saveDiaOtimizacaoToAPI(_waClientId, dia_otimizacao); }, 400);
+  }
+
   // ── Persistência do vínculo WhatsApp no Atlas ─────────────────────────────────
   // O bulk/sync acima é fire-and-forget; este PATCH específico garante que o JID
   // chegue ao MongoDB mesmo em cold start do Render (até 3 retentativas).
@@ -18558,6 +18574,69 @@ function _saveWaGroupToAtlas(clientId, jid, name, _attempt) {
   });
 }
 
+function _saveNewClientToAPI(client, _attempt) {
+  if (_attempt === undefined) _attempt = 1;
+  _apiFetch('/api/clients', {
+    method: 'POST',
+    body: JSON.stringify(client)
+  }).then(function(r) {
+    if (!r) {
+      if (_attempt < 4) {
+        var delay = _attempt * 7000;
+        console.warn('[Client] POST falhou (rede) — retry ' + _attempt + '/3 em ' + (delay/1000) + 's');
+        setTimeout(function(){ _saveNewClientToAPI(client, _attempt + 1); }, delay);
+      }
+    } else if (r._coldStart) {
+      if (_attempt < 4) {
+        var delay2 = _attempt * 9000;
+        console.warn('[Client] cold start — retry ' + _attempt + '/3 em ' + (delay2/1000) + 's');
+        setTimeout(function(){ _saveNewClientToAPI(client, _attempt + 1); }, delay2);
+      }
+    } else if (r.id) {
+      console.log('[Client] ✅ cliente persistido na API: id="' + client.id + '" name="' + client.name + '"');
+    }
+  }).catch(function(e) {
+    if (_attempt < 4) {
+      setTimeout(function(){ _saveNewClientToAPI(client, _attempt + 1); }, _attempt * 8000);
+    }
+  });
+}
+
+function _saveDiaOtimizacaoToAPI(clientId, dia, _attempt) {
+  if (_attempt === undefined) _attempt = 1;
+  _apiFetch('/api/clients/' + clientId + '/dia-otimizacao', {
+    method: 'PATCH',
+    body: JSON.stringify({ dia_otimizacao: dia })
+  }).then(function(r) {
+    if (!r) {
+      if (_attempt < 4) {
+        var delay = _attempt * 7000;
+        console.warn('[DiaOtim] PATCH falhou (rede) — retry ' + _attempt + '/3 em ' + (delay/1000) + 's');
+        setTimeout(function(){ _saveDiaOtimizacaoToAPI(clientId, dia, _attempt + 1); }, delay);
+      } else {
+        showNotification('⚠️ Dia de otimização salvo localmente. Abra o cliente e salve novamente para sincronizar.', 'warn');
+      }
+    } else if (r._coldStart) {
+      if (_attempt < 4) {
+        var delay2 = _attempt * 9000;
+        console.warn('[DiaOtim] cold start — retry ' + _attempt + '/3 em ' + (delay2/1000) + 's');
+        setTimeout(function(){ _saveDiaOtimizacaoToAPI(clientId, dia, _attempt + 1); }, delay2);
+      } else {
+        showNotification('⚠️ Servidor ocupado. Abra o cliente e salve novamente para sincronizar o dia de otimização.', 'warn');
+      }
+    } else if (r.ok) {
+      console.log('[DiaOtim] ✅ dia_otimizacao sincronizado: clientId="' + clientId + '" dia="' + dia + '"');
+    } else {
+      console.error('[DiaOtim] PATCH erro servidor:', r);
+    }
+  }).catch(function(e) {
+    console.error('[DiaOtim] PATCH exceção:', e.message);
+    if (_attempt < 4) {
+      setTimeout(function(){ _saveDiaOtimizacaoToAPI(clientId, dia, _attempt + 1); }, _attempt * 8000);
+    }
+  });
+}
+
 // ── Atualiza o visual do seletor de tipo de relatório ─────────────────────────
 function repTypeChanged() {
   const completo  = document.getElementById('rep-type-completo');
@@ -20754,6 +20833,11 @@ async function loadClients() {
   // 2. Tenta buscar da API (dados mais recentes de qualquer dispositivo)
   const apiData = await _apiFetch('/api/clients');
   if (Array.isArray(apiData) && apiData.length > 0) {
+    // localOnly: clientes em memória que a API ainda não conhece
+    // (criados enquanto o Render estava em cold-start — preserva e re-sincroniza)
+    const _apiIds = new Set(apiData.map(c => c.id));
+    const _localOnly = CLIENTS.list.filter(c => c.id && c.name && !_apiIds.has(c.id));
+
     // Sanitiza logos: remove paths relativos antigos (ex: "image_b367d8.jpg")
     // que eram salvos por versões anteriores com upload em disco.
     // Somente data: e https:// são aceitos — o resto vira '' (mostra avatar de iniciais).
@@ -20766,11 +20850,19 @@ async function loadClients() {
       }
       return c;
     });
-    const maxId = Math.max(...apiData.map(c => parseInt((c.id||'').replace('cl-',''))||0));
+
+    // Reintegra clientes locais que a API ainda não tem — evita apagar clientes
+    // recém-criados enquanto o bulk/sync anterior falhou por cold-start
+    if (_localOnly.length > 0) {
+      console.log(`[Clients] ${_localOnly.length} cliente(s) local-only preservado(s) — re-sincronizando...`);
+      CLIENTS.list.push(..._localOnly);
+      _apiFetch('/api/clients/bulk/sync', { method:'PUT', body: JSON.stringify(_localOnly) }).catch(() => {});
+    }
+
+    const maxId = Math.max(...CLIENTS.list.map(c => parseInt((c.id||'').replace('cl-',''))||0));
     CLIENTS.nextId = Math.max(CLIENTS.nextId, maxId + 1);
     if (_logosFixed > 0) {
       console.log(`[Clients] ${_logosFixed} logo(s) com path relativo corrigida(s) — persistindo limpeza na API...`);
-      // Persiste a correção de volta para o MongoDB para que todos os dispositivos fiquem corrigidos
       _apiFetch('/api/clients/bulk/sync', { method:'PUT', body: JSON.stringify(CLIENTS.list) }).catch(() => {});
     }
     // Migra logos legadas pesadas (PNG / > 80 KB) para JPEG comprimido — melhora carregamento mobile
