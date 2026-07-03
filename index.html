@@ -19827,7 +19827,10 @@ function setTasksView(v) {
 /* ── Filtragem comum (Kanban + Calendário reusam a mesma lógica do Lista) ── */
 function _getFilteredTasks() {
   const search  = (document.getElementById('task-search')?.value || '').toLowerCase();
-  const ownerF  = document.getElementById('task-filter-owner')?.value || '';
+  // Não-admins sempre filtrados pelo próprio id — independente do valor do dropdown
+  const ownerF  = currentUser?.isAdmin
+    ? (document.getElementById('task-filter-owner')?.value || '')
+    : (currentUser?.id || '');
   const clientF = document.getElementById('task-filter-client')?.value || '';
   const statusF = document.getElementById('task-filter-status')?.value || '';
 
