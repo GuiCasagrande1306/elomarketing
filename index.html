@@ -21084,18 +21084,26 @@ async function _crmApiLoad(_retry = 0) {
 
     if (localOnly.length > 0) {
       console.warn(`[CRM] ${localOnly.length} card(s) local(is) ausente(s) no servidor — sync aguardado.`);
-      await _apiFetch('/api/crm/bulk/sync', { method:'PUT', body: JSON.stringify(localOnly) })
-        .catch(e => console.warn('[CRM] localOnly bulk/sync falhou:', e?.message));
-      // Re-fetch para obter o estado completo (inclui os cards recém enviados)
-      const res2 = await _apiFetch('/api/crm');
-      if (res2 && !res2._coldStart && Array.isArray(res2)) {
-        CRM_DATA = res2.filter(c => !_CRM_MOCK_IDS.has(c.id));
-        _crmSave();
-        return true;
+      // Tenta sincronizar — rastreia se o bulk/sync confirmou (success ≠ cold-start)
+      const syncOk = await _apiFetch('/api/crm/bulk/sync', { method:'PUT', body: JSON.stringify(localOnly) })
+        .then(r => !!(r && !r._coldStart && r.ok))
+        .catch(e => { console.warn('[CRM] localOnly bulk/sync falhou:', e?.message); return false; });
+
+      if (syncOk) {
+        // bulk/sync confirmado → re-fetch para obter o estado completo do servidor
+        const res2 = await _apiFetch('/api/crm');
+        if (res2 && !res2._coldStart && Array.isArray(res2)) {
+          CRM_DATA = res2.filter(c => !_CRM_MOCK_IDS.has(c.id));
+          _crmSave();
+          return true;
+        }
       }
+      // bulk/sync falhou (cold-start ou rede) — cai no merge abaixo preservando localOnly
+      console.warn('[CRM] bulk/sync não confirmado — preservando cards locais no merge.');
     }
 
     // Mescla: dados do servidor + cards locais não confirmados (sem mocks)
+    // localOnly é sempre preservado aqui, independente do resultado do bulk/sync
     CRM_DATA = [...data, ...localOnly].filter(c => !_CRM_MOCK_IDS.has(c.id));
     _crmSave();
     return true;
