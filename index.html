@@ -4716,6 +4716,13 @@
       </div>
     </div>
 
+    <!-- Banner de leads pendentes de sincronização -->
+    <div id="crm-pending-banner" style="display:none;margin:0 0 12px;padding:10px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-size:12px;color:var(--text2);align-items:center;gap:8px">
+      <i class="ti ti-cloud-upload" style="color:#F59E0B;flex-shrink:0"></i>
+      <span><strong id="crm-pending-count">1</strong> lead(s) aguardando sincronização — tentando em background…</span>
+      <i class="ti ti-loader-2" id="crm-pending-spinner" style="margin-left:auto;animation:spin 1s linear infinite;display:none;flex-shrink:0;color:#F59E0B"></i>
+    </div>
+
     <!-- Kanban board -->
     <div class="crm-board" id="crm-board"></div>
   </div>
@@ -21124,6 +21131,15 @@ async function _crmInitAndRender() {
   const ok = await _crmApiLoad();
   if (ok) renderCRM();
 
+  // Detecta leads locais que não chegaram ao servidor (sessão anterior com cold-start)
+  // e inicia retry em background automaticamente
+  _crmGetPendingCards().then(pending => {
+    if (pending && pending.length > 0) {
+      _crmUpdatePendingBanner(pending.length);
+      _crmStartPendingRetry();
+    }
+  });
+
   _crmStartAutoRefresh();
 }
 
@@ -21143,6 +21159,12 @@ async function _crmForceSync() {
       ? `${diff} novo(s) lead(s) carregado(s).`
       : 'CRM atualizado.';
     showNotification(msg, 'ok');
+    // Verifica se ainda há pendentes após o sync manual
+    _crmGetPendingCards().then(pending => {
+      _crmUpdatePendingBanner(pending ? pending.length : 0);
+      if (pending && pending.length > 0) _crmStartPendingRetry();
+      else _crmStopPendingRetry();
+    });
   } else {
     showNotification('Não foi possível conectar ao servidor.', 'warn');
   }
@@ -21169,6 +21191,78 @@ function _crmStartAutoRefresh() {
 }
 function _crmStopAutoRefresh() {
   if (_crmRefreshInterval) { clearInterval(_crmRefreshInterval); _crmRefreshInterval = null; }
+}
+
+/* ── Fila off-line: retry automático a cada 10s ─────────────────────────────
+   Detecta leads em CRM_DATA que o servidor ainda não conhece (localOnly)
+   e tenta sincronizar via bulk/sync. Para automaticamente quando tudo chega. */
+let _crmPendingRetryInterval = null;
+
+function _crmUpdatePendingBanner(count) {
+  const banner  = document.getElementById('crm-pending-banner');
+  const countEl = document.getElementById('crm-pending-count');
+  const spinner = document.getElementById('crm-pending-spinner');
+  if (!banner) return;
+  if (count <= 0) {
+    banner.style.display = 'none';
+    if (spinner) spinner.style.display = 'none';
+  } else {
+    banner.style.display = 'flex';
+    if (countEl) countEl.textContent = count;
+  }
+}
+
+function _crmSetPendingSpinner(on) {
+  const spinner = document.getElementById('crm-pending-spinner');
+  if (spinner) spinner.style.display = on ? '' : 'none';
+}
+
+async function _crmGetPendingCards() {
+  const res = await _apiFetch('/api/crm');
+  if (!res || res._coldStart || !Array.isArray(res)) return null; // servidor fora
+  const serverIds = new Set(res.map(c => c.id));
+  return CRM_DATA.filter(c => c.id && !serverIds.has(c.id) && !_CRM_MOCK_IDS.has(c.id));
+}
+
+async function _crmRetryPending() {
+  const pending = await _crmGetPendingCards();
+  if (pending === null) return; // servidor ainda dormindo — tenta no próximo tick
+
+  if (pending.length === 0) {
+    // Tudo sincronizado — para o intervalo e esconde o banner
+    _crmStopPendingRetry();
+    _crmUpdatePendingBanner(0);
+    return;
+  }
+
+  _crmSetPendingSpinner(true);
+  const syncOk = await _apiFetch('/api/crm/bulk/sync', { method:'PUT', body: JSON.stringify(pending) })
+    .then(r => !!(r && !r._coldStart && r.ok))
+    .catch(() => false);
+  _crmSetPendingSpinner(false);
+
+  if (syncOk) {
+    _crmStopPendingRetry();
+    const ok = await _crmApiLoad();
+    if (ok) renderCRM();
+    _crmUpdatePendingBanner(0);
+    showNotification('✅ ' + pending.length + ' lead(s) sincronizado(s) com a nuvem!', 'ok');
+  } else {
+    // Ainda falhou — mantém banner com contagem atualizada
+    _crmUpdatePendingBanner(pending.length);
+  }
+}
+
+function _crmStartPendingRetry() {
+  if (_crmPendingRetryInterval) return; // já está rodando
+  _crmPendingRetryInterval = setInterval(_crmRetryPending, 10000);
+}
+
+function _crmStopPendingRetry() {
+  if (_crmPendingRetryInterval) {
+    clearInterval(_crmPendingRetryInterval);
+    _crmPendingRetryInterval = null;
+  }
 }
 
 // Ao voltar para a aba, sincroniza imediatamente se passaram mais de 15s
@@ -21649,8 +21743,13 @@ async function saveCrmOportunidade(e) {
   if (card) {
     const r = await _crmApiPut(card);
     if (r === null) {
-      // cold-start → retry já agendado; os dados estão seguros no localStorage
-      showNotification('⚠️ Servidor acordando — card salvo localmente. Será sincronizado em breve.', 'warn');
+      // cold-start → inicia fila de retry em background + mostra banner persistente
+      showNotification('⚠️ Servidor ocupado — lead salvo localmente e sincronizando em background…', 'warn');
+      // Conta quantos cards estão pendentes e exibe banner
+      _crmGetPendingCards().then(pending => {
+        if (pending && pending.length > 0) _crmUpdatePendingBanner(pending.length);
+      });
+      _crmStartPendingRetry();
     } else {
       showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
     }
