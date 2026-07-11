@@ -21223,7 +21223,10 @@ async function _crmForceSync() {
   if (btn) btn.disabled = false;
 }
 
-/* Auto-refresh: atualiza o CRM a cada 30s + ao retornar para a aba */
+/* Auto-refresh: atualiza o CRM a cada 15s + ao retornar para a aba
+   _crmSilentRefresh é lightweight e NÃO bloqueia em cold-start:
+   faz um fetch direto, falha silenciosamente e tenta no próximo intervalo.
+   _crmApiLoad (com retries) é reservado para carga inicial. */
 let _crmRefreshInterval = null;
 let _crmLastRefresh = 0;
 
@@ -21231,13 +21234,38 @@ async function _crmSilentRefresh() {
   const activePage = document.querySelector('.page.active')?.id;
   if (activePage !== 'page-crm') return;
   if (document.visibilityState !== 'visible') return;
-  const ok = await _crmApiLoad();
-  if (ok) { renderCRM(); _crmLastRefresh = Date.now(); }
+
+  // Fetch direto sem retries de cold-start — falha silenciosa, tenta no próximo intervalo
+  const res = await _apiFetch('/api/crm');
+  if (!res || res._coldStart || !Array.isArray(res)) return;
+
+  const data = res.filter(c => !_CRM_MOCK_IDS.has(c.id));
+  // Guard: servidor vazio mas temos dados locais — não sobrescrever
+  if (data.length === 0 && CRM_DATA.length > 0) return;
+
+  // Merge seguro: preserva cards locais ainda não confirmados no servidor
+  const serverIds = new Set(data.map(c => c.id).filter(Boolean));
+  const localOnly = CRM_DATA.filter(c => c.id && !serverIds.has(c.id) && !_CRM_MOCK_IDS.has(c.id));
+  const merged = [...data, ...localOnly];
+
+  // Só re-renderiza se algo mudou (evita flicker desnecessário)
+  const changed = merged.length !== CRM_DATA.length ||
+    merged.some(n => {
+      const o = CRM_DATA.find(x => x.id === n.id);
+      return !o || o.coluna !== n.coluna || o.empresa !== n.empresa || o.resultado !== n.resultado;
+    });
+
+  if (changed) {
+    CRM_DATA = merged;
+    _crmSave();
+    renderCRM();
+  }
+  _crmLastRefresh = Date.now();
 }
 
 function _crmStartAutoRefresh() {
   _crmStopAutoRefresh();
-  _crmRefreshInterval = setInterval(_crmSilentRefresh, 30000);
+  _crmRefreshInterval = setInterval(_crmSilentRefresh, 15000); // 15s — igual às tarefas (~10s)
 }
 function _crmStopAutoRefresh() {
   if (_crmRefreshInterval) { clearInterval(_crmRefreshInterval); _crmRefreshInterval = null; }
@@ -21638,6 +21666,9 @@ async function _crmMoveCard(cardId, toColId) {
     // Não precisamos de rollback porque o retry vai resolver.
     // Mas logamos para diagnóstico.
     console.warn('[CRM] Mover card ficou pendente (cold-start / rede):', cardId, oldCol, '→', toColId);
+  } else if (r) {
+    // Move confirmado → re-fetch para propagar para outros usuários
+    _crmSilentRefresh().catch(() => {});
   }
 }
 
@@ -21802,6 +21833,9 @@ async function saveCrmOportunidade(e) {
       _crmStartPendingRetry();
     } else {
       showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
+      // Re-fetch em background (como tasks fazem com loadTasksFromDB) — garante que
+      // mudanças de outros usuários feitas enquanto o modal estava aberto apareçam.
+      _crmSilentRefresh().catch(() => {});
     }
   }
 }
