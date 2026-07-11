@@ -2263,10 +2263,32 @@
   /* CLIENT DETAIL MODAL */
   #client-detail-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:center;justify-content:center; }
   #client-detail-overlay.open { display:flex; }
-  .client-detail-panel { background:var(--bg2);border:1px solid var(--border2);border-radius:18px;width:min(700px,95vw);max-height:85vh;overflow-y:auto;padding:32px; }
+  .client-detail-panel { background:var(--bg2);border:1px solid var(--border2);border-radius:18px;width:min(960px,95vw);max-height:90vh;overflow-y:auto;padding:28px 32px; }
   .client-detail-header { display:flex;align-items:flex-start;gap:16px;margin-bottom:20px; }
   .client-detail-av { width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0; }
   .client-detail-title { font-size:20px;font-weight:700;margin-bottom:6px; }
+
+  /* ── Client BI Dashboard ──────────────────────────── */
+  .cd-kpi-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px; }
+  @media(max-width:680px){ .cd-kpi-grid { grid-template-columns:repeat(2,1fr); } }
+  .cd-kpi { background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:3px;transition:box-shadow 0.18s; }
+  .cd-kpi:hover { box-shadow:0 4px 18px rgba(0,0,0,0.09); }
+  .cd-kpi-top { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
+  .cd-kpi-label { font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:600; }
+  .cd-kpi-value { font-size:22px;font-weight:800;font-family:var(--mono);line-height:1; }
+  .cd-kpi-sub { font-size:10px;color:var(--text3);margin-top:2px; }
+  .cd-chart-wrap { background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px 16px 8px;margin-bottom:20px; }
+  .cd-chart-title { font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px; }
+  .cd-timeline { background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:20px; }
+  .cd-timeline-title { font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:6px; }
+  .cd-timeline-list { position:relative;padding-left:20px; }
+  .cd-timeline-list::before { content:'';position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--border);border-radius:2px; }
+  .cd-timeline-item { position:relative;padding-bottom:14px; }
+  .cd-timeline-item:last-child { padding-bottom:0; }
+  .cd-timeline-dot { position:absolute;left:-22px;top:4px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg3); }
+  .cd-timeline-date { font-size:10px;color:var(--text3);margin-bottom:2px;font-family:var(--mono); }
+  .cd-timeline-text { font-size:12px;color:var(--text2);line-height:1.55; }
+  .cd-tl-badge { display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.4px;margin-right:4px;vertical-align:middle; }
   .invest-bar-row { display:flex;flex-direction:column;gap:7px;margin-top:10px; }
   .invest-bar-item { display:flex;align-items:center;gap:10px;font-size:11px; }
   .invest-bar-label { color:var(--text3);width:64px;flex-shrink:0; }
@@ -11671,72 +11693,233 @@ async function generateClientReport(clientId) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+/* ── Client BI Dashboard helpers ─────────────────────────────────────────── */
+
+function _cdBiKpis(c, goalInfo) {
+  const investTotal = (c.investments||[]).reduce((s,i) => s+(i.value||0), 0);
+  const invest = investTotal > 0 ? investTotal : (c.investment || 0);
+  const months = (c.investments||[]).length;
+
+  const isLeadsGoal = goalInfo?.type === 'leads';
+  const fat    = c.faturamentoMetaAds || (!isLeadsGoal ? (c.goal?.realized || 0) : 0);
+  const leads  = isLeadsGoal ? (c.goal?.realized || 0) : (c.metaCompras || 0);
+  const target = c.goal?.target || 0;
+
+  // ROAS — só para faturamento; proteção contra divisão por zero
+  const roas = (fat > 0 && invest > 0) ? fat / invest : null;
+  // CPL/CPC — proteção contra divisão por zero
+  const cpl  = (leads > 0 && invest > 0) ? invest / leads : null;
+
+  const roasColor = roas === null ? 'var(--text3)' : roas >= 3 ? '#34D399' : roas >= 1.5 ? '#F59E0B' : '#F87171';
+  const roasVal   = isLeadsGoal
+    ? (target > 0 ? Math.round((leads / target) * 100) + '%' : '—')
+    : (roas !== null ? roas.toFixed(1) + 'x' : '—');
+  const roasSub   = isLeadsGoal ? 'atingimento da meta' : 'retorno sobre investimento';
+
+  const kpi2Label = isLeadsGoal ? 'Leads Gerados' : 'Faturamento';
+  const kpi2Val   = isLeadsGoal ? (leads > 0 ? leads.toLocaleString('pt-BR') : '—') : (fat > 0 ? fmtBRL(fat) : '—');
+  const kpi2Sub   = isLeadsGoal ? `Meta: ${target > 0 ? target.toLocaleString('pt-BR') : '—'}` : (fat > 0 ? 'acumulado no período' : 'sem dados');
+
+  const cplLabel = isLeadsGoal ? 'CPL' : 'Custo p/ Compra';
+  const cplSub   = cpl !== null ? `${leads.toLocaleString('pt-BR')} ${isLeadsGoal ? 'leads' : 'compras'}` : 'sem dados de conversão';
+
+  return `<div class="cd-kpi-grid">
+    <div class="cd-kpi">
+      <div class="cd-kpi-top"><i class="ti ti-trending-up" style="color:#6C63FF;font-size:16px"></i><span class="cd-kpi-label">Investimento</span></div>
+      <div class="cd-kpi-value" style="color:#6C63FF">${invest > 0 ? fmtBRL(invest) : '—'}</div>
+      <div class="cd-kpi-sub">${months > 0 ? months + ' meses no histórico' : 'sem histórico'}</div>
+    </div>
+    <div class="cd-kpi">
+      <div class="cd-kpi-top"><i class="ti ti-cash" style="color:#34D399;font-size:16px"></i><span class="cd-kpi-label">${kpi2Label}</span></div>
+      <div class="cd-kpi-value" style="color:#34D399">${kpi2Val}</div>
+      <div class="cd-kpi-sub">${kpi2Sub}</div>
+    </div>
+    <div class="cd-kpi">
+      <div class="cd-kpi-top"><i class="ti ti-chart-bar" style="color:${roasColor};font-size:16px"></i><span class="cd-kpi-label">${isLeadsGoal ? 'Meta' : 'ROAS'}</span></div>
+      <div class="cd-kpi-value" style="color:${roasColor}">${roasVal}</div>
+      <div class="cd-kpi-sub">${roasSub}</div>
+    </div>
+    <div class="cd-kpi">
+      <div class="cd-kpi-top"><i class="ti ti-target" style="color:#F59E0B;font-size:16px"></i><span class="cd-kpi-label">${cplLabel}</span></div>
+      <div class="cd-kpi-value" style="color:#F59E0B">${cpl !== null ? fmtBRL(cpl) : '—'}</div>
+      <div class="cd-kpi-sub">${cplSub}</div>
+    </div>
+  </div>`;
+}
+
+function _cdRenderBiChart(c) {
+  const svg = document.getElementById('cd-bi-chart');
+  if (!svg) return;
+
+  const invs = [...(c.investments||[])].sort((a,b) => a.month.localeCompare(b.month));
+  if (invs.length === 0) {
+    svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="var(--text3)" font-size="13">Nenhum dado de investimento disponível</text>`;
+    return;
+  }
+
+  const W=600, H=160, PL=52, PR=20, PT=14, PB=30;
+  const cW=W-PL-PR, cH=H-PT-PB;
+  const n = invs.length;
+  const vals = invs.map(i => i.value||0);
+  const maxV = Math.max(...vals, 1);
+
+  const xs = invs.map((_,i) => PL + (n>1 ? (i/(n-1))*cW : cW/2));
+  const ys = invs.map(v => PT + cH - (v/maxV)*cH);
+
+  // Smooth path using cubic bezier
+  const linePts = xs.map((x,i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const areaPath = `M${xs[0].toFixed(1)},${(PT+cH).toFixed(1)} ` +
+    xs.map((x,i) => `L${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ') +
+    ` L${xs[n-1].toFixed(1)},${(PT+cH).toFixed(1)} Z`;
+
+  // Grid lines (0%, 50%, 100%)
+  const gridLines = [0, 0.5, 1].map(p => {
+    const y = (PT + cH - p*cH).toFixed(1);
+    const v = maxV*p;
+    const lbl = v >= 1000 ? 'R$'+(v/1000).toFixed(0)+'k' : 'R$'+v.toFixed(0);
+    return `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="${p===0?'0':'4,3'}"/>` +
+      (p > 0 ? `<text x="${PL-4}" y="${(parseFloat(y)+3).toFixed(0)}" text-anchor="end" fill="var(--text3)" font-size="9">${lbl}</text>` : '');
+  }).join('');
+
+  // X-axis month labels
+  const MON = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const xLabels = invs.map((inv,i) => {
+    const [y,m] = inv.month.split('-');
+    return `<text x="${xs[i].toFixed(1)}" y="${H-4}" text-anchor="middle" fill="var(--text3)" font-size="9">${MON[parseInt(m)-1]}/${y.slice(2)}</text>`;
+  }).join('');
+
+  // Dots
+  const dots = xs.map((x,i) =>
+    `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="3.5" fill="#6C63FF" stroke="var(--bg3)" stroke-width="2"/>`
+  ).join('');
+
+  // Label on last dot
+  const lastLabel = `<text x="${xs[n-1].toFixed(1)}" y="${(ys[n-1]-8).toFixed(1)}" text-anchor="middle" fill="#6C63FF" font-size="9.5" font-weight="700">${fmtBRL(vals[n-1])}</text>`;
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="cd-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#6C63FF" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="#6C63FF" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    <path d="${areaPath}" fill="url(#cd-grad)"/>
+    <polyline points="${linePts}" fill="none" stroke="#6C63FF" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${lastLabel}${xLabels}`;
+}
+
+function _cdTimeline(c) {
+  const events = [];
+
+  if (c.startDate) events.push({
+    date: new Date(c.startDate), color:'#6C63FF',
+    badge:'início', badgeBg:'rgba(108,99,255,0.12)', badgeColor:'#6C63FF',
+    text:`Cliente <strong>${c.name}</strong> entrou na agência.`
+  });
+
+  (c.historico_otimizacoes||[]).forEach(h => events.push({
+    date: new Date(h.data), color:'#F59E0B',
+    badge:'otimização', badgeBg:'rgba(245,158,11,0.12)', badgeColor:'#F59E0B',
+    text: h.texto_nota, author: h.autor
+  }));
+
+  const done = (typeof TASKS_DATA !== 'undefined' ? TASKS_DATA : [])
+    .filter(t => t.client === c.id && (t.status === 'Pronto' || t.status === 'Concluído'));
+  done.forEach(t => {
+    const d = t.completedAt || t.created_at;
+    if (!d) return;
+    const who = (USERS.find(u => u.id === (t.assignedTo||t.owner))||{}).name || '';
+    events.push({ date:new Date(d), color:'#34D399', badge:'tarefa', badgeBg:'rgba(52,211,153,0.12)', badgeColor:'#34D399', text:t.title, author:who });
+  });
+
+  if (c.churnDate) events.push({
+    date: new Date(c.churnDate), color:'#F87171',
+    badge:'churn', badgeBg:'rgba(248,113,113,0.12)', badgeColor:'#F87171',
+    text:`Saída marcada. LTV: ${c.ltvDays||0} dias.`
+  });
+
+  events.sort((a,b) => b.date - a.date);
+  if (!events.length) return '';
+
+  const fmtDate = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'});
+  const items = events.slice(0,10).map(ev => `
+    <div class="cd-timeline-item">
+      <div class="cd-timeline-dot" style="background:${ev.color}"></div>
+      <div class="cd-timeline-date">${fmtDate(ev.date)}${ev.author ? ' · '+ev.author : ''}</div>
+      <div class="cd-timeline-text"><span class="cd-tl-badge" style="background:${ev.badgeBg};color:${ev.badgeColor}">${ev.badge}</span>${ev.text}</div>
+    </div>`).join('');
+
+  return `<div class="cd-timeline">
+    <div class="cd-timeline-title"><i class="ti ti-history" style="color:var(--accent)"></i> Histórico de Atividades</div>
+    <div class="cd-timeline-list">${items}</div>
+  </div>`;
+}
+
 function openClientDetail(id) {
   const c = CLIENTS.list.find(x => x.id === id);
   if (!c) return;
   const seg      = CL_SEGMENTS[c.segment] || { label:'—', color:'var(--text3)', bg:'var(--bg3)' };
   const goalInfo = CL_GOAL_MAP[c.segment] || null;
   const owner    = USERS.find(u => u.id === c.owner);
-  const crowns = [1,2,3,4,5].map(i => `<i class="ti ti-crown" style="color:${i<=c.importance?'#F59E0B':'var(--bg4)'};font-size:20px"></i>`).join('');
-  // Ordena decrescente: mês mais recente aparece no topo do gráfico
-  const sortedInvs = [...(c.investments || [])].sort((a, b) => b.month.localeCompare(a.month));
-  const maxV  = Math.max(...sortedInvs.map(i => i.value), 1);
-  const chartHtml = sortedInvs.length ? `
-    <div class="invest-bar-row">
-      ${sortedInvs.slice(0, 8).map(inv => {
-        const pct = Math.round((inv.value / maxV) * 100);
-        const [iy, im] = inv.month.split('-');
-        const lbl = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][parseInt(im)-1] + ' ' + String(iy).slice(2);
-        return `<div class="invest-bar-item"><span class="invest-bar-label">${lbl}</span><div class="invest-bar-track"><div class="invest-bar-fill" style="width:${pct}%"></div></div><span class="invest-bar-val">${fmtBRL(inv.value)}</span></div>`;
-      }).join('')}
-    </div>
-    <div style="margin-top:10px;font-size:11px;color:var(--text3)">Total acumulado: <span style="color:var(--text);font-family:var(--mono)">${fmtBRL(sortedInvs.reduce((s,i) => s + i.value, 0))}</span></div>
-  ` : '<div style="font-size:12px;color:var(--text3);padding:12px 0">Nenhum investimento registrado ainda.</div>';
+  const crowns   = [1,2,3,4,5].map(i =>
+    `<i class="ti ti-crown" style="color:${i<=c.importance?'#F59E0B':'var(--bg4)'};font-size:18px"></i>`).join('');
 
   document.getElementById('client-detail-panel').innerHTML = `
     <div class="client-detail-header">
-      ${_clAvatar(c, 64, '16px')}
+      ${_clAvatar(c, 56, '14px')}
       <div style="flex:1;min-width:0">
         <div class="client-detail-title">${c.name}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
           <span class="segment-badge" style="background:${seg.bg};color:${seg.color}">${seg.label}</span>
-          <div style="display:flex;gap:2px">${crowns}</div>
+          <div style="display:flex;gap:1px">${crowns}</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-ghost btn-sm" onclick="generateClientReport('${c.id}')" title="Gerar Relatório PDF" style="color:var(--accent)"><i class="ti ti-file-text"></i> PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="closeClientDetail();openNewClientModal('${c.id}')"><i class="ti ti-edit"></i> Editar</button>
         ${c.status === 'churn'
-          ? `<button class="btn btn-ghost btn-sm" onclick="reativarCliente('${c.id}')" title="Reativar cliente" style="color:var(--green)"><i class="ti ti-arrow-back-up"></i> Reativar</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="marcarChurn('${c.id}')" title="Marcar churn" style="color:var(--red)"><i class="ti ti-user-x"></i> Marcar Churn</button>`}
+          ? `<button class="btn btn-ghost btn-sm" onclick="reativarCliente('${c.id}')" style="color:var(--green)"><i class="ti ti-arrow-back-up"></i> Reativar</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="marcarChurn('${c.id}')" style="color:var(--red)"><i class="ti ti-user-x"></i> Churn</button>`}
         <button class="btn btn-ghost btn-sm" onclick="closeClientDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
-    <div class="sep" style="margin-bottom:20px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+    <div class="sep" style="margin:0 0 20px"></div>
+
+    ${_cdBiKpis(c, goalInfo)}
+
+    <div class="cd-chart-wrap">
+      <div class="cd-chart-title">
+        <i class="ti ti-chart-area-filled" style="color:var(--accent)"></i>
+        Evolução de Investimento Mensal
+        <span style="margin-left:auto;color:var(--text3);font-size:10px;font-weight:400">
+          ${(c.investments||[]).length} meses · total ${fmtBRL((c.investments||[]).reduce((s,i)=>s+(i.value||0),0))}
+        </span>
+      </div>
+      <svg id="cd-bi-chart" width="100%" viewBox="0 0 600 160" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible"></svg>
+    </div>
+
+    <div id="cd-goal-pacing">${_buildDetailGoalPacing(c, goalInfo, false)}</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0 0">
       <div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:8px">Objetivo Estratégico</div>
-        <div style="background:var(--bg3);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px;font-size:12px;color:var(--text2);line-height:1.65">${c.objective||'<em>Não definido</em>'}</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:6px">Objetivo Estratégico</div>
+        <div style="background:var(--bg3);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:11px;font-size:12px;color:var(--text2);line-height:1.65">${c.objective||'<em style="color:var(--text3)">Não definido</em>'}</div>
       </div>
       <div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:8px">Responsável</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:6px">Responsável</div>
         <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px 14px">
           <div class="avatar" style="background:${owner?.color||'var(--bg4)'};width:32px;height:32px;font-size:11px">${owner?.initials||'?'}</div>
           <div><div style="font-size:13px;font-weight:500">${owner?.name||'—'}</div><div style="font-size:10px;color:var(--text3)">${owner?.role||''}</div></div>
         </div>
-        <div style="margin-top:10px">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:6px">Segmento</div>
-          <span class="segment-badge" style="background:${seg.bg};color:${seg.color};font-size:12px;padding:4px 12px">${seg.label}</span>
-        </div>
       </div>
     </div>
-    <div id="cd-goal-pacing">${_buildDetailGoalPacing(c, goalInfo, false)}</div>
-    <div>
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:4px">Histórico de Investimento</div>
-      ${chartHtml}
-    </div>
+
+    ${_cdTimeline(c)}
   `;
   document.getElementById('client-detail-overlay').classList.add('open');
+  _cdRenderBiChart(c);
 
   // ── GA4 live fetch para Delivery / E-commerce ─────────────────────────────
   const isGA4Seg = c.segment === 'delivery' || c.segment === 'ecommerce';
