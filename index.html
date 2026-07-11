@@ -4904,7 +4904,6 @@
         <select id="cl-form-owner" class="form-select">
           <option value="guilherme">Guilherme</option>
           <option value="henrique">Henrique</option>
-          <option value="amanda">Amanda</option>
           <option value="jaqueline">Jaqueline</option>
           <option value="bernardo">Bernardo</option>
         </select>
@@ -8125,7 +8124,7 @@ const USERS = [
   { id:'guilherme', initials:'GU', name:'Guilherme', role:'CEO · Super Admin',             pin:'admin123', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', isAdmin:true,  isSuperAdmin:true  },
   { id:'henrique',  initials:'HE', name:'Henrique',  role:'Gestor de Tráfego e Projetos',  pin:'admin123', color:'linear-gradient(135deg,#F59E0B,#D97706)', isAdmin:true,  isSuperAdmin:false },
   { id:'bernardo',  initials:'BE', name:'Bernardo',  role:'Gestor de Tráfego',             pin:'user123',  color:'linear-gradient(135deg,#FB923C,#EA580C)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._TRAFFIC_COLLAB_PAGES] },
-  { id:'amanda',    initials:'AM', name:'Amanda',    role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES] },
+  { id:'amanda',    initials:'AM', name:'Amanda',    role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#F472B6,#DB2777)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES], isActive:false },
   { id:'jaqueline', initials:'JA', name:'Jaqueline', role:'Designer',                       pin:'user123',  color:'linear-gradient(135deg,#38BDF8,#0284C7)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._DESIGNER_COLLAB_PAGES] },
   { id:'caio',      initials:'CA', name:'Caio',      role:'Vendedor',                        pin:'vendas123', color:'linear-gradient(135deg,#10B981,#059669)', isAdmin:false, isSuperAdmin:false, allowedPages:[..._VENDEDOR_PAGES] },
 ];
@@ -8166,7 +8165,7 @@ function initAuth() {
 function renderLoginScreen() {
   const grid = document.getElementById('login-profiles-grid');
   if (!grid) return;
-  grid.innerHTML = USERS.map(u => {
+  grid.innerHTML = USERS.filter(u => u.isActive !== false).map(u => {
     const avContent = u.photo
       ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover">`
       : u.initials;
@@ -8232,6 +8231,7 @@ async function doLogin() {
   const pin  = document.getElementById('login-pin').value;
   const user = USERS.find(u => u.id === pendingLoginUser);
   if (!user) { failLogin('Usuário não encontrado.'); return; }
+  if (user.isActive === false) { failLogin('Usuário inativo. Entre em contato com o administrador.'); return; }
 
   setBtnLoading(true);
 
@@ -8306,7 +8306,7 @@ function loginUser(user) {
   const sel = document.getElementById('collab-filter');
   if (sel) {
     sel.innerHTML = '<option value="all">Todos os Colaboradores</option>' +
-      USERS.map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
+      USERS.filter(u => u.isActive !== false).map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
     sel.value = 'all';
   }
   // Admins: dropdown de colaborador visível. Colaboradores: oculto (filtro travado no próprio usuário)
@@ -8391,7 +8391,7 @@ function _renderOwnerChips(selectedIds) {
   const wrap = document.getElementById('task-owners-chips');
   if (!wrap) return;
   const isAdmin = !!(currentUser?.isAdmin);
-  wrap.innerHTML = USERS.map(u => {
+  wrap.innerHTML = USERS.filter(u => u.isActive !== false).map(u => {
     const sel  = _taskOwnerIds.includes(u.id);
     const able = isAdmin || u.id === currentUser?.id;
     const avHtml = u.photo
@@ -8760,7 +8760,7 @@ function adminEditOwner(chip) {
   if (chip.querySelector('select')) return;
   const item = chip.closest('.task-item');
   const sel = document.createElement('select');
-  USERS.forEach(u => {
+  USERS.filter(u => u.isActive !== false).forEach(u => {
     const opt = document.createElement('option');
     opt.value = u.id;
     opt.textContent = u.name;
@@ -16456,7 +16456,7 @@ async function renderTorreControle(force = false) {
 
   // ── Monta dados por colaborador ─────────────────────────────────────────
   // Usa USERS como fonte de verdade da lista de colaboradores
-  const collabList = USERS.map(u => {
+  const collabList = USERS.filter(u => u.isActive !== false).map(u => {
     const tasks    = tasksByUser[u.id] || { open: 0, done: 0 };
     const otim     = otimByOwner[u.id] || { overdue: 0, warning: 0, total: 0 };
     // Enriquece com dados de backend se disponível
@@ -19605,7 +19605,7 @@ function _populateTaskFilters() {
       // Admin: todas as opções disponíveis
       const prev = ownerSel.value;
       ownerSel.innerHTML = '<option value="">Todos os Colaboradores</option>';
-      USERS.forEach(u => {
+      USERS.filter(u => u.isActive !== false).forEach(u => {
         const o = document.createElement('option');
         o.value = u.id;
         o.textContent = u.name + (u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : '');
@@ -20695,7 +20695,7 @@ function renderTeamPermissions() {
 
   if (!currentUser?.isAdmin) { wrap.innerHTML = ''; return; }
 
-  const collabs = USERS.filter(u => !u.isAdmin);
+  const collabs = USERS.filter(u => !u.isAdmin && u.isActive !== false);
 
   wrap.innerHTML = `
     <div class="card" style="border-color:rgba(108,99,255,0.25);background:rgba(108,99,255,0.04)">
