@@ -23021,12 +23021,13 @@ function closeFixedCostModal() {
 }
 async function saveFixedCost() {
   const nome  = document.getElementById('fin-fc-nome').value.trim();
+  const cat   = document.getElementById('fin-fc-cat').value;
   const valor = parseFloat(document.getElementById('fin-fc-valor').value);
   const dia   = parseInt(document.getElementById('fin-fc-dia').value, 10);
   const errEl = document.getElementById('fin-fc-error');
   const showErr = msg => { if(errEl){errEl.textContent=msg;errEl.style.display='block';} };
 
-  if (!nome)              return showErr('Informe o nome da ferramenta.');
+  if (!nome)                  return showErr('Informe a descrição / nome.');
   if (isNaN(valor)||valor<=0) return showErr('Informe um valor mensal válido.');
   if (!dia||dia<1||dia>31)    return showErr('Informe um dia de vencimento entre 1 e 31.');
   if (errEl) errEl.style.display = 'none';
@@ -23038,6 +23039,7 @@ async function saveFixedCost() {
     method: 'POST',
     body: JSON.stringify({
       client_name:    nome,
+      categoria:      cat,
       valor_mensal:   valor,
       dia_vencimento: dia,
       data_inicio:    new Date().toISOString().slice(0,10),
@@ -23830,7 +23832,7 @@ window.addEventListener('resize', () => {
       </div>
       <div style="flex:1">
         <div style="font-size:14px;font-weight:700;color:var(--text)">Novo Custo Fixo</div>
-        <div style="font-size:11px;color:var(--text3)">Ferramenta ou app recorrente</div>
+        <div style="font-size:11px;color:var(--text3)">Despesa recorrente da agência</div>
       </div>
       <button onclick="closeFixedCostModal()"
         style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:4px">
@@ -23839,9 +23841,20 @@ window.addEventListener('resize', () => {
     </div>
     <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
       <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Nome da Ferramenta</label>
-        <input id="fin-fc-nome" type="text" placeholder="Ex: Canva Pro, ChatGPT, Meta Ads..."
+        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Descrição / Nome <span style="color:#F87171">*</span></label>
+        <input id="fin-fc-nome" type="text" placeholder="Ex: Canva Pro, Folha de Pagamento, Pró-labore, Aluguel..."
           style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:13px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Categoria <span style="color:#F87171">*</span></label>
+        <select id="fin-fc-cat" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:13px;box-sizing:border-box">
+          <option value="Ferramentas / Software">Ferramentas / Software</option>
+          <option value="Folha de Pagamento / Equipe">Folha de Pagamento / Equipe</option>
+          <option value="Infraestrutura / Aluguel">Infraestrutura / Aluguel</option>
+          <option value="Impostos / Contabilidade">Impostos / Contabilidade</option>
+          <option value="Marketing / Anúncios próprios">Marketing / Anúncios próprios</option>
+          <option value="Outros">Outros</option>
+        </select>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
