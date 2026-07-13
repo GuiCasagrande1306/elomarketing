@@ -4887,9 +4887,12 @@
           </div>
         </div>
         <div id="rec-modal-error" style="display:none;color:#F87171;font-size:11px;padding:8px 12px;background:rgba(248,113,113,.1);border-radius:6px;border:1px solid rgba(248,113,113,.3)"></div>
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-          <button class="btn btn-ghost" onclick="closeRecModal()">Cancelar</button>
-          <button class="btn btn-primary" id="rec-save-btn" onclick="recSave()"><i class="ti ti-check"></i> Salvar</button>
+        <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
+          <button id="rec-delete-btn" style="display:none;background:rgba(248,113,113,.12);color:#F87171;border:1px solid rgba(248,113,113,.3);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;display:none;align-items:center;gap:6px" onclick="recDeleteFromModal()"><i class="ti ti-trash"></i> Excluir Contrato</button>
+          <div style="display:flex;gap:10px;margin-left:auto">
+            <button class="btn btn-ghost" onclick="closeRecModal()">Cancelar</button>
+            <button class="btn btn-primary" id="rec-save-btn" onclick="recSave()"><i class="ti ti-check"></i> Salvar</button>
+          </div>
         </div>
       </div>
     </div>
@@ -23307,6 +23310,8 @@ function openNewRecModal() {
   document.getElementById('rec-inicio').value = new Date().toISOString().slice(0,10);
   const errEl = document.getElementById('rec-modal-error');
   if (errEl) errEl.style.display = 'none';
+  const delBtn = document.getElementById('rec-delete-btn');
+  if (delBtn) delBtn.style.display = 'none';
   document.getElementById('rec-modal').style.display = 'flex';
 }
 
@@ -23325,7 +23330,33 @@ function openRecModal(recId) {
   document.getElementById('rec-inicio').value = entry.data_inicio?.slice(0,10) || new Date().toISOString().slice(0,10);
   const errEl = document.getElementById('rec-modal-error');
   if (errEl) errEl.style.display = 'none';
+  const delBtn = document.getElementById('rec-delete-btn');
+  if (delBtn) delBtn.style.display = 'flex';
   document.getElementById('rec-modal').style.display = 'flex';
+}
+
+async function recDeleteFromModal() {
+  if (!_REC_EDITING?.recId) return;
+  const { recId, clientName } = _REC_EDITING;
+  if (!confirm(`Deseja realmente excluir permanentemente o contrato de "${clientName}"?\n\nEsta ação não pode ser desfeita.`)) return;
+  closeRecModal();
+  // Optimistic UI
+  const backup = [..._REC_LIST];
+  _REC_LIST = _REC_LIST.filter(r => r.id !== recId);
+  _FIN_DASH_RECS = _FIN_DASH_RECS.filter(r => r.id !== recId);
+  recRenderTable();
+  finAssLoad();
+  const res = await _apiFetch(`/api/finance/recurrences/${recId}`, { method: 'DELETE' });
+  if (res?.ok) {
+    showNotification(`Contrato de "${clientName}" excluído.`, 'ok');
+    recLoadMonthly();
+  } else {
+    _REC_LIST = backup;
+    _FIN_DASH_RECS = [];
+    recRenderTable();
+    finAssLoad();
+    showNotification(res?.error || 'Erro ao excluir contrato.', 'error');
+  }
 }
 
 function closeRecModal() {
