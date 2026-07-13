@@ -23249,7 +23249,8 @@ function recRenderTable() {
     const acoes = `
       <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px" onclick="openRecModal('${r.id}')"><i class="ti ti-pencil"></i> Editar</button>
       ${r.status_contrato === 'Ativo'   ? `<button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#FBBF24" onclick="recTogglePause('${r.id}','Pausado')"  title="Pausar"><i class="ti ti-player-pause"></i></button>` : ''}
-      ${r.status_contrato === 'Pausado' ? `<button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#34D399" onclick="recTogglePause('${r.id}','Ativo')"   title="Reativar"><i class="ti ti-player-play"></i></button>` : ''}`;
+      ${r.status_contrato === 'Pausado' ? `<button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#34D399" onclick="recTogglePause('${r.id}','Ativo')"   title="Reativar"><i class="ti ti-player-play"></i></button>` : ''}
+      <button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#F87171" onclick="recDeleteRec('${r.id}','${r.client_name.replace(/'/g,"\\'")}')" title="Excluir"><i class="ti ti-trash"></i></button>`;
     return `
     <tr class="monday-row">
       <td class="monday-td"><strong style="cursor:pointer;color:var(--accent)" onclick="openRecDetail('${r.id}')">${r.client_name}</strong></td>
@@ -23267,6 +23268,28 @@ function recRenderTable() {
 async function recTogglePause(recId, newStatus) {
   const r = await _apiFetch(`/api/finance/recurrences/${recId}`, { method:'PUT', body:JSON.stringify({ status_contrato: newStatus }) });
   if (r?.ok) { showNotification(`Contrato ${newStatus === 'Ativo' ? 'reativado' : 'pausado'}.`, 'ok'); recLoad(); }
+}
+
+async function recDeleteRec(id, nome) {
+  if (!confirm(`Tem certeza que deseja excluir a recorrência de "${nome}"?\n\nEsta ação não pode ser desfeita.`)) return;
+  // Optimistic UI: remove do estado local imediatamente
+  const backup = [..._REC_LIST];
+  _REC_LIST = _REC_LIST.filter(r => r.id !== id);
+  _FIN_DASH_RECS = _FIN_DASH_RECS.filter(r => r.id !== id);
+  recRenderTable();
+  finAssLoad();
+  const res = await _apiFetch(`/api/finance/recurrences/${id}`, { method: 'DELETE' });
+  if (res?.ok) {
+    showNotification(`"${nome}" excluído com sucesso.`, 'ok');
+    recLoadMonthly();
+  } else {
+    // Reverte se falhou
+    _REC_LIST = backup;
+    _FIN_DASH_RECS = [];
+    recRenderTable();
+    finAssLoad();
+    showNotification(res?.error || 'Erro ao excluir.', 'error');
+  }
 }
 
 /* ── Modal: abre para NOVA recorrência ── */
