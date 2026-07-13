@@ -2566,8 +2566,16 @@
 
   .crm-toolbar {
     display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
     padding: 12px 20px; flex-shrink: 0;
   }
+  .crm-period-btn {
+    padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--text2); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .crm-period-btn:hover { background: var(--bg3); color: var(--text1); }
+  .crm-period-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
   .crm-board {
     display: flex; gap: 12px;
@@ -4894,9 +4902,12 @@
 
     <!-- Toolbar -->
     <div class="crm-toolbar">
-      <div style="font-size:13px;color:var(--text3)">
-        <i class="ti ti-info-circle" style="margin-right:5px"></i>
-        Arraste os cards entre colunas ou use os botões de ação para avançar etapas
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--text3);margin-right:4px">Fechados:</span>
+        <button class="crm-period-btn active" data-period="todos"   onclick="crmSetPeriod('todos',this)">Todos</button>
+        <button class="crm-period-btn"        data-period="mes"     onclick="crmSetPeriod('mes',this)">Este Mês</button>
+        <button class="crm-period-btn"        data-period="30d"     onclick="crmSetPeriod('30d',this)">30 dias</button>
+        <button class="crm-period-btn"        data-period="90d"     onclick="crmSetPeriod('90d',this)">90 dias</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-ghost btn-sm" id="crm-sync-btn" onclick="_crmForceSync()" title="Buscar leads mais recentes do servidor">
@@ -21346,6 +21357,32 @@ const CRM_COLS = [
   { id: 'negociacao', label: 'Em Negociação',                 color: '#A78BFA',   dot: '#A78BFA'        },
   { id: 'fechado',    label: 'Fechado',                       color: '#22D3A0',   dot: 'var(--green)'   },
 ];
+const _CRM_ACTIVE_COLS = new Set(['lead','contato','proposta','negociacao']);
+
+/* Período de filtro da coluna Fechado — nunca afeta colunas ativas */
+let CRM_FILTER_PERIOD = 'todos';
+
+function crmSetPeriod(period, btn) {
+  CRM_FILTER_PERIOD = period;
+  document.querySelectorAll('.crm-period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === period));
+  _crmRenderBoard();
+}
+
+/* Retorna a data-limite (Date) para o filtro da coluna Fechado.
+   Colunas ativas nunca usam este valor. */
+function _crmPeriodThreshold() {
+  const now = new Date();
+  if (CRM_FILTER_PERIOD === 'mes') {
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  if (CRM_FILTER_PERIOD === '30d') {
+    return new Date(now.getTime() - 30 * 86400000);
+  }
+  if (CRM_FILTER_PERIOD === '90d') {
+    return new Date(now.getTime() - 90 * 86400000);
+  }
+  return null; // 'todos' → sem limite
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    CRM — Camada de Persistência
@@ -21811,10 +21848,21 @@ function _crmRenderBoard() {
   if (!board) return;
   board.innerHTML = '';
 
+  const knownColIds = new Set(CRM_COLS.map(c => c.id));
+  const threshold   = _crmPeriodThreshold();
+
   CRM_COLS.forEach(col => {
-    /* Ordena: atrasados → hoje → próximos → sem data */
-    const cards = [...CRM_DATA.filter(c => c.coluna === col.id)]
-      .sort((a, b) => _crmUrgencyScore(a) - _crmUrgencyScore(b));
+    const isActive = _CRM_ACTIVE_COLS.has(col.id);
+    /* Colunas ativas: todos os leads, sem filtro de data.
+       Coluna fechado: respeita o período selecionado. */
+    const cards = [...CRM_DATA.filter(c => {
+      if (c.coluna !== col.id) return false;
+      if (!isActive && threshold) {
+        const d = c.data ? new Date(c.data) : null;
+        if (!d || d < threshold) return false;
+      }
+      return true;
+    })].sort((a, b) => _crmUrgencyScore(a) - _crmUrgencyScore(b));
     const total = cards.reduce((s, c) => s + (c.valor || 0), 0);
 
     const colEl = document.createElement('div');
@@ -21863,6 +21911,30 @@ function _crmRenderBoard() {
       cardsContainer.appendChild(_crmBuildCard(card));
     });
   });
+
+  /* ── Coluna "Sem Categoria" para leads com coluna desconhecida ── */
+  const unmapped = CRM_DATA.filter(c => c.coluna && !knownColIds.has(c.coluna));
+  if (unmapped.length > 0) {
+    const colEl = document.createElement('div');
+    colEl.className = 'crm-col';
+    const total = unmapped.reduce((s, c) => s + (c.valor || 0), 0);
+    colEl.innerHTML = `
+      <div class="crm-col-header">
+        <div class="crm-col-title">
+          <span class="crm-col-dot" style="background:var(--text3)"></span>
+          Sem Categoria
+        </div>
+        <div class="crm-col-meta">
+          <span class="crm-col-count">${unmapped.length}</span>
+          <span class="crm-col-total">${_crmFmtBRL(total)}</span>
+        </div>
+      </div>
+      <div class="crm-cards" id="crm-cards-uncategorized"></div>
+    `;
+    board.appendChild(colEl);
+    const container = colEl.querySelector('.crm-cards');
+    unmapped.forEach(card => container.appendChild(_crmBuildCard(card)));
+  }
 }
 
 function _crmBuildCard(c) {
