@@ -4678,7 +4678,7 @@
       <div class="fin-section-sep">
         <div class="fin-section-title">
           <i class="ti ti-tool" style="color:#F87171"></i> Custos Fixos (Ferramentas & Apps)
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="finSwitchTab('transacoes',document.querySelector('[data-tab=transacoes]'));setTimeout(()=>openFinAddModal(),100)">
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="openFixedCostModal()">
             <i class="ti ti-plus"></i> Adicionar
           </button>
         </div>
@@ -22945,78 +22945,133 @@ function finDashPieChart() {
 }
 
 /* ── ASSINATURAS: summary + custos fixos ── */
+/* ── Modal: Adicionar Custo Fixo ── */
+function openFixedCostModal() {
+  document.getElementById('fin-fc-nome').value  = '';
+  document.getElementById('fin-fc-valor').value = '';
+  document.getElementById('fin-fc-dia').value   = '10';
+  const errEl = document.getElementById('fin-fc-error');
+  if (errEl) errEl.style.display = 'none';
+  const overlay = document.getElementById('fin-fc-overlay');
+  overlay.style.display = 'flex';
+}
+function closeFixedCostModal() {
+  document.getElementById('fin-fc-overlay').style.display = 'none';
+}
+async function saveFixedCost() {
+  const nome  = document.getElementById('fin-fc-nome').value.trim();
+  const valor = parseFloat(document.getElementById('fin-fc-valor').value);
+  const dia   = parseInt(document.getElementById('fin-fc-dia').value, 10);
+  const errEl = document.getElementById('fin-fc-error');
+  const showErr = msg => { if(errEl){errEl.textContent=msg;errEl.style.display='block';} };
+
+  if (!nome)              return showErr('Informe o nome da ferramenta.');
+  if (isNaN(valor)||valor<=0) return showErr('Informe um valor mensal válido.');
+  if (!dia||dia<1||dia>31)    return showErr('Informe um dia de vencimento entre 1 e 31.');
+  if (errEl) errEl.style.display = 'none';
+
+  const btn = document.getElementById('fin-fc-save-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .8s linear infinite"></i> Salvando...'; }
+
+  const r = await _apiFetch('/api/finance/recurrences', {
+    method: 'POST',
+    body: JSON.stringify({
+      client_name:    nome,
+      valor_mensal:   valor,
+      dia_vencimento: dia,
+      data_inicio:    new Date().toISOString().slice(0,10),
+      forma_pagamento:'Mensal',
+      status_contrato:'Ativo',
+      tipo:           'despesa',
+    }),
+  });
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Salvar'; }
+
+  if (r?.ok) {
+    showNotification(`Custo fixo "${nome}" cadastrado!`, 'ok');
+    closeFixedCostModal();
+    // Invalida cache e recarrega
+    _FIN_DASH_RECS = [];
+    await finAssLoad();
+    recLoadMonthly();
+  } else {
+    showErr(r?.error || 'Erro ao salvar. Tente novamente.');
+  }
+}
+
 async function finAssLoad() {
-  // MRR já está em _FIN_DASH_RECS se o dashboard foi carregado; senão busca
+  // Busca todas as recorrências (receitas + despesas)
   if (_FIN_DASH_RECS.length === 0) {
     const r = await _apiFetch('/api/finance/recurrences');
     if (Array.isArray(r)) _FIN_DASH_RECS = r;
   }
 
   const mrr = _FIN_DASH_RECS
-    .filter(r => r.status_contrato === 'Ativo')
+    .filter(r => r.status_contrato === 'Ativo' && (!r.tipo || r.tipo === 'receita'))
     .reduce((s,r) => s + Number(r.valor_mensal || 0), 0);
 
-  // Custos fixos: transações com is_recorrente=true e tipo='despesa'
-  // Busca todas do período para filtrar (usa _FIN_DASH_DATA se disponível)
-  let fixedCosts = _FIN_DASH_DATA.filter(t => t.is_recorrente && t.tipo === 'despesa');
-  if (_FIN_DASH_DATA.length === 0) {
-    const today = new Date();
-    const start = `${today.getFullYear()}-01-01`;
-    const end   = `${today.getFullYear()}-12-31`;
-    const r = await _apiFetch(`/api/finance/transactions?startDate=${start}&endDate=${end}`);
-    if (Array.isArray(r)) fixedCosts = r.filter(t => t.is_recorrente && t.tipo === 'despesa');
-  }
-
-  // Agrupa por descricao/categoria para mostrar valor mensal representativo
-  const fixedMap = {};
-  fixedCosts.forEach(t => {
-    const key = t.descricao || t.categoria || 'Sem descrição';
-    if (!fixedMap[key]) fixedMap[key] = { descricao: key, categoria: t.categoria, valor: 0, count: 0, frequencia: t.frequencia };
-    fixedMap[key].valor  += Number(t.valor);
-    fixedMap[key].count  += 1;
-  });
-  const fixedList = Object.values(fixedMap).sort((a,b) => b.valor - a.valor);
-  const totalFixed = fixedList.reduce((s,f) => s + (f.frequencia === 'anual' ? f.valor/12 : f.valor), 0);
+  // Custos fixos: recorrências com tipo='despesa'
+  const fixedList = _FIN_DASH_RECS
+    .filter(r => r.tipo === 'despesa' && r.status_contrato === 'Ativo')
+    .sort((a,b) => b.valor_mensal - a.valor_mensal);
+  const totalFixed = fixedList.reduce((s,r) => s + Number(r.valor_mensal || 0), 0);
   const saldo = mrr - totalFixed;
 
   const fmt = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const el  = id => document.getElementById(id);
 
   if (el('fin-ass-mrr'))       el('fin-ass-mrr').textContent       = fmt(mrr);
-  if (el('fin-ass-mrr-sub'))   el('fin-ass-mrr-sub').textContent   = `${_FIN_DASH_RECS.filter(r=>r.status_contrato==='Ativo').length} contratos ativos`;
+  if (el('fin-ass-mrr-sub'))   el('fin-ass-mrr-sub').textContent   = `${_FIN_DASH_RECS.filter(r=>r.status_contrato==='Ativo'&&(!r.tipo||r.tipo==='receita')).length} contratos ativos`;
   if (el('fin-ass-custos'))    el('fin-ass-custos').textContent    = fmt(totalFixed);
   if (el('fin-ass-custos-sub')) el('fin-ass-custos-sub').textContent = `${fixedList.length} item${fixedList.length!==1?'s':''} recorrentes`;
   if (el('fin-ass-saldo')) {
-    el('fin-ass-saldo').textContent  = fmt(saldo);
-    el('fin-ass-saldo').style.color  = saldo >= 0 ? '#34D399' : '#F87171';
+    el('fin-ass-saldo').textContent = fmt(saldo);
+    el('fin-ass-saldo').style.color = saldo >= 0 ? '#34D399' : '#F87171';
   }
 
   // Renderiza lista de custos fixos
   const wrap = document.getElementById('fin-fixed-costs-list');
-  if (wrap) {
-    if (fixedList.length === 0) {
-      wrap.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
-        Nenhum custo fixo cadastrado. Adicione uma saída em Lançamentos com a opção "É recorrente" marcada.
-      </div>`;
-    } else {
-      wrap.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table class="monday-table">
-        <thead><tr style="background:var(--bg3)">
-          <th class="monday-th">Descrição</th>
-          <th class="monday-th" style="width:120px">Categoria</th>
-          <th class="monday-th" style="width:90px;text-align:center">Frequência</th>
-          <th class="monday-th" style="width:130px;text-align:right">Valor Mensal</th>
-        </tr></thead>
-        <tbody>${fixedList.map(f => {
-          const mensal = f.frequencia === 'anual' ? f.valor / 12 : f.valor;
-          return `<tr style="border-bottom:1px solid var(--border)">
-            <td class="monday-td">${f.descricao}</td>
-            <td class="monday-td" style="font-size:11px;color:var(--text3)">${f.categoria || '—'}</td>
-            <td class="monday-td" style="text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--bg3);color:var(--text3)">${f.frequencia || 'mensal'}</span></td>
-            <td class="monday-td" style="text-align:right;font-family:var(--mono);font-weight:700;color:#F87171">${fmt(mensal)}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table></div></div>`;
-    }
+  if (!wrap) return;
+  if (fixedList.length === 0) {
+    wrap.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
+      Nenhum custo fixo cadastrado. Clique em <strong>+ Adicionar</strong> para incluir uma ferramenta recorrente.
+    </div>`;
+  } else {
+    wrap.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table class="monday-table">
+      <thead><tr style="background:var(--bg3)">
+        <th class="monday-th">Ferramenta / App</th>
+        <th class="monday-th" style="width:100px;text-align:center">Dia Vcto</th>
+        <th class="monday-th" style="width:130px;text-align:right">Valor Mensal</th>
+        <th class="monday-th" style="width:80px;text-align:center">Ações</th>
+      </tr></thead>
+      <tbody>${fixedList.map(r => `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td class="monday-td"><strong>${r.client_name}</strong></td>
+          <td class="monday-td" style="text-align:center;color:var(--text3);font-size:12px">Dia ${r.dia_vencimento}</td>
+          <td class="monday-td" style="text-align:right;font-family:var(--mono);font-weight:700;color:#F87171">${fmt(Number(r.valor_mensal))}</td>
+          <td class="monday-td" style="text-align:center">
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;color:#F87171"
+              onclick="finDeleteFixedCost('${r.id}','${r.client_name.replace(/'/g,'\\\'')}')" title="Remover">
+              <i class="ti ti-trash"></i>
+            </button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div></div>`;
+  }
+}
+
+async function finDeleteFixedCost(id, nome) {
+  if (!confirm(`Remover custo fixo "${nome}"?`)) return;
+  const r = await _apiFetch(`/api/finance/recurrences/${id}`, { method:'PUT', body: JSON.stringify({ status_contrato:'Cancelado' }) });
+  if (r?.ok) {
+    showNotification(`"${nome}" removido.`, 'ok');
+    _FIN_DASH_RECS = [];
+    finAssLoad();
+    recLoadMonthly();
+  } else {
+    showNotification('Erro ao remover.', 'error');
   }
 }
 
@@ -23179,13 +23234,15 @@ async function recLoad(_retry = 0) {
 function recRenderTable() {
   const tbody = document.getElementById('rec-tbody');
   if (!tbody) return;
-  if (!_REC_LIST.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado. Clique em "Nova Recorrência" para começar.</td></tr>`;
+  // Só mostra contratos de clientes (receita) — custos fixos ficam na seção própria
+  const lista = _REC_LIST.filter(r => !r.tipo || r.tipo === 'receita');
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado. Clique em "Novo Contrato" para começar.</td></tr>`;
     return;
   }
 
   const statusColor = { 'Ativo':'#34D399', 'Pausado':'#FBBF24', 'Cancelado':'#F87171' };
-  tbody.innerHTML = _REC_LIST.map(r => {
+  tbody.innerHTML = lista.map(r => {
     const statusClr = statusColor[r.status_contrato] || '#6C63FF';
     const valorFmt  = `R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
     const diaFmt    = `Dia ${r.dia_vencimento}`;
@@ -23486,7 +23543,81 @@ async function recSave() {
   }
 }
 
-/* ── Mensalidades do Mês ── */
+/* ── Mensalidades do Mês — estado local para Optimistic UI ── */
+let _REC_MONTHLY_DATA = [];
+
+function _recMonthlyRender() {
+  const tbody = document.getElementById('rec-monthly-tbody');
+  if (!tbody) return;
+
+  const data = _REC_MONTHLY_DATA;
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">
+      Nenhuma mensalidade configurada para ${_recFmtMes(_REC_MES)}.<br>
+      <span style="font-size:11px">Cadastre contratos na seção <strong>Receitas Recorrentes</strong> acima.</span>
+    </td></tr>`;
+    return;
+  }
+
+  const fmt2 = v => Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Totais separados: receitas vs despesas
+  const receitas  = data.filter(r => !r.tipo || r.tipo === 'receita');
+  const despesas  = data.filter(r => r.tipo === 'despesa');
+  const totalMes  = data.reduce((s,r) => s + Number(r.valor_mensal||0), 0);
+  const recebido  = receitas.filter(r=>r.pago).reduce((s,r) => s + Number(r.valor_mensal||0), 0);
+  const pago      = despesas.filter(r=>r.pago).reduce((s,r) => s + Number(r.valor_mensal||0), 0);
+
+  const rows = data.map(r => {
+    const isDespesa = r.tipo === 'despesa';
+    const tagPago = isDespesa
+      ? `<span style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">✅ Pago</span>`
+      : `<span style="background:#34D39922;color:#34D399;border:1px solid #34D39944;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">✅ Recebido</span>`;
+    const btnAcao = isDespesa
+      ? `<button class="btn btn-sm" style="font-size:11px;background:#FBBF24;color:#000;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600"
+           onclick="recMarcarPago('${r.id}','${isDespesa}')">
+           <i class="ti ti-check"></i> Marcar como Pago
+         </button>`
+      : `<button class="btn btn-primary btn-sm" style="font-size:11px"
+           onclick="recMarcarPago('${r.id}','${isDespesa}')">
+           <i class="ti ti-check"></i> Marcar como Recebido
+         </button>`;
+    const btnDesfazer = `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--text3)"
+        onclick="recDesmarcarPago('${r.id}')">
+        <i class="ti ti-rotate-left"></i> Desfazer
+      </button>`;
+
+    return `
+    <tr class="monday-row" data-rec-id="${r.id}">
+      <td class="monday-td">
+        <strong>${r.client_name}</strong>
+        ${isDespesa ? `<span style="font-size:9px;margin-left:6px;padding:1px 6px;border-radius:10px;background:#F8717122;color:#F87171">custo</span>` : ''}
+      </td>
+      <td class="monday-td" style="text-align:right;font-family:var(--mono);color:${isDespesa?'#F87171':'#34D399'}">
+        ${isDespesa?'-':'+'} R$ ${fmt2(r.valor_mensal)}
+      </td>
+      <td class="monday-td" style="text-align:center;color:var(--text3);font-size:12px">Dia ${r.dia_vencimento}</td>
+      <td class="monday-td" style="text-align:center">
+        ${r.pago ? tagPago : `<span style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">Pendente</span>`}
+      </td>
+      <td class="monday-td" style="text-align:center;white-space:nowrap">
+        ${r.pago ? btnDesfazer : btnAcao}
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = `
+    <tr style="background:var(--bg3)">
+      <td class="monday-td" colspan="2" style="font-size:11px;color:var(--text3)">
+        ${data.length} lançamentos · Total: <strong style="color:var(--text)">R$ ${fmt2(totalMes)}</strong>
+      </td>
+      <td class="monday-td" colspan="3" style="font-size:11px;text-align:right">
+        <span style="color:#34D399;margin-right:12px">Recebido: <strong>R$ ${fmt2(recebido)}</strong></span>
+        <span style="color:#F87171">Pago: <strong>R$ ${fmt2(pago)}</strong></span>
+      </td>
+    </tr>` + rows;
+}
+
 async function recLoadMonthly() {
   const label = document.getElementById('rec-mes-label');
   if (label) label.textContent = _recFmtMes(_REC_MES);
@@ -23494,51 +23625,47 @@ async function recLoadMonthly() {
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i></td></tr>`;
   const data = await _apiFetch(`/api/finance/recurrences/monthly?mes=${_REC_MES}`);
-  if (!Array.isArray(data) || !data.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">
-      Nenhuma mensalidade configurada para ${_recFmtMes(_REC_MES)}.<br>
-      <span style="font-size:11px">Configure o valor mensal na aba <strong>Recorrências</strong>.</span>
-    </td></tr>`;
+  if (!Array.isArray(data)) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Erro ao carregar mensalidades.</td></tr>`;
     return;
   }
-  const totalMes = data.reduce((s, r) => s + Number(r.valor_mensal || 0), 0);
-  const totalPago = data.filter(r => r.pago).reduce((s, r) => s + Number(r.valor_mensal || 0), 0);
-  tbody.innerHTML = `
-    <tr style="background:var(--bg3)">
-      <td class="monday-td" colspan="3" style="font-size:11px;color:var(--text3)">
-        ${data.length} mensalidades · Total: <strong style="color:var(--text)">R$ ${totalMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
-      </td>
-      <td class="monday-td" colspan="2" style="font-size:11px;color:#34D399;text-align:right">
-        Recebido: <strong>R$ ${totalPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
-      </td>
-    </tr>` +
-  data.map(r => `
-    <tr class="monday-row">
-      <td class="monday-td"><strong>${r.client_name}</strong></td>
-      <td class="monday-td" style="text-align:right">R$ ${Number(r.valor_mensal).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      <td class="monday-td" style="text-align:center">Dia ${r.dia_vencimento}</td>
-      <td class="monday-td" style="text-align:center">
-        ${r.pago
-          ? `<span style="background:#34D39922;color:#34D399;border:1px solid #34D39944;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">✓ Pago</span>`
-          : `<span style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">Pendente</span>`}
-      </td>
-      <td class="monday-td" style="text-align:center">
-        ${r.pago
-          ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#F87171" onclick="recDesmarcarPago('${r.id}')"><i class="ti ti-x"></i> Desfazer</button>`
-          : `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="recMarcarPago('${r.id}')"><i class="ti ti-check"></i> Marcar Pago</button>`}
-      </td>
-    </tr>`).join('');
+  _REC_MONTHLY_DATA = data;
+  _recMonthlyRender();
 }
 
-async function recMarcarPago(id) {
+async function recMarcarPago(id, isDespesaStr) {
+  // Optimistic UI: atualiza estado local imediatamente
+  const item = _REC_MONTHLY_DATA.find(r => r.id === id);
+  if (item) { item.pago = true; item.data_pagamento = new Date().toISOString().slice(0,10); }
+  _recMonthlyRender();
+
   const r = await _apiFetch(`/api/finance/recurrences/${id}/pay`, { method:'POST', body:JSON.stringify({ mes: _REC_MES }) });
-  if (r?.ok) { showNotification('Mensalidade marcada como paga!', 'ok'); recLoadMonthly(); }
-  else showNotification(r?.error || 'Erro ao marcar pagamento.', 'error');
+  if (r?.ok) {
+    const label = isDespesaStr === 'true' ? 'Pagamento registrado!' : 'Mensalidade marcada como recebida!';
+    showNotification(label, 'ok');
+  } else {
+    // Reverte o optimistic update
+    if (item) { item.pago = false; item.data_pagamento = null; }
+    _recMonthlyRender();
+    showNotification(r?.error || 'Erro ao registrar pagamento.', 'error');
+  }
 }
+
 async function recDesmarcarPago(id) {
+  // Optimistic UI: reverte imediatamente
+  const item = _REC_MONTHLY_DATA.find(r => r.id === id);
+  if (item) { item.pago = false; item.data_pagamento = null; }
+  _recMonthlyRender();
+
   const r = await _apiFetch(`/api/finance/recurrences/${id}/pay/${_REC_MES}`, { method:'DELETE' });
-  if (r?.ok) { showNotification('Pagamento desfeito.', 'ok'); recLoadMonthly(); }
-  else showNotification(r?.error || 'Erro ao desfazer.', 'error');
+  if (r?.ok) {
+    showNotification('Lançamento desfeito.', 'ok');
+  } else {
+    // Reverte o optimistic update
+    if (item) { item.pago = true; }
+    _recMonthlyRender();
+    showNotification(r?.error || 'Erro ao desfazer.', 'error');
+  }
 }
 function recMesAnterior() {
   const [y,m] = _REC_MES.split('-').map(Number);
@@ -23569,6 +23696,56 @@ window.addEventListener('resize', () => {
 </script>
 <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImportFile(event)">
 <div id="welcome-toast"></div>
+
+<!-- ── Modal: Adicionar Custo Fixo ─────────────────────────────────────────── -->
+<div id="fin-fc-overlay" onclick="if(event.target===this)closeFixedCostModal()"
+  style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:16px;
+              width:min(420px,94vw);box-shadow:0 24px 64px rgba(0,0,0,.4);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)">
+      <div style="width:34px;height:34px;border-radius:10px;background:rgba(248,113,113,.15);
+                  display:flex;align-items:center;justify-content:center;color:#F87171;font-size:17px">
+        <i class="ti ti-tool"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Novo Custo Fixo</div>
+        <div style="font-size:11px;color:var(--text3)">Ferramenta ou app recorrente</div>
+      </div>
+      <button onclick="closeFixedCostModal()"
+        style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:4px">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Nome da Ferramenta</label>
+        <input id="fin-fc-nome" type="text" placeholder="Ex: Canva Pro, ChatGPT, Meta Ads..."
+          style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:13px;box-sizing:border-box">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Valor Mensal (R$)</label>
+          <input id="fin-fc-valor" type="number" min="0" step="0.01" placeholder="0,00"
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Dia do Vencimento</label>
+          <input id="fin-fc-dia" type="number" min="1" max="31" value="10"
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+      <div id="fin-fc-error" style="display:none;color:#F87171;font-size:11px;padding:8px 12px;
+        background:rgba(248,113,113,.1);border-radius:6px;border:1px solid rgba(248,113,113,.3)"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-ghost" onclick="closeFixedCostModal()">Cancelar</button>
+        <button class="btn btn-primary" id="fin-fc-save-btn" onclick="saveFixedCost()">
+          <i class="ti ti-check"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Group Picker Modal ──────────────────────────────────────────────────── -->
 <div id="wa-group-picker-overlay"
