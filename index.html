@@ -3276,6 +3276,9 @@
     font-size: 11px;
   }
   #rec-monthly-table tbody tr:first-child td { width: 100%; justify-content: space-between; }
+
+  /* Grid Receitas | Custos Fixos empilha no mobile */
+  #fin-rec-grid { grid-template-columns: 1fr !important; }
 }
 </style>
 </head>
@@ -4509,260 +4512,124 @@
   <!-- ===== FINANCEIRO ===== -->
   <div class="page" id="page-financeiro">
 
-    <!-- Tab navigation -->
-    <div id="fin-tab-bar" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto">
-      <button class="fin-tab-btn active" data-tab="dashboard" onclick="finSwitchTab('dashboard',this)">
-        <i class="ti ti-chart-bar"></i> Dashboard Geral
-      </button>
-      <button class="fin-tab-btn" data-tab="transacoes" onclick="finSwitchTab('transacoes',this)">
-        <i class="ti ti-list-details"></i> Lançamentos
-      </button>
-      <button class="fin-tab-btn" data-tab="assinaturas" onclick="finSwitchTab('assinaturas',this)">
-        <i class="ti ti-repeat"></i> Assinaturas & Recorrências
-      </button>
-      <button class="fin-tab-btn" data-tab="bancario" onclick="finSwitchTab('bancario',this)">
-        <i class="ti ti-building-bank"></i> Bancário
+    <!-- ── Filtro Global de Mês (controla todas as seções) ── -->
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:24px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">MÊS</span>
+        <button class="btn btn-ghost btn-sm" onclick="finGlobalMesAnterior()">&#8249;</button>
+        <span id="fin-dash-mes-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:110px;text-align:center"></span>
+        <button class="btn btn-ghost btn-sm" onclick="finGlobalMesProximo()">&#8250;</button>
+      </div>
+      <select id="fin-dash-cat" class="form-select" style="padding:5px 10px;font-size:11px;width:160px" onchange="finDashApplyFilters()">
+        <option value="">Todas as categorias</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="finRefreshAll()" style="margin-left:auto">
+        <i class="ti ti-refresh"></i> Atualizar
       </button>
     </div>
 
-    <!-- Tab: Dashboard Geral -->
-    <div id="fin-tab-dashboard">
-      <!-- Filtros globais -->
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">MÊS</span>
-          <button class="btn btn-ghost btn-sm" onclick="finDashMesAnterior()">&#8249;</button>
-          <span id="fin-dash-mes-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:110px;text-align:center"></span>
-          <button class="btn btn-ghost btn-sm" onclick="finDashMesProximo()">&#8250;</button>
-        </div>
-        <select id="fin-dash-cat" class="form-select" style="padding:5px 10px;font-size:11px;width:160px" onchange="finDashApplyFilters()">
-          <option value="">Todas as categorias</option>
-        </select>
-        <button class="btn btn-ghost btn-sm" onclick="finDashLoad()" style="margin-left:auto"><i class="ti ti-refresh"></i> Atualizar</button>
-      </div>
-
-      <!-- KPI 4-col -->
-      <div class="fin-kpi4">
-        <div class="metric-card" style="--accent-color:#34D399">
-          <div class="metric-label"><i class="ti ti-trending-up"></i> Receita Total</div>
-          <div class="metric-value" id="fin-dash-receita" style="color:#34D399">—</div>
-          <div class="metric-sub" id="fin-dash-receita-sub"></div>
-        </div>
-        <div class="metric-card" style="--accent-color:#F87171">
-          <div class="metric-label"><i class="ti ti-trending-down"></i> Custos Totais</div>
-          <div class="metric-value" id="fin-dash-custo" style="color:#F87171">—</div>
-          <div class="metric-sub" id="fin-dash-custo-sub"></div>
-        </div>
-        <div class="metric-card" style="--accent-color:#6C63FF">
-          <div class="metric-label"><i class="ti ti-scale"></i> Lucro Líquido</div>
-          <div class="metric-value" id="fin-dash-lucro">—</div>
-          <div class="metric-sub" id="fin-dash-lucro-sub">receita − custo</div>
-        </div>
-        <div class="metric-card" style="--accent-color:#FBBF24">
-          <div class="metric-label"><i class="ti ti-repeat"></i> MRR</div>
-          <div class="metric-value" id="fin-dash-mrr" style="color:#FBBF24">—</div>
-          <div class="metric-sub" id="fin-dash-mrr-sub">contratos ativos</div>
-        </div>
-      </div>
-
-      <!-- BarChart 6 meses -->
-      <div class="fin-chart-card">
-        <div class="fin-chart-title">
-          <i class="ti ti-chart-bar" style="color:var(--accent)"></i> Fluxo de Caixa — Últimos 6 Meses
-          <div class="fin-chart-legend">
-            <span><span class="fin-chart-dot" style="background:#34D399"></span>Entradas</span>
-            <span><span class="fin-chart-dot" style="background:#F87171"></span>Saídas</span>
-          </div>
-        </div>
-        <div id="fin-dash-bar-wrap" style="width:100%;overflow-x:auto">
-          <div style="text-align:center;color:var(--text3);font-size:12px;padding:40px 0">Clique em Atualizar para carregar</div>
-        </div>
-      </div>
-
-      <!-- PieChart por categoria -->
-      <div class="fin-chart-card">
-        <div class="fin-chart-title">
-          <i class="ti ti-chart-pie" style="color:var(--accent)"></i> Distribuição de Saídas por Categoria
-        </div>
-        <div id="fin-dash-pie-wrap">
-          <div style="text-align:center;color:var(--text3);font-size:12px;padding:40px 0">Sem dados no período</div>
-        </div>
-      </div>
-    </div><!-- /fin-tab-dashboard -->
-
-    <!-- Tab: Lançamentos (antes: Transações) -->
-    <div id="fin-tab-transacoes" style="display:none">
-
-    <!-- ── Toolbar: filtros de período + importação ── -->
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">PERÍODO</span>
-        <button class="fin-period-btn active" data-period="month"  onclick="finSetPeriod('month',this)">Este Mês</button>
-        <button class="fin-period-btn"        data-period="30d"    onclick="finSetPeriod('30d',this)">Últimos 30 dias</button>
-        <button class="fin-period-btn"        data-period="year"   onclick="finSetPeriod('year',this)">Este Ano</button>
-        <button class="fin-period-btn"        data-period="custom" onclick="finSetPeriod('custom',this)">Personalizado</button>
-        <div id="fin-custom-range" style="display:none;align-items:center;gap:6px">
-          <input type="date" id="fin-date-start" class="form-input" style="padding:5px 8px;font-size:11px;width:130px" onchange="finLoad()">
-          <span style="color:var(--text3);font-size:11px">→</span>
-          <input type="date" id="fin-date-end"   class="form-input" style="padding:5px 8px;font-size:11px;width:130px" onchange="finLoad()">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="openFinAddModal()">
-          <i class="ti ti-plus"></i> Nova Transação
-        </button>
-        <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0">
-          <i class="ti ti-file-spreadsheet"></i> Importar .csv/.xlsx
-          <input type="file" id="fin-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="finImportFile(this)">
-        </label>
-      </div>
-    </div>
-
-    <!-- ── KPI Cards ── -->
-    <div class="grid-3" style="margin-bottom:18px">
+    <!-- ── SEÇÃO 1: KPIs + Gráfico de Barras ── -->
+    <div class="fin-kpi4" style="margin-bottom:20px">
       <div class="metric-card" style="--accent-color:#34D399">
-        <div class="metric-label"><i class="ti ti-trending-up"></i> Total de Entradas</div>
-        <div class="metric-value" id="fin-kpi-receitas" style="color:#34D399">R$ 0,00</div>
-        <div class="metric-sub" id="fin-kpi-receitas-sub">0 transações</div>
+        <div class="metric-label"><i class="ti ti-trending-up"></i> Receita Total</div>
+        <div class="metric-value" id="fin-dash-receita" style="color:#34D399">—</div>
+        <div class="metric-sub" id="fin-dash-receita-sub"></div>
       </div>
       <div class="metric-card" style="--accent-color:#F87171">
-        <div class="metric-label"><i class="ti ti-trending-down"></i> Total de Saídas</div>
-        <div class="metric-value" id="fin-kpi-despesas" style="color:#F87171">R$ 0,00</div>
-        <div class="metric-sub" id="fin-kpi-despesas-sub">0 transações</div>
+        <div class="metric-label"><i class="ti ti-trending-down"></i> Custos Totais</div>
+        <div class="metric-value" id="fin-dash-custo" style="color:#F87171">—</div>
+        <div class="metric-sub" id="fin-dash-custo-sub"></div>
       </div>
       <div class="metric-card" style="--accent-color:#6C63FF">
-        <div class="metric-label"><i class="ti ti-scale"></i> Saldo / Lucro Líquido</div>
-        <div class="metric-value" id="fin-kpi-saldo">R$ 0,00</div>
-        <div class="metric-sub" id="fin-kpi-saldo-sub">receitas − despesas</div>
+        <div class="metric-label"><i class="ti ti-scale"></i> Lucro Líquido</div>
+        <div class="metric-value" id="fin-dash-lucro">—</div>
+        <div class="metric-sub" id="fin-dash-lucro-sub">receita − custo</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#FBBF24">
+        <div class="metric-label"><i class="ti ti-repeat"></i> MRR</div>
+        <div class="metric-value" id="fin-dash-mrr" style="color:#FBBF24">—</div>
+        <div class="metric-sub" id="fin-dash-mrr-sub">contratos ativos</div>
       </div>
     </div>
 
-    <!-- ── Gráfico de fluxo de caixa ── -->
-    <div class="card" style="margin-bottom:18px;padding:20px 24px">
-      <div class="card-header" style="margin-bottom:16px">
-        <div class="card-title"><i class="ti ti-chart-area-line" style="color:var(--accent)"></i> Fluxo de Caixa</div>
-        <div id="fin-chart-legend" style="display:flex;gap:14px;font-size:10px;color:var(--text3)">
-          <span><span style="display:inline-block;width:10px;height:10px;background:#34D399;border-radius:2px;margin-right:4px"></span>Entradas</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:#F87171;border-radius:2px;margin-right:4px"></span>Saídas</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:#6C63FF;border-radius:2px;margin-right:4px"></span>Saldo</span>
+    <div class="fin-chart-card" style="margin-bottom:28px">
+      <div class="fin-chart-title">
+        <i class="ti ti-chart-bar" style="color:var(--accent)"></i> Fluxo de Caixa — Últimos 6 Meses
+        <div class="fin-chart-legend">
+          <span><span class="fin-chart-dot" style="background:#34D399"></span>Entradas</span>
+          <span><span class="fin-chart-dot" style="background:#F87171"></span>Saídas</span>
         </div>
       </div>
-      <div id="fin-chart-wrap" style="width:100%;overflow-x:auto">
-        <svg id="fin-chart-svg" width="100%" height="220" style="display:block"></svg>
+      <div id="fin-dash-bar-wrap" style="width:100%;overflow-x:auto">
+        <div style="text-align:center;color:var(--text3);font-size:12px;padding:40px 0">Carregando...</div>
       </div>
     </div>
 
-    <!-- ── Extrato detalhado ── -->
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
-        <div class="card-title"><i class="ti ti-list-details" style="color:var(--accent)"></i> Extrato Detalhado</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="text" id="fin-search" class="form-input" placeholder="🔍 Buscar..." style="padding:5px 10px;font-size:11px;width:180px" oninput="finRenderTable()">
-          <select id="fin-filter-tipo" class="form-select" style="padding:5px 8px;font-size:11px;width:110px" onchange="finRenderTable()">
-            <option value="">Todos</option>
-            <option value="receita">Receitas</option>
-            <option value="despesa">Despesas</option>
-          </select>
-          <select id="fin-filter-cat" class="form-select" style="padding:5px 8px;font-size:11px;width:130px" onchange="finRenderTable()">
-            <option value="">Todas as categorias</option>
-          </select>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="monday-table fin-mob-table" id="fin-table">
-          <thead>
-            <tr style="background:var(--bg3)">
-              <th class="monday-th" style="width:100px">Data</th>
-              <th class="monday-th">Descrição</th>
-              <th class="monday-th" style="width:130px">Categoria</th>
-              <th class="monday-th" style="width:90px;text-align:center">Tipo</th>
-              <th class="monday-th" style="width:120px;text-align:right">Valor</th>
-              <th class="monday-th" style="width:48px"></th>
-            </tr>
-          </thead>
-          <tbody id="fin-tbody">
-            <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um período e clique em sincronizar</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div id="fin-table-footer" style="padding:10px 20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);display:none"></div>
-    </div>
+    <!-- ── SEÇÃO 2: Grid 2 colunas — Receitas | Custos Fixos ── -->
+    <div id="fin-rec-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:32px">
 
-    </div><!-- /fin-tab-transacoes -->
-
-    <!-- Tab: Assinaturas & Recorrências (merge de recorrencias + mensalidades) -->
-    <div id="fin-tab-assinaturas" style="display:none">
-
-      <!-- Resumo MRR vs Custos Fixos -->
-      <div class="fin-rec-summary">
-        <div class="metric-card" style="--accent-color:#34D399">
-          <div class="metric-label"><i class="ti ti-repeat"></i> MRR</div>
-          <div class="metric-value" id="fin-ass-mrr" style="color:#34D399">—</div>
-          <div class="metric-sub" id="fin-ass-mrr-sub">Receita Recorrente Mensal</div>
-        </div>
-        <div class="metric-card" style="--accent-color:#F87171">
-          <div class="metric-label"><i class="ti ti-tool"></i> Custos Fixos</div>
-          <div class="metric-value" id="fin-ass-custos" style="color:#F87171">—</div>
-          <div class="metric-sub" id="fin-ass-custos-sub">Ferramentas & apps</div>
-        </div>
-        <div class="metric-card" style="--accent-color:#6C63FF">
-          <div class="metric-label"><i class="ti ti-scale"></i> Saldo da Recorrência</div>
-          <div class="metric-value" id="fin-ass-saldo">—</div>
-          <div class="metric-sub">MRR − Custos Fixos</div>
-        </div>
-      </div>
-
-      <!-- Seção 1: Receitas Recorrentes (contratos de clientes) -->
-      <div class="fin-section-title">
-        <i class="ti ti-users" style="color:#34D399"></i> Receitas Recorrentes
-        <span id="rec-count-label" style="font-size:11px;font-weight:400;color:var(--text3)">contratos de clientes</span>
-        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openNewRecModal()"><i class="ti ti-plus"></i> Novo Contrato</button>
-      </div>
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:0">
-        <div style="overflow-x:auto">
-          <table class="monday-table fin-mob-table" id="rec-table">
-            <thead>
-              <tr style="background:var(--bg3)">
-                <th class="monday-th">Cliente</th>
-                <th class="monday-th" style="text-align:right">Valor Mensal</th>
-                <th class="monday-th" style="text-align:center">Dia Vcto</th>
-                <th class="monday-th" style="text-align:center">Forma Pgto</th>
-                <th class="monday-th" style="text-align:center">Status</th>
-                <th class="monday-th" style="text-align:center">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="rec-tbody">
-              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Seção 2: Custos Fixos (ferramentas/apps recorrentes) -->
-      <div class="fin-section-sep">
+      <!-- Coluna Esquerda: Receitas Recorrentes -->
+      <div>
         <div class="fin-section-title">
-          <i class="ti ti-tool" style="color:#F87171"></i> Custos Fixos (Ferramentas & Apps)
+          <i class="ti ti-users" style="color:#34D399"></i> Receitas Recorrentes
+          <span id="rec-count-label" style="font-size:11px;font-weight:400;color:var(--text3)">contratos de clientes</span>
+          <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openNewRecModal()">
+            <i class="ti ti-plus"></i> Novo Contrato
+          </button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto">
+            <table class="monday-table fin-mob-table" id="rec-table">
+              <thead>
+                <tr style="background:var(--bg3)">
+                  <th class="monday-th">Cliente</th>
+                  <th class="monday-th" style="text-align:right">Valor Mensal</th>
+                  <th class="monday-th" style="text-align:center">Dia Vcto</th>
+                  <th class="monday-th" style="text-align:center">Forma Pgto</th>
+                  <th class="monday-th" style="text-align:center">Status</th>
+                  <th class="monday-th" style="text-align:center">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="rec-tbody">
+                <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhum contrato cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coluna Direita: Custos Fixos -->
+      <div>
+        <div class="fin-section-title">
+          <i class="ti ti-tool" style="color:#F87171"></i> Custos Fixos (Equipe & Softwares)
           <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="openFixedCostModal()">
             <i class="ti ti-plus"></i> Adicionar
           </button>
         </div>
         <div id="fin-fixed-costs-list">
           <div style="text-align:center;color:var(--text3);font-size:12px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
-            Nenhum custo fixo cadastrado. Adicione uma saída em Lançamentos com a opção "É recorrente" marcada.
+            Nenhum custo fixo cadastrado.
           </div>
         </div>
       </div>
 
-      <!-- Seção 3: Mensalidades do Mês -->
-      <div class="fin-section-sep">
-        <div class="fin-section-title" style="margin-bottom:0">
-          <i class="ti ti-calendar-due" style="color:var(--accent)"></i> Mensalidades do Mês
-          <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-            <button class="btn btn-ghost btn-sm" onclick="recMesAnterior()">&#8249;</button>
-            <span id="rec-mes-label" style="font-size:12px;font-weight:600;color:var(--text);min-width:90px;text-align:center">Julho/2026</span>
-            <button class="btn btn-ghost btn-sm" onclick="recMesProximo()">&#8250;</button>
-            <button class="btn btn-ghost btn-sm" onclick="recLoadMonthly()" title="Atualizar lista"><i class="ti ti-refresh"></i></button>
-          </div>
+    </div><!-- /fin-rec-grid -->
+
+    <!-- ── Divisória elegante ── -->
+    <div style="position:relative;margin:0 0 32px">
+      <div style="border-top:1px solid var(--border)"></div>
+      <span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--bg1);padding:0 16px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap">Extrato &amp; Mensalidades</span>
+    </div>
+
+    <!-- ── SEÇÃO 3a: Mensalidades do Mês ── -->
+    <div style="margin-bottom:24px">
+      <div class="fin-section-title" style="margin-bottom:12px">
+        <i class="ti ti-calendar-due" style="color:var(--accent)"></i> Mensalidades do Mês
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <button class="btn btn-ghost btn-sm" onclick="recMesAnterior()">&#8249;</button>
+          <span id="rec-mes-label" style="font-size:12px;font-weight:600;color:var(--text);min-width:90px;text-align:center">—</span>
+          <button class="btn btn-ghost btn-sm" onclick="recMesProximo()">&#8250;</button>
+          <button class="btn btn-ghost btn-sm" onclick="recLoadMonthly()" title="Atualizar lista"><i class="ti ti-refresh"></i></button>
         </div>
       </div>
       <div class="card" style="padding:0;overflow:hidden">
@@ -4783,8 +4650,107 @@
           </table>
         </div>
       </div>
+    </div>
 
-    </div><!-- /fin-tab-assinaturas -->
+    <!-- ── SEÇÃO 3b: Extrato de Lançamentos ── -->
+    <div>
+      <div class="fin-section-title" style="margin-bottom:14px">
+        <i class="ti ti-list-details" style="color:var(--accent)"></i> Extrato de Lançamentos
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="btn btn-ghost btn-sm" onclick="openFinAddModal()">
+            <i class="ti ti-plus"></i> Nova Transação
+          </button>
+          <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0">
+            <i class="ti ti-file-spreadsheet"></i> Importar .csv/.xlsx
+            <input type="file" id="fin-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="finImportFile(this)">
+          </label>
+        </div>
+      </div>
+
+      <!-- Filtros de período -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">PERÍODO</span>
+        <button class="fin-period-btn active" data-period="month"  onclick="finSetPeriod('month',this)">Este Mês</button>
+        <button class="fin-period-btn"        data-period="30d"    onclick="finSetPeriod('30d',this)">Últimos 30 dias</button>
+        <button class="fin-period-btn"        data-period="year"   onclick="finSetPeriod('year',this)">Este Ano</button>
+        <button class="fin-period-btn"        data-period="custom" onclick="finSetPeriod('custom',this)">Personalizado</button>
+        <div id="fin-custom-range" style="display:none;align-items:center;gap:6px">
+          <input type="date" id="fin-date-start" class="form-input" style="padding:5px 8px;font-size:11px;width:130px" onchange="finLoad()">
+          <span style="color:var(--text3);font-size:11px">→</span>
+          <input type="date" id="fin-date-end"   class="form-input" style="padding:5px 8px;font-size:11px;width:130px" onchange="finLoad()">
+        </div>
+      </div>
+
+      <!-- KPI mini-cards do extrato -->
+      <div class="grid-3" style="margin-bottom:18px">
+        <div class="metric-card" style="--accent-color:#34D399">
+          <div class="metric-label"><i class="ti ti-trending-up"></i> Total de Entradas</div>
+          <div class="metric-value" id="fin-kpi-receitas" style="color:#34D399">R$ 0,00</div>
+          <div class="metric-sub" id="fin-kpi-receitas-sub">0 transações</div>
+        </div>
+        <div class="metric-card" style="--accent-color:#F87171">
+          <div class="metric-label"><i class="ti ti-trending-down"></i> Total de Saídas</div>
+          <div class="metric-value" id="fin-kpi-despesas" style="color:#F87171">R$ 0,00</div>
+          <div class="metric-sub" id="fin-kpi-despesas-sub">0 transações</div>
+        </div>
+        <div class="metric-card" style="--accent-color:#6C63FF">
+          <div class="metric-label"><i class="ti ti-scale"></i> Saldo / Lucro Líquido</div>
+          <div class="metric-value" id="fin-kpi-saldo">R$ 0,00</div>
+          <div class="metric-sub" id="fin-kpi-saldo-sub">receitas − despesas</div>
+        </div>
+      </div>
+
+      <!-- Gráfico de linha do extrato -->
+      <div class="card" style="margin-bottom:18px;padding:20px 24px">
+        <div class="card-header" style="margin-bottom:16px">
+          <div class="card-title"><i class="ti ti-chart-area-line" style="color:var(--accent)"></i> Fluxo de Caixa</div>
+          <div id="fin-chart-legend" style="display:flex;gap:14px;font-size:10px;color:var(--text3)">
+            <span><span style="display:inline-block;width:10px;height:10px;background:#34D399;border-radius:2px;margin-right:4px"></span>Entradas</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#F87171;border-radius:2px;margin-right:4px"></span>Saídas</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#6C63FF;border-radius:2px;margin-right:4px"></span>Saldo</span>
+          </div>
+        </div>
+        <div id="fin-chart-wrap" style="width:100%;overflow-x:auto">
+          <svg id="fin-chart-svg" width="100%" height="220" style="display:block"></svg>
+        </div>
+      </div>
+
+      <!-- Tabela extrato detalhado -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+          <div class="card-title"><i class="ti ti-list-details" style="color:var(--accent)"></i> Extrato Detalhado</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <input type="text" id="fin-search" class="form-input" placeholder="🔍 Buscar..." style="padding:5px 10px;font-size:11px;width:180px" oninput="finRenderTable()">
+            <select id="fin-filter-tipo" class="form-select" style="padding:5px 8px;font-size:11px;width:110px" onchange="finRenderTable()">
+              <option value="">Todos</option>
+              <option value="receita">Receitas</option>
+              <option value="despesa">Despesas</option>
+            </select>
+            <select id="fin-filter-cat" class="form-select" style="padding:5px 8px;font-size:11px;width:130px" onchange="finRenderTable()">
+              <option value="">Todas as categorias</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="monday-table fin-mob-table" id="fin-table">
+            <thead>
+              <tr style="background:var(--bg3)">
+                <th class="monday-th" style="width:100px">Data</th>
+                <th class="monday-th">Descrição</th>
+                <th class="monday-th" style="width:130px">Categoria</th>
+                <th class="monday-th" style="width:90px;text-align:center">Tipo</th>
+                <th class="monday-th" style="width:120px;text-align:right">Valor</th>
+                <th class="monday-th" style="width:48px"></th>
+              </tr>
+            </thead>
+            <tbody id="fin-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um período e clique em sincronizar</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="fin-table-footer" style="padding:10px 20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);display:none"></div>
+      </div>
+    </div><!-- /extrato -->
 
     <!-- ── Painel lateral: detalhes do contrato recorrente ── -->
     <div id="rec-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1200" onclick="closeRecDetail()"></div>
@@ -4807,64 +4773,21 @@
       </div>
     </div>
 
-    <!-- Tab: Bancário -->
-    <div id="fin-tab-bancario" style="display:none">
-      <!-- toolbar -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">MÊS</span>
-          <button class="btn btn-ghost btn-sm" onclick="finBankMesAnterior()">&#8249;</button>
-          <span id="fin-bank-mes-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:110px;text-align:center"></span>
-          <button class="btn btn-ghost btn-sm" onclick="finBankMesProximo()">&#8250;</button>
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="finBankLoad()"><i class="ti ti-refresh"></i> Sincronizar</button>
-      </div>
-
-      <!-- KPI cards -->
-      <div class="grid-3" style="margin-bottom:18px">
-        <div class="metric-card" style="--accent-color:#34D399">
-          <div class="metric-label"><i class="ti ti-trending-up"></i> Receita do Mês</div>
-          <div class="metric-value" id="fin-bank-kpi-receita" style="color:#34D399">R$ 0,00</div>
-          <div class="metric-sub" id="fin-bank-kpi-receita-sub">0 entradas</div>
-        </div>
-        <div class="metric-card" style="--accent-color:#F87171">
-          <div class="metric-label"><i class="ti ti-trending-down"></i> Despesas</div>
-          <div class="metric-value" id="fin-bank-kpi-despesa" style="color:#F87171">R$ 0,00</div>
-          <div class="metric-sub" id="fin-bank-kpi-despesa-sub">0 saídas</div>
-        </div>
-        <div class="metric-card" style="--accent-color:#6C63FF">
-          <div class="metric-label"><i class="ti ti-scale"></i> Saldo / Lucro</div>
-          <div class="metric-value" id="fin-bank-kpi-saldo">R$ 0,00</div>
-          <div class="metric-sub" style="color:var(--text3)">receitas − despesas</div>
-        </div>
-      </div>
-
-      <!-- Últimas transações -->
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-          <div class="card-title"><i class="ti ti-building-bank" style="color:var(--accent)"></i> Últimas Transações Bancárias</div>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="monday-table" id="fin-bank-table">
-            <thead>
-              <tr style="background:var(--bg3)">
-                <th class="monday-th" style="width:100px">Data</th>
-                <th class="monday-th">Descrição</th>
-                <th class="monday-th" style="width:110px">Cliente</th>
-                <th class="monday-th" style="width:90px;text-align:center">Status</th>
-                <th class="monday-th" style="width:80px;text-align:center">Método</th>
-                <th class="monday-th" style="width:90px;text-align:center">Tipo</th>
-                <th class="monday-th" style="width:120px;text-align:right">Valor</th>
-              </tr>
-            </thead>
-            <tbody id="fin-bank-tbody">
-              <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um mês e clique em Sincronizar</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div id="fin-bank-footer" style="padding:10px 20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);display:none"></div>
-      </div>
-    </div><!-- /fin-tab-bancario -->
+    <!-- IDs legados para compatibilidade com JS do bancário (oculto) -->
+    <span id="fin-bank-mes-label" style="display:none"></span>
+    <span id="fin-ass-mrr" style="display:none"></span>
+    <span id="fin-ass-mrr-sub" style="display:none"></span>
+    <span id="fin-ass-custos" style="display:none"></span>
+    <span id="fin-ass-custos-sub" style="display:none"></span>
+    <span id="fin-ass-saldo" style="display:none"></span>
+    <table id="fin-bank-table" style="display:none"><tbody id="fin-bank-tbody"></tbody></table>
+    <div id="fin-bank-footer" style="display:none"></div>
+    <div id="fin-bank-kpi-receita" style="display:none"></div>
+    <div id="fin-bank-kpi-receita-sub" style="display:none"></div>
+    <div id="fin-bank-kpi-despesa" style="display:none"></div>
+    <div id="fin-bank-kpi-despesa-sub" style="display:none"></div>
+    <div id="fin-bank-kpi-saldo" style="display:none"></div>
+    <div id="fin-dash-pie-wrap" style="display:none"></div>
 
   </div><!-- /page-financeiro -->
 
@@ -23860,11 +23783,45 @@ function recMesProximo() {
   recLoadMonthly();
 }
 
-/* ── Inicializa a página Financeiro ────────────────────────────── */
+/* ── Navegação global de mês (sincroniza Dashboard + Mensalidades) ── */
+function finGlobalMesAnterior() {
+  const [y,m] = _FIN_DASH_MES.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  _FIN_DASH_MES = _REC_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  finRefreshAll();
+}
+function finGlobalMesProximo() {
+  const [y,m] = _FIN_DASH_MES.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  _FIN_DASH_MES = _REC_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  finRefreshAll();
+}
+function finRefreshAll() {
+  const label = document.getElementById('fin-dash-mes-label');
+  if (label) label.textContent = _finDashFmtMes(_FIN_DASH_MES);
+  const recLabel = document.getElementById('rec-mes-label');
+  if (recLabel) recLabel.textContent = _recFmtMes(_REC_MES);
+  _FIN_DASH_DATA = [];
+  _FIN_DASH_RECS = [];
+  _REC_MONTHLY_DATA = [];
+  finDashLoad();
+  recLoad();
+  recLoadMonthly();
+  finAssLoad();
+  finLoad();
+}
+
+/* ── Inicializa a página Financeiro (página única, sem abas) ─────── */
 function renderFinanceiro() {
-  // Ativa aba Dashboard por padrão se nenhuma ativa
-  const activeTab = [...document.querySelectorAll('.fin-tab-btn')].find(b => b.classList.contains('active'))?.dataset.tab || 'dashboard';
-  finSwitchTab(activeTab, document.querySelector(`[data-tab="${activeTab}"]`));
+  const label = document.getElementById('fin-dash-mes-label');
+  if (label) label.textContent = _finDashFmtMes(_FIN_DASH_MES);
+  const recLabel = document.getElementById('rec-mes-label');
+  if (recLabel) recLabel.textContent = _recFmtMes(_REC_MES);
+  finDashLoad();
+  recLoad();
+  recLoadMonthly();
+  finAssLoad();
+  finLoad();
 }
 
 /* ── Redesenha o gráfico ao redimensionar a janela ─────────────── */
