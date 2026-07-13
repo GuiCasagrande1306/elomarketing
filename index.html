@@ -23071,11 +23071,16 @@ async function finAssLoad() {
     if (Array.isArray(r)) _FIN_DASH_RECS = r;
   }
 
+  // Garante que os pagamentos do mês atual estejam disponíveis para o status de cada custo
+  if (_REC_MONTHLY_DATA.length === 0) {
+    const m = await _apiFetch(`/api/finance/recurrences/monthly?mes=${_REC_MES}`);
+    if (Array.isArray(m)) _REC_MONTHLY_DATA = m;
+  }
+
   const mrr = _FIN_DASH_RECS
     .filter(r => r.status_contrato === 'Ativo' && (!r.tipo || r.tipo === 'receita'))
     .reduce((s,r) => s + Number(r.valor_mensal || 0), 0);
 
-  // Custos fixos: recorrências com tipo='despesa'
   const fixedList = _FIN_DASH_RECS
     .filter(r => r.tipo === 'despesa' && r.status_contrato === 'Ativo')
     .sort((a,b) => b.valor_mensal - a.valor_mensal);
@@ -23094,35 +23099,87 @@ async function finAssLoad() {
     el('fin-ass-saldo').style.color = saldo >= 0 ? '#34D399' : '#F87171';
   }
 
-  // Renderiza lista de custos fixos
   const wrap = document.getElementById('fin-fixed-costs-list');
   if (!wrap) return;
   if (fixedList.length === 0) {
     wrap.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
-      Nenhum custo fixo cadastrado. Clique em <strong>+ Adicionar</strong> para incluir uma ferramenta recorrente.
+      Nenhum custo fixo cadastrado. Clique em <strong>+ Adicionar</strong> para incluir uma despesa recorrente.
     </div>`;
   } else {
-    wrap.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table class="monday-table">
+    const mesFmt = _recFmtMes(_REC_MES);
+    wrap.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table class="monday-table fin-mob-table">
       <thead><tr style="background:var(--bg3)">
-        <th class="monday-th">Ferramenta / App</th>
+        <th class="monday-th">Descrição</th>
         <th class="monday-th" style="width:100px;text-align:center">Dia Vcto</th>
-        <th class="monday-th" style="width:130px;text-align:right">Valor Mensal</th>
-        <th class="monday-th" style="width:80px;text-align:center">Ações</th>
+        <th class="monday-th" style="width:130px;text-align:right">Valor</th>
+        <th class="monday-th" style="width:120px;text-align:center">Status ${mesFmt}</th>
+        <th class="monday-th" style="width:190px;text-align:center">Ações</th>
       </tr></thead>
-      <tbody>${fixedList.map(r => `
+      <tbody>${fixedList.map(r => {
+        const monthly  = _REC_MONTHLY_DATA.find(m => m.id === r.id);
+        const isPago   = monthly?.pago === true;
+        const nomeEsc  = r.client_name.replace(/'/g,"\\'");
+        const statusBadge = isPago
+          ? `<span style="background:#34D39922;color:#34D399;border:1px solid #34D39944;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">✅ Pago</span>`
+          : `<span style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">Pendente</span>`;
+        const btnBaixa = isPago
+          ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--text3)" onclick="finFcDesfazer('${r.id}')"><i class="ti ti-rotate-left"></i> Desfazer</button>`
+          : `<button class="btn btn-sm" style="font-size:10px;background:#F87171;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600" onclick="finFcMarcarPago('${r.id}')"><i class="ti ti-check"></i> Marcar como Pago</button>`;
+        return `
         <tr style="border-bottom:1px solid var(--border)">
-          <td class="monday-td"><strong>${r.client_name}</strong></td>
-          <td class="monday-td" style="text-align:center;color:var(--text3);font-size:12px">Dia ${r.dia_vencimento}</td>
-          <td class="monday-td" style="text-align:right;font-family:var(--mono);font-weight:700;color:#F87171">${fmt(Number(r.valor_mensal))}</td>
-          <td class="monday-td" style="text-align:center">
-            <button class="btn btn-ghost btn-sm" style="font-size:10px;color:#F87171"
-              onclick="finDeleteFixedCost('${r.id}','${r.client_name.replace(/'/g,'\\\'')}')" title="Remover">
-              <i class="ti ti-trash"></i>
-            </button>
+          <td class="monday-td" data-label="Descrição">
+            <strong>${r.client_name}</strong>
+            ${r.categoria ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${r.categoria}</div>` : ''}
           </td>
-        </tr>`).join('')}
+          <td class="monday-td" data-label="Vcto" style="text-align:center;color:var(--text3);font-size:12px">Dia ${r.dia_vencimento}</td>
+          <td class="monday-td" data-label="Valor" style="text-align:right;font-family:var(--mono);font-weight:700;color:#F87171">${fmt(Number(r.valor_mensal))}</td>
+          <td class="monday-td" data-label="Status" style="text-align:center">${statusBadge}</td>
+          <td class="monday-td mob-td-actions" style="text-align:center;white-space:nowrap;gap:6px;display:flex;justify-content:center;align-items:center">
+            ${btnBaixa}
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;color:#F87171" onclick="finDeleteFixedCost('${r.id}','${nomeEsc}')" title="Remover"><i class="ti ti-trash"></i></button>
+          </td>
+        </tr>`;
+      }).join('')}
       </tbody>
     </table></div></div>`;
+  }
+}
+
+async function finFcMarcarPago(id) {
+  const item = _REC_MONTHLY_DATA.find(r => r.id === id);
+  if (item) { item.pago = true; item.data_pagamento = new Date().toISOString().slice(0,10); }
+  finAssLoad();
+  _recMonthlyRender();
+
+  const res = await _apiFetch(`/api/finance/recurrences/${id}/pay`, { method:'POST', body: JSON.stringify({ mes: _REC_MES }) });
+  if (res?.ok) {
+    showNotification('Custo marcado como pago!', 'ok');
+    _FIN_DASH_DATA = [];
+    finDashLoad();
+  } else {
+    if (item) { item.pago = false; item.data_pagamento = null; }
+    finAssLoad();
+    _recMonthlyRender();
+    showNotification(res?.error || 'Erro ao registrar pagamento.', 'error');
+  }
+}
+
+async function finFcDesfazer(id) {
+  const item = _REC_MONTHLY_DATA.find(r => r.id === id);
+  if (item) { item.pago = false; item.data_pagamento = null; }
+  finAssLoad();
+  _recMonthlyRender();
+
+  const res = await _apiFetch(`/api/finance/recurrences/${id}/pay/${_REC_MES}`, { method:'DELETE' });
+  if (res?.ok) {
+    showNotification('Pagamento desfeito.', 'ok');
+    _FIN_DASH_DATA = [];
+    finDashLoad();
+  } else {
+    if (item) { item.pago = true; }
+    finAssLoad();
+    _recMonthlyRender();
+    showNotification(res?.error || 'Erro ao desfazer.', 'error');
   }
 }
 
