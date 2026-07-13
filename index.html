@@ -3212,6 +3212,70 @@
 
   /* ── Login / pre-auth não afetado ───────────────────────────── */
   .pre-auth body { overflow: auto; }
+
+  /* ── CRM Kanban: scroll-snap para swipe fluido ─────────────── */
+  .crm-board { scroll-snap-type: x mandatory; padding: 0 12px 16px; }
+  .crm-col   { scroll-snap-align: start; flex: 0 0 82vw; }
+
+  /* ── Tab bar financeiro: scroll horizontal sem quebra ────────── */
+  #fin-tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap !important; padding-bottom: 2px; }
+  #fin-tab-bar .fin-tab-btn { flex-shrink: 0; white-space: nowrap; }
+
+  /* ── Tabelas financeiras → card view no mobile ───────────────
+     Aplicar classe  fin-mob-table  na <table>.
+     JS precisa adicionar  data-label="..."  em cada <td>
+     e  class="mob-td-actions"  no td de ações.
+  ──────────────────────────────────────────────────────────────── */
+  .fin-mob-table { min-width: unset !important; }
+  .fin-mob-table thead { display: none !important; }
+  .fin-mob-table,
+  .fin-mob-table tbody { display: block !important; }
+  .fin-mob-table tbody tr {
+    display: block !important;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    padding: 12px 14px;
+  }
+  .fin-mob-table tbody td {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border: none !important;
+    font-size: 12px;
+    min-height: 0;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+  .fin-mob-table tbody td[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    flex-shrink: 0;
+    margin-right: 8px;
+  }
+  .fin-mob-table tbody td.mob-td-actions {
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border) !important;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  /* fila de totais (primeiro tr) da tabela mensal vira bloco resumo */
+  #rec-monthly-table tbody tr:first-child {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 4px;
+    background: var(--bg3);
+    font-size: 11px;
+  }
+  #rec-monthly-table tbody tr:first-child td { width: 100%; justify-content: space-between; }
 }
 </style>
 </head>
@@ -4446,7 +4510,7 @@
   <div class="page" id="page-financeiro">
 
     <!-- Tab navigation -->
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto">
+    <div id="fin-tab-bar" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto">
       <button class="fin-tab-btn active" data-tab="dashboard" onclick="finSwitchTab('dashboard',this)">
         <i class="ti ti-chart-bar"></i> Dashboard Geral
       </button>
@@ -4605,7 +4669,7 @@
         </div>
       </div>
       <div style="overflow-x:auto">
-        <table class="monday-table" id="fin-table">
+        <table class="monday-table fin-mob-table" id="fin-table">
           <thead>
             <tr style="background:var(--bg3)">
               <th class="monday-th" style="width:100px">Data</th>
@@ -4656,7 +4720,7 @@
       </div>
       <div class="card" style="padding:0;overflow:hidden;margin-bottom:0">
         <div style="overflow-x:auto">
-          <table class="monday-table" id="rec-table">
+          <table class="monday-table fin-mob-table" id="rec-table">
             <thead>
               <tr style="background:var(--bg3)">
                 <th class="monday-th">Cliente</th>
@@ -4702,7 +4766,7 @@
       </div>
       <div class="card" style="padding:0;overflow:hidden">
         <div style="overflow-x:auto">
-          <table class="monday-table" id="rec-monthly-table">
+          <table class="monday-table fin-mob-table" id="rec-monthly-table">
             <thead>
               <tr style="background:var(--bg3)">
                 <th class="monday-th">Cliente</th>
@@ -22476,12 +22540,12 @@ function finRenderTable() {
     const valSign   = t.tipo === 'receita' ? '+' : '−';
     const id = t._id || '';
     return `<tr class="monday-tr">
-      <td class="monday-td" style="font-size:11px;white-space:nowrap">${_finFmtDate(t.data)}</td>
-      <td class="monday-td" style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.descricao||''}">${t.descricao||'—'}</td>
-      <td class="monday-td"><span style="font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:4px">${t.categoria||'—'}</span></td>
-      <td class="monday-td" style="text-align:center"><span class="${tipoCls}">${tipoLabel}</span></td>
-      <td class="monday-td" style="text-align:right;font-size:12px;font-weight:700;color:${valColor};white-space:nowrap">${valSign} ${_finFmt(t.valor)}</td>
-      <td class="monday-td" style="text-align:center">
+      <td class="monday-td" data-label="Data" style="font-size:11px;white-space:nowrap">${_finFmtDate(t.data)}</td>
+      <td class="monday-td" data-label="Descrição" style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.descricao||''}">${t.descricao||'—'}</td>
+      <td class="monday-td" data-label="Categoria"><span style="font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:4px">${t.categoria||'—'}</span></td>
+      <td class="monday-td" data-label="Tipo" style="text-align:center"><span class="${tipoCls}">${tipoLabel}</span></td>
+      <td class="monday-td" data-label="Valor" style="text-align:right;font-size:12px;font-weight:700;color:${valColor};white-space:nowrap">${valSign} ${_finFmt(t.valor)}</td>
+      <td class="monday-td mob-td-actions" style="text-align:center">
         <button onclick="finDeleteTx('${id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px" title="Excluir"><i class="ti ti-trash" style="font-size:11px"></i></button>
       </td>
     </tr>`;
@@ -23250,14 +23314,14 @@ function recRenderTable() {
       <button class="btn btn-ghost btn-sm" style="padding:3px 6px;font-size:11px;color:#F87171" onclick="recDeleteRec('${r.id}','${r.client_name.replace(/'/g,"\\'")}')" title="Excluir"><i class="ti ti-trash"></i></button>`;
     return `
     <tr class="monday-row">
-      <td class="monday-td"><strong style="cursor:pointer;color:var(--accent)" onclick="openRecDetail('${r.id}')">${r.client_name}</strong></td>
-      <td class="monday-td" style="text-align:right">${valorFmt}</td>
-      <td class="monday-td" style="text-align:center">${diaFmt}</td>
-      <td class="monday-td" style="text-align:center">${r.forma_pagamento || '—'}</td>
-      <td class="monday-td" style="text-align:center">
+      <td class="monday-td" data-label="Cliente"><strong style="cursor:pointer;color:var(--accent)" onclick="openRecDetail('${r.id}')">${r.client_name}</strong></td>
+      <td class="monday-td" data-label="Valor" style="text-align:right">${valorFmt}</td>
+      <td class="monday-td" data-label="Vencto" style="text-align:center">${diaFmt}</td>
+      <td class="monday-td" data-label="Pgto" style="text-align:center">${r.forma_pagamento || '—'}</td>
+      <td class="monday-td" data-label="Status" style="text-align:center">
         <span style="background:${statusClr}22;color:${statusClr};border:1px solid ${statusClr}44;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">${r.status_contrato || 'Ativo'}</span>
       </td>
-      <td class="monday-td" style="text-align:center;white-space:nowrap">${acoes}</td>
+      <td class="monday-td mob-td-actions" style="text-align:center;white-space:nowrap">${acoes}</td>
     </tr>`;
   }).join('');
 }
@@ -23640,18 +23704,18 @@ function _recMonthlyRender() {
 
     return `
     <tr class="monday-row" data-rec-id="${r.id}">
-      <td class="monday-td">
+      <td class="monday-td" data-label="Nome">
         <strong>${r.client_name}</strong>
         ${isDespesa ? `<span style="font-size:9px;margin-left:6px;padding:1px 6px;border-radius:10px;background:#F8717122;color:#F87171">custo</span>` : ''}
       </td>
-      <td class="monday-td" style="text-align:right;font-family:var(--mono);color:${isDespesa?'#F87171':'#34D399'}">
+      <td class="monday-td" data-label="Valor" style="text-align:right;font-family:var(--mono);color:${isDespesa?'#F87171':'#34D399'}">
         ${isDespesa?'-':'+'} R$ ${fmt2(r.valor_mensal)}
       </td>
-      <td class="monday-td" style="text-align:center;color:var(--text3);font-size:12px">Dia ${r.dia_vencimento}</td>
-      <td class="monday-td" style="text-align:center">
+      <td class="monday-td" data-label="Vencto" style="text-align:center;color:var(--text3);font-size:12px">Dia ${r.dia_vencimento}</td>
+      <td class="monday-td" data-label="Status" style="text-align:center">
         ${r.pago ? tagPago : `<span style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">Pendente</span>`}
       </td>
-      <td class="monday-td" style="text-align:center;white-space:nowrap">
+      <td class="monday-td mob-td-actions" style="text-align:center;white-space:nowrap">
         ${r.pago ? btnDesfazer : btnAcao}
       </td>
     </tr>`;
