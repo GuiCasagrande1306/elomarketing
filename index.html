@@ -23758,6 +23758,9 @@ async function recMarcarPago(id, isDespesaStr) {
   if (r?.ok) {
     const label = isDespesaStr === 'true' ? 'Pagamento registrado!' : 'Mensalidade marcada como recebida!';
     showNotification(label, 'ok');
+    // Invalida cache do dashboard → próximo acesso (ou agora) reflete o novo lançamento
+    _FIN_DASH_DATA = [];
+    finDashLoad();
   } else {
     // Reverte o optimistic update
     if (item) { item.pago = false; item.data_pagamento = null; }
@@ -23775,6 +23778,8 @@ async function recDesmarcarPago(id) {
   const r = await _apiFetch(`/api/finance/recurrences/${id}/pay/${_REC_MES}`, { method:'DELETE' });
   if (r?.ok) {
     showNotification('Lançamento desfeito.', 'ok');
+    _FIN_DASH_DATA = [];
+    finDashLoad();
   } else {
     // Reverte o optimistic update
     if (item) { item.pago = true; }
