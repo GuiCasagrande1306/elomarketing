@@ -2829,6 +2829,20 @@
 .fin-tab-btn{background:none;border:none;border-bottom:2px solid transparent;padding:10px 18px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;transition:color .2s,border-color .2s;display:flex;align-items:center;gap:6px;margin-bottom:-1px}
 .fin-tab-btn:hover{color:var(--text)}
 .fin-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+/* ── Dashboard BI ──────────────────────────────── */
+.fin-kpi4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:900px){.fin-kpi4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.fin-kpi4{grid-template-columns:1fr}}
+.fin-chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:18px}
+.fin-chart-title{font-size:12px;font-weight:700;color:var(--text);letter-spacing:.02em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.fin-chart-legend{display:flex;gap:14px;margin-left:auto;font-size:10px;color:var(--text3)}
+.fin-chart-legend span{display:flex;align-items:center;gap:4px}
+.fin-chart-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.fin-pie-wrap{display:flex;align-items:center;flex-wrap:wrap;gap:16px}
+.fin-rec-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}
+@media(max-width:680px){.fin-rec-summary{grid-template-columns:1fr}}
+.fin-section-sep{margin:28px 0 18px;padding-top:20px;border-top:1px solid var(--border)}
+.fin-section-title{font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .fin-badge-receita{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(52,211,153,.15);color:#34D399;border:1px solid rgba(52,211,153,.3)}
 .fin-badge-despesa{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(248,113,113,.15);color:#F87171;border:1px solid rgba(248,113,113,.3)}
 .fin-import-progress{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px}
@@ -4424,20 +4438,88 @@
   <div class="page" id="page-financeiro">
 
     <!-- Tab navigation -->
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px">
-      <button class="fin-tab-btn active" data-tab="transacoes" onclick="finSwitchTab('transacoes',this)">
-        <i class="ti ti-list-details"></i> Transações
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto">
+      <button class="fin-tab-btn active" data-tab="dashboard" onclick="finSwitchTab('dashboard',this)">
+        <i class="ti ti-chart-bar"></i> Dashboard Geral
       </button>
-      <button class="fin-tab-btn" data-tab="recorrencias" onclick="finSwitchTab('recorrencias',this)">
-        <i class="ti ti-repeat"></i> Recorrências
+      <button class="fin-tab-btn" data-tab="transacoes" onclick="finSwitchTab('transacoes',this)">
+        <i class="ti ti-list-details"></i> Lançamentos
       </button>
-      <button class="fin-tab-btn" data-tab="mensalidades" onclick="finSwitchTab('mensalidades',this)">
-        <i class="ti ti-calendar-due"></i> Mensalidades do Mês
+      <button class="fin-tab-btn" data-tab="assinaturas" onclick="finSwitchTab('assinaturas',this)">
+        <i class="ti ti-repeat"></i> Assinaturas & Recorrências
+      </button>
+      <button class="fin-tab-btn" data-tab="bancario" onclick="finSwitchTab('bancario',this)">
+        <i class="ti ti-building-bank"></i> Bancário
       </button>
     </div>
 
-    <!-- Tab: Transações (existing content) -->
-    <div id="fin-tab-transacoes">
+    <!-- Tab: Dashboard Geral -->
+    <div id="fin-tab-dashboard">
+      <!-- Filtros globais -->
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">MÊS</span>
+          <button class="btn btn-ghost btn-sm" onclick="finDashMesAnterior()">&#8249;</button>
+          <span id="fin-dash-mes-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:110px;text-align:center"></span>
+          <button class="btn btn-ghost btn-sm" onclick="finDashMesProximo()">&#8250;</button>
+        </div>
+        <select id="fin-dash-cat" class="form-select" style="padding:5px 10px;font-size:11px;width:160px" onchange="finDashApplyFilters()">
+          <option value="">Todas as categorias</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="finDashLoad()" style="margin-left:auto"><i class="ti ti-refresh"></i> Atualizar</button>
+      </div>
+
+      <!-- KPI 4-col -->
+      <div class="fin-kpi4">
+        <div class="metric-card" style="--accent-color:#34D399">
+          <div class="metric-label"><i class="ti ti-trending-up"></i> Receita Total</div>
+          <div class="metric-value" id="fin-dash-receita" style="color:#34D399">—</div>
+          <div class="metric-sub" id="fin-dash-receita-sub"></div>
+        </div>
+        <div class="metric-card" style="--accent-color:#F87171">
+          <div class="metric-label"><i class="ti ti-trending-down"></i> Custos Totais</div>
+          <div class="metric-value" id="fin-dash-custo" style="color:#F87171">—</div>
+          <div class="metric-sub" id="fin-dash-custo-sub"></div>
+        </div>
+        <div class="metric-card" style="--accent-color:#6C63FF">
+          <div class="metric-label"><i class="ti ti-scale"></i> Lucro Líquido</div>
+          <div class="metric-value" id="fin-dash-lucro">—</div>
+          <div class="metric-sub" id="fin-dash-lucro-sub">receita − custo</div>
+        </div>
+        <div class="metric-card" style="--accent-color:#FBBF24">
+          <div class="metric-label"><i class="ti ti-repeat"></i> MRR</div>
+          <div class="metric-value" id="fin-dash-mrr" style="color:#FBBF24">—</div>
+          <div class="metric-sub" id="fin-dash-mrr-sub">contratos ativos</div>
+        </div>
+      </div>
+
+      <!-- BarChart 6 meses -->
+      <div class="fin-chart-card">
+        <div class="fin-chart-title">
+          <i class="ti ti-chart-bar" style="color:var(--accent)"></i> Fluxo de Caixa — Últimos 6 Meses
+          <div class="fin-chart-legend">
+            <span><span class="fin-chart-dot" style="background:#34D399"></span>Entradas</span>
+            <span><span class="fin-chart-dot" style="background:#F87171"></span>Saídas</span>
+          </div>
+        </div>
+        <div id="fin-dash-bar-wrap" style="width:100%;overflow-x:auto">
+          <div style="text-align:center;color:var(--text3);font-size:12px;padding:40px 0">Clique em Atualizar para carregar</div>
+        </div>
+      </div>
+
+      <!-- PieChart por categoria -->
+      <div class="fin-chart-card">
+        <div class="fin-chart-title">
+          <i class="ti ti-chart-pie" style="color:var(--accent)"></i> Distribuição de Saídas por Categoria
+        </div>
+        <div id="fin-dash-pie-wrap">
+          <div style="text-align:center;color:var(--text3);font-size:12px;padding:40px 0">Sem dados no período</div>
+        </div>
+      </div>
+    </div><!-- /fin-tab-dashboard -->
+
+    <!-- Tab: Lançamentos (antes: Transações) -->
+    <div id="fin-tab-transacoes" style="display:none">
 
     <!-- ── Toolbar: filtros de período + importação ── -->
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
@@ -4536,25 +4618,42 @@
 
     </div><!-- /fin-tab-transacoes -->
 
-    <!-- Tab: Recorrências -->
-    <div id="fin-tab-recorrencias" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--text)"><i class="ti ti-repeat" style="color:var(--accent);margin-right:6px"></i> Contratos Recorrentes</div>
-          <div id="rec-count-label" style="font-size:11px;color:var(--text3);margin-top:3px">Contratos de mensalidade cadastrados</div>
+    <!-- Tab: Assinaturas & Recorrências (merge de recorrencias + mensalidades) -->
+    <div id="fin-tab-assinaturas" style="display:none">
+
+      <!-- Resumo MRR vs Custos Fixos -->
+      <div class="fin-rec-summary">
+        <div class="metric-card" style="--accent-color:#34D399">
+          <div class="metric-label"><i class="ti ti-repeat"></i> MRR</div>
+          <div class="metric-value" id="fin-ass-mrr" style="color:#34D399">—</div>
+          <div class="metric-sub" id="fin-ass-mrr-sub">Receita Recorrente Mensal</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="openNewRecModal()"><i class="ti ti-plus"></i> Nova Recorrência</button>
+        <div class="metric-card" style="--accent-color:#F87171">
+          <div class="metric-label"><i class="ti ti-tool"></i> Custos Fixos</div>
+          <div class="metric-value" id="fin-ass-custos" style="color:#F87171">—</div>
+          <div class="metric-sub" id="fin-ass-custos-sub">Ferramentas & apps</div>
+        </div>
+        <div class="metric-card" style="--accent-color:#6C63FF">
+          <div class="metric-label"><i class="ti ti-scale"></i> Saldo da Recorrência</div>
+          <div class="metric-value" id="fin-ass-saldo">—</div>
+          <div class="metric-sub">MRR − Custos Fixos</div>
         </div>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
+
+      <!-- Seção 1: Receitas Recorrentes (contratos de clientes) -->
+      <div class="fin-section-title">
+        <i class="ti ti-users" style="color:#34D399"></i> Receitas Recorrentes
+        <span id="rec-count-label" style="font-size:11px;font-weight:400;color:var(--text3)">contratos de clientes</span>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openNewRecModal()"><i class="ti ti-plus"></i> Novo Contrato</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:0">
         <div style="overflow-x:auto">
           <table class="monday-table" id="rec-table">
             <thead>
               <tr style="background:var(--bg3)">
                 <th class="monday-th">Cliente</th>
                 <th class="monday-th" style="text-align:right">Valor Mensal</th>
-                <th class="monday-th" style="text-align:center">Dia Vencimento</th>
+                <th class="monday-th" style="text-align:center">Dia Vcto</th>
                 <th class="monday-th" style="text-align:center">Forma Pgto</th>
                 <th class="monday-th" style="text-align:center">Status</th>
                 <th class="monday-th" style="text-align:center">Ações</th>
@@ -4566,41 +4665,31 @@
           </table>
         </div>
       </div>
-    </div><!-- /fin-tab-recorrencias -->
 
-    <!-- ── Painel lateral: detalhes do contrato recorrente ── -->
-    <div id="rec-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1200" onclick="closeRecDetail()"></div>
-    <div id="rec-detail-panel" style="position:fixed;top:0;right:-440px;width:min(420px,100vw);height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:1201;transition:right .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden">
-      <!-- header -->
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-        <div>
-          <div id="rec-detail-name" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px"></div>
-          <div id="rec-detail-status"></div>
+      <!-- Seção 2: Custos Fixos (ferramentas/apps recorrentes) -->
+      <div class="fin-section-sep">
+        <div class="fin-section-title">
+          <i class="ti ti-tool" style="color:#F87171"></i> Custos Fixos (Ferramentas & Apps)
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="finSwitchTab('transacoes',document.querySelector('[data-tab=transacoes]'));setTimeout(()=>openFinAddModal(),100)">
+            <i class="ti ti-plus"></i> Adicionar
+          </button>
         </div>
-        <button onclick="closeRecDetail()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;padding:2px;line-height:1"><i class="ti ti-x"></i></button>
+        <div id="fin-fixed-costs-list">
+          <div style="text-align:center;color:var(--text3);font-size:12px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
+            Nenhum custo fixo cadastrado. Adicione uma saída em Lançamentos com a opção "É recorrente" marcada.
+          </div>
+        </div>
       </div>
-      <!-- métricas -->
-      <div id="rec-detail-metrics" style="display:grid;grid-template-columns:1fr 1fr;background:var(--border);gap:1px;flex-shrink:0"></div>
-      <!-- histórico -->
-      <div style="flex:1;overflow-y:auto;padding:16px 20px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Histórico de Pagamentos</div>
-        <div id="rec-detail-history"></div>
-      </div>
-      <!-- ações -->
-      <div style="border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:8px;flex-shrink:0">
-        <button class="btn btn-ghost btn-sm" style="flex:1" id="rec-detail-edit-btn" onclick="openRecDetailEdit()"><i class="ti ti-pencil"></i> Editar Contrato</button>
-        <button class="btn btn-ghost btn-sm" id="rec-detail-pause-btn" onclick="recDetailTogglePause()"></button>
-      </div>
-    </div>
 
-    <!-- Tab: Mensalidades do Mês -->
-    <div id="fin-tab-mensalidades" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-        <div style="font-size:14px;font-weight:700;color:var(--text)"><i class="ti ti-calendar-due" style="color:var(--accent);margin-right:6px"></i> Mensalidades do Mês</div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <button class="btn btn-ghost btn-sm" onclick="recMesAnterior()">&#8249;</button>
-          <span id="rec-mes-label" style="font-size:13px;font-weight:600;color:var(--text)">Junho/2026</span>
-          <button class="btn btn-ghost btn-sm" onclick="recMesProximo()">&#8250;</button>
+      <!-- Seção 3: Mensalidades do Mês -->
+      <div class="fin-section-sep">
+        <div class="fin-section-title" style="margin-bottom:0">
+          <i class="ti ti-calendar-due" style="color:var(--accent)"></i> Mensalidades do Mês
+          <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+            <button class="btn btn-ghost btn-sm" onclick="recMesAnterior()">&#8249;</button>
+            <span id="rec-mes-label" style="font-size:12px;font-weight:600;color:var(--text);min-width:90px;text-align:center">Julho/2026</span>
+            <button class="btn btn-ghost btn-sm" onclick="recMesProximo()">&#8250;</button>
+          </div>
         </div>
       </div>
       <div class="card" style="padding:0;overflow:hidden">
@@ -4616,12 +4705,93 @@
               </tr>
             </thead>
             <tbody id="rec-monthly-tbody">
-              <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um mês para ver as mensalidades.</td></tr>
+              <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Carregando mensalidades...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div><!-- /fin-tab-mensalidades -->
+
+    </div><!-- /fin-tab-assinaturas -->
+
+    <!-- ── Painel lateral: detalhes do contrato recorrente ── -->
+    <div id="rec-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1200" onclick="closeRecDetail()"></div>
+    <div id="rec-detail-panel" style="position:fixed;top:0;right:-440px;width:min(420px,100vw);height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:1201;transition:right .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div>
+          <div id="rec-detail-name" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px"></div>
+          <div id="rec-detail-status"></div>
+        </div>
+        <button onclick="closeRecDetail()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;padding:2px;line-height:1"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="rec-detail-metrics" style="display:grid;grid-template-columns:1fr 1fr;background:var(--border);gap:1px;flex-shrink:0"></div>
+      <div style="flex:1;overflow-y:auto;padding:16px 20px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Histórico de Pagamentos</div>
+        <div id="rec-detail-history"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" style="flex:1" id="rec-detail-edit-btn" onclick="openRecDetailEdit()"><i class="ti ti-pencil"></i> Editar Contrato</button>
+        <button class="btn btn-ghost btn-sm" id="rec-detail-pause-btn" onclick="recDetailTogglePause()"></button>
+      </div>
+    </div>
+
+    <!-- Tab: Bancário -->
+    <div id="fin-tab-bancario" style="display:none">
+      <!-- toolbar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.04em">MÊS</span>
+          <button class="btn btn-ghost btn-sm" onclick="finBankMesAnterior()">&#8249;</button>
+          <span id="fin-bank-mes-label" style="font-size:13px;font-weight:600;color:var(--text);min-width:110px;text-align:center"></span>
+          <button class="btn btn-ghost btn-sm" onclick="finBankMesProximo()">&#8250;</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="finBankLoad()"><i class="ti ti-refresh"></i> Sincronizar</button>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="grid-3" style="margin-bottom:18px">
+        <div class="metric-card" style="--accent-color:#34D399">
+          <div class="metric-label"><i class="ti ti-trending-up"></i> Receita do Mês</div>
+          <div class="metric-value" id="fin-bank-kpi-receita" style="color:#34D399">R$ 0,00</div>
+          <div class="metric-sub" id="fin-bank-kpi-receita-sub">0 entradas</div>
+        </div>
+        <div class="metric-card" style="--accent-color:#F87171">
+          <div class="metric-label"><i class="ti ti-trending-down"></i> Despesas</div>
+          <div class="metric-value" id="fin-bank-kpi-despesa" style="color:#F87171">R$ 0,00</div>
+          <div class="metric-sub" id="fin-bank-kpi-despesa-sub">0 saídas</div>
+        </div>
+        <div class="metric-card" style="--accent-color:#6C63FF">
+          <div class="metric-label"><i class="ti ti-scale"></i> Saldo / Lucro</div>
+          <div class="metric-value" id="fin-bank-kpi-saldo">R$ 0,00</div>
+          <div class="metric-sub" style="color:var(--text3)">receitas − despesas</div>
+        </div>
+      </div>
+
+      <!-- Últimas transações -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+          <div class="card-title"><i class="ti ti-building-bank" style="color:var(--accent)"></i> Últimas Transações Bancárias</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="monday-table" id="fin-bank-table">
+            <thead>
+              <tr style="background:var(--bg3)">
+                <th class="monday-th" style="width:100px">Data</th>
+                <th class="monday-th">Descrição</th>
+                <th class="monday-th" style="width:110px">Cliente</th>
+                <th class="monday-th" style="width:90px;text-align:center">Status</th>
+                <th class="monday-th" style="width:80px;text-align:center">Método</th>
+                <th class="monday-th" style="width:90px;text-align:center">Tipo</th>
+                <th class="monday-th" style="width:120px;text-align:right">Valor</th>
+              </tr>
+            </thead>
+            <tbody id="fin-bank-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Selecione um mês e clique em Sincronizar</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="fin-bank-footer" style="padding:10px 20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);display:none"></div>
+      </div>
+    </div><!-- /fin-tab-bancario -->
 
   </div><!-- /page-financeiro -->
 
@@ -22439,12 +22609,453 @@ async function _finParseXLSX(file) {
 
 /* ── FIN TABS ── */
 function finSwitchTab(tab, btn) {
-  ['transacoes','recorrencias','mensalidades'].forEach(t => {
-    document.getElementById(`fin-tab-${t}`).style.display = t === tab ? '' : 'none';
+  ['dashboard','transacoes','assinaturas','bancario'].forEach(t => {
+    const el = document.getElementById(`fin-tab-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  if (tab === 'recorrencias') recLoad();
-  if (tab === 'mensalidades') recLoadMonthly();
+  if (tab === 'dashboard')   finDashLoad();
+  if (tab === 'assinaturas') { recLoad(); recLoadMonthly(); finAssLoad(); }
+  if (tab === 'bancario')    finBankLoad();
+}
+
+/* ── DASHBOARD GERAL ── */
+let _FIN_DASH_MES  = (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
+let _FIN_DASH_DATA = [];   // últimos 6 meses de transações
+let _FIN_DASH_RECS = [];   // financial_recurrences (para MRR)
+
+function _finDashFmtMes(ym) {
+  const [y,m] = ym.split('-');
+  const nms = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${nms[parseInt(m)-1]}/${y}`;
+}
+
+function finDashMesAnterior() {
+  const [y,m] = _FIN_DASH_MES.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  _FIN_DASH_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  finDashApplyFilters();
+}
+function finDashMesProximo() {
+  const [y,m] = _FIN_DASH_MES.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  _FIN_DASH_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  finDashApplyFilters();
+}
+
+/* Retorna 'YYYY-MM' para o mês em que a transação é contabilizada:
+   - Pago → usa data_pagamento (ou data como fallback)
+   - Pendente → usa data_vencimento (ou data como fallback) */
+function _finTxYM(t) {
+  if (t.status === 'pendente') {
+    const d = t.data_vencimento || t.data;
+    return d ? String(d).slice(0,7) : null;
+  }
+  const d = t.data_pagamento || t.data;
+  return d ? String(d).slice(0,7) : null;
+}
+
+async function finDashLoad() {
+  const label = document.getElementById('fin-dash-mes-label');
+  if (label) label.textContent = _finDashFmtMes(_FIN_DASH_MES);
+
+  // Plaquinha de loading nos KPIs
+  ['receita','custo','lucro','mrr'].forEach(k => {
+    const el = document.getElementById(`fin-dash-${k}`);
+    if (el) el.textContent = '…';
+  });
+
+  // Busca: últimos 6 meses (do início de 5 meses atrás até fim do mês atual)
+  const [cy, cm] = _FIN_DASH_MES.split('-').map(Number);
+  const startObj  = new Date(cy, cm - 6, 1);
+  const endObj    = new Date(cy, cm, 0);
+  const start     = startObj.toISOString().slice(0,10);
+  const end       = endObj.toISOString().slice(0,10);
+
+  const [txRes, recRes] = await Promise.all([
+    _apiFetch(`/api/finance/transactions?startDate=${start}&endDate=${end}`),
+    _apiFetch('/api/finance/recurrences'),
+  ]);
+
+  _FIN_DASH_DATA = Array.isArray(txRes) ? txRes : [];
+  _FIN_DASH_RECS = Array.isArray(recRes) ? recRes : [];
+
+  // Preenche dropdown de categorias
+  const catSel = document.getElementById('fin-dash-cat');
+  if (catSel) {
+    const cats = [...new Set(_FIN_DASH_DATA.map(t => t.categoria).filter(Boolean))].sort();
+    catSel.innerHTML = '<option value="">Todas as categorias</option>' +
+      cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  finDashApplyFilters();
+}
+
+function finDashApplyFilters() {
+  const label = document.getElementById('fin-dash-mes-label');
+  if (label) label.textContent = _finDashFmtMes(_FIN_DASH_MES);
+  finDashRenderKPIs();
+  finDashBarChart();
+  finDashPieChart();
+}
+
+function finDashRenderKPIs() {
+  const cat    = document.getElementById('fin-dash-cat')?.value || '';
+  const curYM  = _FIN_DASH_MES;
+  const curTxs = _FIN_DASH_DATA.filter(t => {
+    if (_finTxYM(t) !== curYM) return false;
+    if (cat && t.categoria !== cat) return false;
+    return true;
+  });
+
+  const receitas = curTxs.filter(t => t.tipo === 'receita');
+  const despesas = curTxs.filter(t => t.tipo === 'despesa');
+  const totRec = receitas.reduce((s,t) => s + Number(t.valor), 0);
+  const totDes = despesas.reduce((s,t) => s + Number(t.valor), 0);
+  const lucro  = totRec - totDes;
+
+  // MRR: soma dos contratos ativos (independente de filtro de categoria)
+  const mrr = _FIN_DASH_RECS
+    .filter(r => r.status_contrato === 'Ativo')
+    .reduce((s,r) => s + Number(r.valor_mensal || 0), 0);
+
+  const fmt = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const el = id => document.getElementById(id);
+
+  if (el('fin-dash-receita'))     el('fin-dash-receita').textContent     = fmt(totRec);
+  if (el('fin-dash-receita-sub')) el('fin-dash-receita-sub').textContent = `${receitas.length} entrada${receitas.length!==1?'s':''}`;
+  if (el('fin-dash-custo'))       el('fin-dash-custo').textContent       = fmt(totDes);
+  if (el('fin-dash-custo-sub'))   el('fin-dash-custo-sub').textContent   = `${despesas.length} saída${despesas.length!==1?'s':''}`;
+  if (el('fin-dash-lucro')) {
+    el('fin-dash-lucro').textContent = fmt(lucro);
+    el('fin-dash-lucro').style.color = lucro >= 0 ? '#34D399' : '#F87171';
+  }
+  if (el('fin-dash-mrr'))     el('fin-dash-mrr').textContent     = fmt(mrr);
+  if (el('fin-dash-mrr-sub')) el('fin-dash-mrr-sub').textContent = `${_FIN_DASH_RECS.filter(r=>r.status_contrato==='Ativo').length} contratos ativos`;
+}
+
+function finDashBarChart() {
+  const wrap = document.getElementById('fin-dash-bar-wrap');
+  if (!wrap) return;
+
+  const cat = document.getElementById('fin-dash-cat')?.value || '';
+
+  // Últimos 6 meses (terminando no mês selecionado)
+  const [cy, cm] = _FIN_DASH_MES.split('-').map(Number);
+  const months6 = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(cy, cm - 1 - i, 1);
+    months6.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+
+  const byMonth = {};
+  months6.forEach(m => { byMonth[m] = { receita: 0, despesa: 0 }; });
+  _FIN_DASH_DATA.forEach(t => {
+    const ym = _finTxYM(t);
+    if (!byMonth[ym]) return;
+    if (cat && t.categoria !== cat) return;
+    byMonth[ym][t.tipo === 'receita' ? 'receita' : 'despesa'] += Number(t.valor);
+  });
+
+  const W = 700, H = 220;
+  const PAD = { top: 24, right: 16, bottom: 44, left: 58 };
+  const cW = W - PAD.left - PAD.right;
+  const cH = H - PAD.top  - PAD.bottom;
+
+  const allVals = months6.flatMap(m => [byMonth[m].receita, byMonth[m].despesa]);
+  const maxVal  = Math.max(...allVals, 1);
+  const groupW  = cW / months6.length;
+  const barW    = groupW * 0.32;
+  const gap     = groupW * 0.04;
+  const nms     = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const fmtK    = v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(Math.round(v));
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">`;
+
+  // Gridlines + labels Y
+  for (let i = 0; i <= 4; i++) {
+    const y   = PAD.top + (cH / 4) * i;
+    const val = maxVal * (1 - i / 4);
+    svg += `<line x1="${PAD.left}" y1="${y}" x2="${W-PAD.right}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
+    svg += `<text x="${PAD.left-6}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--text3)">R$${fmtK(val)}</text>`;
+  }
+
+  // Barras e labels X
+  months6.forEach((ym, i) => {
+    const d   = byMonth[ym];
+    const x0  = PAD.left + i * groupW + groupW * 0.12;
+    const [y, m] = ym.split('-');
+
+    // Barra receita (verde)
+    const rH = (d.receita / maxVal) * cH;
+    svg += `<rect x="${x0}" y="${PAD.top + cH - rH}" width="${barW}" height="${rH}" rx="3" fill="#34D399"/>`;
+    if (d.receita > 0) svg += `<text x="${x0 + barW/2}" y="${PAD.top + cH - rH - 4}" text-anchor="middle" font-size="9" fill="#34D399">${fmtK(d.receita)}</text>`;
+
+    // Barra despesa (vermelha)
+    const dH = (d.despesa / maxVal) * cH;
+    const x1 = x0 + barW + gap;
+    svg += `<rect x="${x1}" y="${PAD.top + cH - dH}" width="${barW}" height="${dH}" rx="3" fill="#F87171"/>`;
+    if (d.despesa > 0) svg += `<text x="${x1 + barW/2}" y="${PAD.top + cH - dH - 4}" text-anchor="middle" font-size="9" fill="#F87171">${fmtK(d.despesa)}</text>`;
+
+    // Label mês
+    const cx = x0 + barW + gap/2;
+    svg += `<text x="${cx}" y="${H - PAD.bottom + 14}" text-anchor="middle" font-size="11" font-weight="600" fill="${ym === _FIN_DASH_MES ? 'var(--accent)' : 'var(--text3)'}">${nms[parseInt(m)-1]}</text>`;
+    svg += `<text x="${cx}" y="${H - PAD.bottom + 27}" text-anchor="middle" font-size="9" fill="var(--text3)">${y}</text>`;
+  });
+
+  svg += '</svg>';
+  wrap.innerHTML = svg;
+}
+
+function finDashPieChart() {
+  const wrap = document.getElementById('fin-dash-pie-wrap');
+  if (!wrap) return;
+
+  const cat   = document.getElementById('fin-dash-cat')?.value || '';
+  const curYM = _FIN_DASH_MES;
+
+  const despesas = _FIN_DASH_DATA.filter(t => {
+    if (t.tipo !== 'despesa') return false;
+    if (_finTxYM(t) !== curYM) return false;
+    if (cat && t.categoria !== cat) return false;
+    return true;
+  });
+
+  // Agrupa por categoria
+  const catMap = {};
+  despesas.forEach(t => {
+    const c = t.categoria || 'Outros';
+    catMap[c] = (catMap[c] || 0) + Number(t.valor);
+  });
+  const catData = Object.entries(catMap).sort((a,b) => b[1]-a[1]).map(([cat,val]) => ({ cat, val }));
+  const total   = catData.reduce((s,c) => s + c.val, 0);
+
+  if (total === 0) {
+    wrap.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:12px;padding:40px 0">Sem saídas no período selecionado</div>';
+    return;
+  }
+
+  const COLORS = ['#6C63FF','#F87171','#34D399','#FBBF24','#60A5FA','#F472B6','#A78BFA','#FB923C'];
+  const cx = 90, cy = 90, R = 72, cx2 = 90, cy2 = 90;
+
+  let svg = `<svg viewBox="0 0 180 180" width="180" height="180" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">`;
+  let angle = -Math.PI / 2;
+  catData.forEach((c, i) => {
+    const pct   = c.val / total;
+    const end   = angle + pct * 2 * Math.PI;
+    const x1    = cx + R * Math.cos(angle);
+    const y1    = cy + R * Math.sin(angle);
+    const x2    = cx + R * Math.cos(end);
+    const y2    = cy + R * Math.sin(end);
+    const large = pct > 0.5 ? 1 : 0;
+    svg += `<path d="M${cx2},${cy2} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} Z" fill="${COLORS[i%COLORS.length]}" opacity="0.88"/>`;
+    angle = end;
+  });
+  // Círculo central para efeito donut
+  svg += `<circle cx="${cx2}" cy="${cy2}" r="36" fill="var(--bg2)"/>`;
+  svg += `<text x="${cx2}" y="${cy2-6}" text-anchor="middle" font-size="10" fill="var(--text3)">Total</text>`;
+  svg += `<text x="${cx2}" y="${cy2+10}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)">${(total/1000).toFixed(0)}k</text>`;
+  svg += '</svg>';
+
+  let legend = '<div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">';
+  catData.forEach((c, i) => {
+    const pct = ((c.val / total) * 100).toFixed(1);
+    legend += `<div style="display:flex;align-items:center;gap:8px;font-size:11px">
+      <span style="width:10px;height:10px;border-radius:50%;background:${COLORS[i%COLORS.length]};flex-shrink:0"></span>
+      <span style="flex:1;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.cat}</span>
+      <span style="color:var(--text3);font-size:10px">${pct}%</span>
+      <span style="font-family:var(--mono);font-weight:700;color:var(--text);font-size:11px;white-space:nowrap">${c.val.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+    </div>`;
+  });
+  legend += '</div>';
+
+  wrap.innerHTML = `<div class="fin-pie-wrap">${svg}${legend}</div>`;
+}
+
+/* ── ASSINATURAS: summary + custos fixos ── */
+async function finAssLoad() {
+  // MRR já está em _FIN_DASH_RECS se o dashboard foi carregado; senão busca
+  if (_FIN_DASH_RECS.length === 0) {
+    const r = await _apiFetch('/api/finance/recurrences');
+    if (Array.isArray(r)) _FIN_DASH_RECS = r;
+  }
+
+  const mrr = _FIN_DASH_RECS
+    .filter(r => r.status_contrato === 'Ativo')
+    .reduce((s,r) => s + Number(r.valor_mensal || 0), 0);
+
+  // Custos fixos: transações com is_recorrente=true e tipo='despesa'
+  // Busca todas do período para filtrar (usa _FIN_DASH_DATA se disponível)
+  let fixedCosts = _FIN_DASH_DATA.filter(t => t.is_recorrente && t.tipo === 'despesa');
+  if (_FIN_DASH_DATA.length === 0) {
+    const today = new Date();
+    const start = `${today.getFullYear()}-01-01`;
+    const end   = `${today.getFullYear()}-12-31`;
+    const r = await _apiFetch(`/api/finance/transactions?startDate=${start}&endDate=${end}`);
+    if (Array.isArray(r)) fixedCosts = r.filter(t => t.is_recorrente && t.tipo === 'despesa');
+  }
+
+  // Agrupa por descricao/categoria para mostrar valor mensal representativo
+  const fixedMap = {};
+  fixedCosts.forEach(t => {
+    const key = t.descricao || t.categoria || 'Sem descrição';
+    if (!fixedMap[key]) fixedMap[key] = { descricao: key, categoria: t.categoria, valor: 0, count: 0, frequencia: t.frequencia };
+    fixedMap[key].valor  += Number(t.valor);
+    fixedMap[key].count  += 1;
+  });
+  const fixedList = Object.values(fixedMap).sort((a,b) => b.valor - a.valor);
+  const totalFixed = fixedList.reduce((s,f) => s + (f.frequencia === 'anual' ? f.valor/12 : f.valor), 0);
+  const saldo = mrr - totalFixed;
+
+  const fmt = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const el  = id => document.getElementById(id);
+
+  if (el('fin-ass-mrr'))       el('fin-ass-mrr').textContent       = fmt(mrr);
+  if (el('fin-ass-mrr-sub'))   el('fin-ass-mrr-sub').textContent   = `${_FIN_DASH_RECS.filter(r=>r.status_contrato==='Ativo').length} contratos ativos`;
+  if (el('fin-ass-custos'))    el('fin-ass-custos').textContent    = fmt(totalFixed);
+  if (el('fin-ass-custos-sub')) el('fin-ass-custos-sub').textContent = `${fixedList.length} item${fixedList.length!==1?'s':''} recorrentes`;
+  if (el('fin-ass-saldo')) {
+    el('fin-ass-saldo').textContent  = fmt(saldo);
+    el('fin-ass-saldo').style.color  = saldo >= 0 ? '#34D399' : '#F87171';
+  }
+
+  // Renderiza lista de custos fixos
+  const wrap = document.getElementById('fin-fixed-costs-list');
+  if (wrap) {
+    if (fixedList.length === 0) {
+      wrap.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
+        Nenhum custo fixo cadastrado. Adicione uma saída em Lançamentos com a opção "É recorrente" marcada.
+      </div>`;
+    } else {
+      wrap.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table class="monday-table">
+        <thead><tr style="background:var(--bg3)">
+          <th class="monday-th">Descrição</th>
+          <th class="monday-th" style="width:120px">Categoria</th>
+          <th class="monday-th" style="width:90px;text-align:center">Frequência</th>
+          <th class="monday-th" style="width:130px;text-align:right">Valor Mensal</th>
+        </tr></thead>
+        <tbody>${fixedList.map(f => {
+          const mensal = f.frequencia === 'anual' ? f.valor / 12 : f.valor;
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td class="monday-td">${f.descricao}</td>
+            <td class="monday-td" style="font-size:11px;color:var(--text3)">${f.categoria || '—'}</td>
+            <td class="monday-td" style="text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--bg3);color:var(--text3)">${f.frequencia || 'mensal'}</span></td>
+            <td class="monday-td" style="text-align:right;font-family:var(--mono);font-weight:700;color:#F87171">${fmt(mensal)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div></div>`;
+    }
+  }
+}
+
+/* ── BANCÁRIO state ── */
+let _BANK_DATA = [];
+let _BANK_MES  = (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
+
+function _bankFmtMes(ym) {
+  const [y,m] = ym.split('-');
+  const names = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${names[parseInt(m)-1]}/${y}`;
+}
+
+function finBankMesAnterior() {
+  const [y,m] = _BANK_MES.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  _BANK_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  finBankLoad();
+}
+function finBankMesProximo() {
+  const [y,m] = _BANK_MES.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  _BANK_MES = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  finBankLoad();
+}
+
+async function finBankLoad() {
+  const label = document.getElementById('fin-bank-mes-label');
+  const tbody = document.getElementById('fin-bank-tbody');
+  if (label) label.textContent = _bankFmtMes(_BANK_MES);
+  if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:28px;font-size:12px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Carregando...</td></tr>`;
+
+  const res = await _apiFetch(`/api/finance/bank-transactions?mes=${_BANK_MES}`);
+  if (!res || res.error) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:28px;font-size:12px">Erro ao carregar transações bancárias.</td></tr>`;
+    return;
+  }
+  _BANK_DATA = Array.isArray(res) ? res : [];
+  finBankRenderKPIs();
+  finBankRenderList();
+}
+
+function finBankRenderKPIs() {
+  const fmt = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const receitas = _BANK_DATA.filter(t => t.tipo === 'receita');
+  const despesas = _BANK_DATA.filter(t => t.tipo === 'despesa');
+  const totRec = receitas.reduce((s,t) => s + Number(t.valor), 0);
+  const totDes = despesas.reduce((s,t) => s + Number(t.valor), 0);
+  const saldo  = totRec - totDes;
+
+  const el = id => document.getElementById(id);
+  if (el('fin-bank-kpi-receita'))     el('fin-bank-kpi-receita').textContent     = fmt(totRec);
+  if (el('fin-bank-kpi-receita-sub')) el('fin-bank-kpi-receita-sub').textContent = `${receitas.length} entrada${receitas.length!==1?'s':''}`;
+  if (el('fin-bank-kpi-despesa'))     el('fin-bank-kpi-despesa').textContent     = fmt(totDes);
+  if (el('fin-bank-kpi-despesa-sub')) el('fin-bank-kpi-despesa-sub').textContent = `${despesas.length} saída${despesas.length!==1?'s':''}`;
+  if (el('fin-bank-kpi-saldo')) {
+    el('fin-bank-kpi-saldo').textContent  = fmt(saldo);
+    el('fin-bank-kpi-saldo').style.color  = saldo >= 0 ? '#34D399' : '#F87171';
+  }
+}
+
+function finBankRenderList() {
+  const tbody  = document.getElementById('fin-bank-tbody');
+  const footer = document.getElementById('fin-bank-footer');
+  if (!tbody) return;
+
+  if (_BANK_DATA.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px;font-size:12px">Nenhuma transação bancária neste mês.</td></tr>`;
+    if (footer) footer.style.display = 'none';
+    return;
+  }
+
+  const statusBadge = s => {
+    const map = { pago:['#34D399','Pago'], pendente:['#FBBF24','Pendente'], falhou:['#F87171','Falhou'] };
+    const [color, label] = map[s] || ['var(--text3)', s];
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${color}20;color:${color}">${label}</span>`;
+  };
+  const metodoBadge = m => {
+    if (!m) return '<span style="color:var(--text3);font-size:11px">—</span>';
+    const icons = { pix:'<i class="ti ti-qrcode"></i>', boleto:'<i class="ti ti-receipt"></i>', cartao:'<i class="ti ti-credit-card"></i>', ted:'<i class="ti ti-building-bank"></i>', outro:'<i class="ti ti-dots"></i>' };
+    return `<span style="font-size:11px;color:var(--text2)">${icons[m]||''} ${m.charAt(0).toUpperCase()+m.slice(1)}</span>`;
+  };
+  const fmtData = d => {
+    if (!d) return '—';
+    const [y,m,day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  };
+  const fmtVal = (v, tipo) => {
+    const s = Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    const c = tipo === 'receita' ? '#34D399' : '#F87171';
+    const sign = tipo === 'receita' ? '+' : '−';
+    return `<span style="color:${c};font-weight:700;font-family:var(--mono)">${sign} ${s}</span>`;
+  };
+
+  tbody.innerHTML = _BANK_DATA.map(t => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td class="monday-td" style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmtData(t.data_pagamento)}</td>
+      <td class="monday-td" style="font-size:12px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.descricao || t.banco_origem || '—'}</td>
+      <td class="monday-td" style="font-size:11px;color:var(--text2)">${t.cliente_nome || (t.email_pagador ? `<span style="color:var(--text3)">${t.email_pagador}</span>` : '—')}</td>
+      <td class="monday-td" style="text-align:center">${statusBadge(t.status)}</td>
+      <td class="monday-td" style="text-align:center">${metodoBadge(t.metodo)}</td>
+      <td class="monday-td" style="text-align:center">
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${t.tipo==='receita'?'#34D39920':'#F8717120'};color:${t.tipo==='receita'?'#34D399':'#F87171'}">${t.tipo==='receita'?'Entrada':'Saída'}</span>
+      </td>
+      <td class="monday-td" style="text-align:right">${fmtVal(t.valor, t.tipo)}</td>
+    </tr>`).join('');
+
+  if (footer) {
+    footer.textContent = `${_BANK_DATA.length} transação${_BANK_DATA.length!==1?'ões':''} encontrada${_BANK_DATA.length!==1?'s':''}`;
+    footer.style.display = '';
+  }
 }
 
 /* ── RECORRÊNCIAS state ── */
@@ -22872,18 +23483,9 @@ function recMesProximo() {
 
 /* ── Inicializa a página Financeiro ────────────────────────────── */
 function renderFinanceiro() {
-  // Define o período padrão (este mês) se ainda não foi inicializado
-  const { start, end } = _finDateRange();
-  // Preenche os inputs de data caso custom
-  const ds = document.getElementById('fin-date-start');
-  const de = document.getElementById('fin-date-end');
-  if (ds && !ds.value) ds.value = start;
-  if (de && !de.value) de.value = end;
-  // Re-aplica CSS active no botão de período correto
-  document.querySelectorAll('.fin-period-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.period === _FIN_PERIOD);
-  });
-  finLoad();
+  // Ativa aba Dashboard por padrão se nenhuma ativa
+  const activeTab = [...document.querySelectorAll('.fin-tab-btn')].find(b => b.classList.contains('active'))?.dataset.tab || 'dashboard';
+  finSwitchTab(activeTab, document.querySelector(`[data-tab="${activeTab}"]`));
 }
 
 /* ── Redesenha o gráfico ao redimensionar a janela ─────────────── */
