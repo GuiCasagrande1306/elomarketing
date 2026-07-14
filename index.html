@@ -21594,6 +21594,11 @@ async function _crmApiLoad(_retry = 0) {
 async function _crmInitAndRender() {
   renderCRM(); // mostra o que já está em memória imediatamente (sem flash)
 
+  // Acorda o Render em background para que writes subsequentes não encontrem cold-start
+  if (typeof PROD_CONFIG !== 'undefined' && PROD_CONFIG.apiUrl) {
+    fetch(PROD_CONFIG.apiUrl + '/api/crm', { signal: AbortSignal.timeout(60000) }).catch(() => {});
+  }
+
   if (db) {
     // Caminho direto — sem Render, sem cold-start, realtime cuida das atualizações
     const data = await _crmSupabaseLoad();
