@@ -22109,12 +22109,9 @@ async function _crmMoveCard(cardId, toColId) {
   _crmSave();
   renderCRM();
 
-  // Persiste no servidor — prefere Supabase direto quando disponível
-  if (db) {
-    const ok = await _crmSupabasePut(card);
-    if (!ok) console.warn('[CRM Supabase] Move ficou pendente:', cardId, oldCol, '→', toColId);
-    // Realtime propaga para outros colaboradores automaticamente
-  } else {
+  // Writes sempre via Render API (service_role — conhece todas as colunas)
+  // Realtime Supabase propaga para outros colaboradores automaticamente
+  {
     const r = await _crmApiPut(card);
     if (r === null) {
       console.warn('[CRM API] Mover card ficou pendente (cold-start / rede):', cardId, oldCol, '→', toColId);
@@ -22128,8 +22125,7 @@ function _crmDeleteCard(cardId) {
   if (!confirm('Excluir esta oportunidade?')) return;
   CRM_DATA = CRM_DATA.filter(c => c.id !== cardId);
   _crmSave();
-  if (db) _crmSupabaseDelete(cardId);
-  else    _crmApiDelete(cardId);
+  _crmApiDelete(cardId);
   renderCRM();
 }
 
@@ -22219,8 +22215,7 @@ function _crmDeleteFromModal() {
   /* Remove do array principal */
   CRM_DATA = CRM_DATA.filter(c => c.id !== id);
   _crmSave();
-  if (db) _crmSupabaseDelete(id);
-  else    _crmApiDelete(id);
+  _crmApiDelete(id);
 
   /* Fecha modal e atualiza Kanban + métricas */
   closeCrmModal();
@@ -22274,17 +22269,10 @@ async function saveCrmOportunidade(e) {
   renderCRM();
   if (submitBtn) { submitBtn.disabled = false; if (origLabel) submitBtn.innerHTML = origLabel; }
 
-  // Persiste no servidor — prefere Supabase direto quando disponível
+  // Writes sempre via Render API (service_role — conhece todas as colunas)
+  // Realtime Supabase propaga para outros colaboradores automaticamente
   if (card) {
-    if (db) {
-      const ok = await _crmSupabasePut(card);
-      if (ok) {
-        showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
-        // Realtime propaga para outros colaboradores via WS — sem poll manual necessário
-      } else {
-        showNotification('⚠️ Falha ao salvar — verifique sua conexão.', 'warn');
-      }
-    } else {
+    {
       const r = await _crmApiPut(card);
       if (r === null) {
         showNotification('⚠️ Servidor ocupado — lead salvo localmente e sincronizando em background…', 'warn');
@@ -22294,7 +22282,6 @@ async function saveCrmOportunidade(e) {
         _crmStartPendingRetry();
       } else {
         showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
-        _crmSilentRefresh().catch(() => {});
       }
     }
   }
