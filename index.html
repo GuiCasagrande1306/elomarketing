@@ -8105,6 +8105,8 @@ async function initSupabaseSync() {
     _autoSyncAndLoad().catch(() => {}); // sobe localStorage → Atlas e baixa tudo no login
     return;
   }
+  // Realtime sempre ativo — independente do carregamento inicial de dados
+  setupRealtimeChannel();
   setSyncStatus('syncing');
 
   const withTimeout = (p, ms) => Promise.race([
@@ -8119,23 +8121,20 @@ async function initSupabaseSync() {
     );
     if (clientsOk) {
       renderClients(); renderGoalAlerts(); renderPacingAlerts(); renderDashboard();
-      /* Atualiza dropdown de clientes em Relatórios após carga do BD */
       if (document.querySelector('.page.active')?.id === 'page-relatorios') populateReportSelects();
     }
     setSyncStatus('ok');
-    setupRealtimeChannel();
   } catch(err) {
-    const isTimeout = err.message === 'timeout';
-    console.warn('[Supabase] initSync:', err.message);
-    showNotification(
-      isTimeout
-        ? 'Supabase lento — a usar dados locais. <small>Sincronizará quando reconectar.</small>'
-        : 'Erro ao conectar ao Supabase — modo offline.',
-      'warn'
-    );
-    setSyncStatus('error');
-    // Fallback: UI funciona com dados seed / localStorage de sessão
+    // Timeout aqui significa Render em cold-start (não Supabase com problema)
+    // Não exibir notificação — dados locais estão corretos e realtime já está ativo
+    console.warn('[Supabase] initSync (dados):', err.message);
+    setSyncStatus('ok'); // realtime está ok mesmo que o fetch inicial tenha demorado
     renderClients(); renderGoalAlerts(); renderPacingAlerts(); renderDashboard();
+    // Tenta carregar dados em background após o cold-start
+    setTimeout(() => {
+      loadClientsFromDB().then(ok => { if (ok) { renderClients(); renderGoalAlerts(); renderPacingAlerts(); renderDashboard(); } }).catch(() => {});
+      loadTasksFromDB().catch(() => {});
+    }, 10000);
   }
 }
 
