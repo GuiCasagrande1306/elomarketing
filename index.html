@@ -7588,8 +7588,8 @@ const PROD_CONFIG = {
   apiUrl: 'https://elomarketing-api.onrender.com',
 
   // ── Supabase (opcional) ───────────────────────────────────────────────────
-  supabaseUrl:      'https://SEU-PROJETO.supabase.co',
-  supabaseAnonKey:  'SUA-CHAVE',
+  supabaseUrl:      'https://levmmdcnkkyrrccfyqzl.supabase.co',
+  supabaseAnonKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxldm1tZGNua2t5cnJjY2Z5cXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNTQyNzUsImV4cCI6MjA5NTkzMDI3NX0.08mx7MmXhgNzb87EKZBBmW9wvdY1GJhATcjniW4kOTE',
 
   // ── Backend Render (proxy WhatsApp / Evolution API) ───────────────────────
   // Prioridade: override localStorage → auto-detect local → Render produção
@@ -8025,7 +8025,7 @@ function updateTaskInDB(id, updates, _attempt = 1, _onPermanentFail = null) {
   });
   // Supabase (legado — mantido se configurado)
   if (db && currentUser) {
-    db.from('tarefas').update({ ...updates, updated_by: currentUser.id }).eq('id', id).catch(() => {});
+    (async () => { try { await db.from('tarefas').update({ ...updates, updated_by: currentUser.id }).eq('id', id); } catch(_) {} })();
   }
 }
 
@@ -8094,7 +8094,7 @@ async function _deleteTask(taskId) {
   setTimeout(() => _pendingDeletions.delete(taskId), 30000);
 
   // Supabase (legado)
-  if (db) db.from('tarefas').delete().eq('id', taskId).catch(() => {});
+  if (db) (async () => { try { await db.from('tarefas').delete().eq('id', taskId); } catch(_) {} })();
 }
 
 // Mantido por compatibilidade — redireciona para o novo fluxo
@@ -21467,6 +21467,54 @@ function _crmApiUrl() {
   return base ? `${base}/api/crm` : null;
 }
 
+/* ── Acesso direto ao Supabase — bypass do Render, sem cold-start ────────────
+   Estas funções só executam quando DB_READY=true e db≠null (credenciais reais
+   configuradas em PROD_CONFIG.supabaseUrl / supabaseAnonKey).
+   Mapeamento idêntico ao usado em deploy_render/routes/crm.js (rowToApp/appToRow).
+── */
+
+async function _crmSupabaseLoad() {
+  if (!db) return null;
+  try {
+    const { data, error } = await db
+      .from('crm_leads')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(error.message);
+    return data.filter(r => !_CRM_MOCK_IDS.has(r.lead_id)).map(r => ({
+      id: r.lead_id, empresa: r.empresa, contato: r.contato,
+      telefone: r.telefone, instagram: r.instagram, valor: r.valor,
+      origem: r.origem, coluna: r.coluna || 'lead', resultado: r.resultado,
+      obs: r.obs, nextFollowUp: r.next_follow_up, data: r.data,
+      responsavel: r.responsavel,
+    }));
+  } catch (e) { console.warn('[CRM Supabase] load:', e.message); return null; }
+}
+
+async function _crmSupabasePut(card) {
+  if (!db) return false;
+  try {
+    const { error } = await db.from('crm_leads').upsert({
+      lead_id: card.id, empresa: card.empresa, contato: card.contato,
+      telefone: card.telefone, instagram: card.instagram, valor: card.valor,
+      origem: card.origem, coluna: card.coluna || 'lead', resultado: card.resultado,
+      obs: card.obs, next_follow_up: card.nextFollowUp, data: card.data,
+      responsavel: card.responsavel, updated_at: new Date().toISOString(),
+    }, { onConflict: 'lead_id' });
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (e) { console.warn('[CRM Supabase] upsert:', e.message); return false; }
+}
+
+async function _crmSupabaseDelete(id) {
+  if (!db) return false;
+  try {
+    const { error } = await db.from('crm_leads').delete().eq('lead_id', id);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (e) { console.warn('[CRM Supabase] delete:', e.message); return false; }
+}
+
 /* Carrega leads da API e MERGE com dados locais.
    NUNCA substitui diretamente CRM_DATA pelo array do servidor:
    cards criados localmente mas ainda não confirmados no Atlas são preservados
@@ -21545,19 +21593,38 @@ async function _crmApiLoad(_retry = 0) {
   }
 }
 
-/* Ponto de entrada do CRM: carrega da API (se configurada), cai no
-   localStorage e — na primeira vez — dispara bulk sync para popular o Atlas */
+/* Ponto de entrada do CRM: prefere Supabase direto (sem cold-start) quando
+   DB_READY=true; cai na API via Render como fallback. */
 async function _crmInitAndRender() {
   renderCRM(); // mostra o que já está em memória imediatamente (sem flash)
 
+  if (db) {
+    // Caminho direto — sem Render, sem cold-start, realtime cuida das atualizações
+    const data = await _crmSupabaseLoad();
+    if (data !== null) {
+      // Merge seguro: preserva cards locais ainda não confirmados no servidor
+      const serverIds = new Set(data.map(c => c.id));
+      const localOnly = CRM_DATA.filter(c => c.id && !serverIds.has(c.id) && !_CRM_MOCK_IDS.has(c.id));
+      // Sobe para Supabase qualquer card criado offline antes das credenciais serem configuradas
+      if (localOnly.length > 0) {
+        console.warn(`[CRM Supabase] ${localOnly.length} card(s) local(is) → sync automático.`);
+        localOnly.forEach(card => _crmSupabasePut(card));
+      }
+      CRM_DATA = [...data, ...localOnly];
+      _crmSave();
+      renderCRM();
+    }
+    _crmStartAutoRefresh(); // safety-net poll a cada 60s (realtime é o canal principal)
+    return;
+  }
+
+  // Fallback: caminho via Render API
   const apiConfigured = !!_crmApiUrl();
-  if (!apiConfigured) return; // sem API → apenas localStorage
+  if (!apiConfigured) return;
 
   const ok = await _crmApiLoad();
   if (ok) renderCRM();
 
-  // Detecta leads locais que não chegaram ao servidor (sessão anterior com cold-start)
-  // e inicia retry em background automaticamente
   _crmGetPendingCards().then(pending => {
     if (pending && pending.length > 0) {
       _crmUpdatePendingBanner(pending.length);
@@ -21610,20 +21677,24 @@ async function _crmSilentRefresh() {
   if (activePage !== 'page-crm') return;
   if (document.visibilityState !== 'visible') return;
 
-  // Fetch direto sem retries de cold-start — falha silenciosa, tenta no próximo intervalo
-  const res = await _apiFetch('/api/crm');
-  if (!res || res._coldStart || !Array.isArray(res)) return;
+  let data;
+  if (db) {
+    // Supabase direto — realtime já cuida de mudanças instantâneas; isto é safety-net
+    data = await _crmSupabaseLoad();
+    if (data === null) return;
+  } else {
+    // Fallback: Render API sem retries
+    const res = await _apiFetch('/api/crm');
+    if (!res || res._coldStart || !Array.isArray(res)) return;
+    data = res.filter(c => !_CRM_MOCK_IDS.has(c.id));
+  }
 
-  const data = res.filter(c => !_CRM_MOCK_IDS.has(c.id));
-  // Guard: servidor vazio mas temos dados locais — não sobrescrever
   if (data.length === 0 && CRM_DATA.length > 0) return;
 
-  // Merge seguro: preserva cards locais ainda não confirmados no servidor
   const serverIds = new Set(data.map(c => c.id).filter(Boolean));
   const localOnly = CRM_DATA.filter(c => c.id && !serverIds.has(c.id) && !_CRM_MOCK_IDS.has(c.id));
   const merged = [...data, ...localOnly];
 
-  // Só re-renderiza se algo mudou (evita flicker desnecessário)
   const changed = merged.length !== CRM_DATA.length ||
     merged.some(n => {
       const o = CRM_DATA.find(x => x.id === n.id);
@@ -21640,7 +21711,9 @@ async function _crmSilentRefresh() {
 
 function _crmStartAutoRefresh() {
   _crmStopAutoRefresh();
-  _crmRefreshInterval = setInterval(_crmSilentRefresh, 15000); // 15s — igual às tarefas (~10s)
+  // Com Supabase Realtime ativo, poll é apenas safety-net → intervalo maior
+  const interval = db ? 60000 : 15000;
+  _crmRefreshInterval = setInterval(_crmSilentRefresh, interval);
 }
 function _crmStopAutoRefresh() {
   if (_crmRefreshInterval) { clearInterval(_crmRefreshInterval); _crmRefreshInterval = null; }
@@ -22067,18 +22140,18 @@ async function _crmMoveCard(cardId, toColId) {
   _crmSave();
   renderCRM();
 
-  // Persiste no servidor — rollback se falhar permanentemente
-  const r = await _crmApiPut(card);
-  if (r === null && card.coluna === toColId) {
-    // null = cold-start → retry automático já agendado em _crmApiPut → não faz rollback
-    // Para erro permanente (servidor retornou erro real):
-    // _crmApiPut só retorna null em cold-start OU erro; o retry já cuida do cold-start.
-    // Não precisamos de rollback porque o retry vai resolver.
-    // Mas logamos para diagnóstico.
-    console.warn('[CRM] Mover card ficou pendente (cold-start / rede):', cardId, oldCol, '→', toColId);
-  } else if (r) {
-    // Move confirmado → re-fetch para propagar para outros usuários
-    _crmSilentRefresh().catch(() => {});
+  // Persiste no servidor — prefere Supabase direto quando disponível
+  if (db) {
+    const ok = await _crmSupabasePut(card);
+    if (!ok) console.warn('[CRM Supabase] Move ficou pendente:', cardId, oldCol, '→', toColId);
+    // Realtime propaga para outros colaboradores automaticamente
+  } else {
+    const r = await _crmApiPut(card);
+    if (r === null) {
+      console.warn('[CRM API] Mover card ficou pendente (cold-start / rede):', cardId, oldCol, '→', toColId);
+    } else if (r) {
+      _crmSilentRefresh().catch(() => {});
+    }
   }
 }
 
@@ -22086,7 +22159,8 @@ function _crmDeleteCard(cardId) {
   if (!confirm('Excluir esta oportunidade?')) return;
   CRM_DATA = CRM_DATA.filter(c => c.id !== cardId);
   _crmSave();
-  _crmApiDelete(cardId);
+  if (db) _crmSupabaseDelete(cardId);
+  else    _crmApiDelete(cardId);
   renderCRM();
 }
 
@@ -22176,7 +22250,8 @@ function _crmDeleteFromModal() {
   /* Remove do array principal */
   CRM_DATA = CRM_DATA.filter(c => c.id !== id);
   _crmSave();
-  _crmApiDelete(id);
+  if (db) _crmSupabaseDelete(id);
+  else    _crmApiDelete(id);
 
   /* Fecha modal e atualiza Kanban + métricas */
   closeCrmModal();
@@ -22230,22 +22305,28 @@ async function saveCrmOportunidade(e) {
   renderCRM();
   if (submitBtn) { submitBtn.disabled = false; if (origLabel) submitBtn.innerHTML = origLabel; }
 
-  // Persiste no servidor (com retry automático no cold-start)
+  // Persiste no servidor — prefere Supabase direto quando disponível
   if (card) {
-    const r = await _crmApiPut(card);
-    if (r === null) {
-      // cold-start → inicia fila de retry em background + mostra banner persistente
-      showNotification('⚠️ Servidor ocupado — lead salvo localmente e sincronizando em background…', 'warn');
-      // Conta quantos cards estão pendentes e exibe banner
-      _crmGetPendingCards().then(pending => {
-        if (pending && pending.length > 0) _crmUpdatePendingBanner(pending.length);
-      });
-      _crmStartPendingRetry();
+    if (db) {
+      const ok = await _crmSupabasePut(card);
+      if (ok) {
+        showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
+        // Realtime propaga para outros colaboradores via WS — sem poll manual necessário
+      } else {
+        showNotification('⚠️ Falha ao salvar — verifique sua conexão.', 'warn');
+      }
     } else {
-      showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
-      // Re-fetch em background (como tasks fazem com loadTasksFromDB) — garante que
-      // mudanças de outros usuários feitas enquanto o modal estava aberto apareçam.
-      _crmSilentRefresh().catch(() => {});
+      const r = await _crmApiPut(card);
+      if (r === null) {
+        showNotification('⚠️ Servidor ocupado — lead salvo localmente e sincronizando em background…', 'warn');
+        _crmGetPendingCards().then(pending => {
+          if (pending && pending.length > 0) _crmUpdatePendingBanner(pending.length);
+        });
+        _crmStartPendingRetry();
+      } else {
+        showNotification(id ? 'Oportunidade atualizada!' : 'Oportunidade criada!', 'ok');
+        _crmSilentRefresh().catch(() => {});
+      }
     }
   }
 }
