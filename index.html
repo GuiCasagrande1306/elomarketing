@@ -3584,19 +3584,11 @@
 
         <!-- Bloco 1: Analytics de Produtividade -->
         <div class="card" style="border-color:rgba(108,99,255,0.3);background:rgba(108,99,255,0.03)">
-          <div class="card-header" style="margin-bottom:10px">
+          <div class="card-header" style="margin-bottom:8px">
             <div class="card-title" style="font-size:13px"><i class="ti ti-chart-donut" style="color:var(--accent)"></i> Analytics de Produtividade</div>
             <span id="dash-tasks-badge" class="badge badge-gray" style="font-size:10px">0</span>
           </div>
-          <div class="dash-split">
-            <div id="dash-tasks-list" style="display:flex;flex-direction:column;gap:5px;min-height:60px">
-              <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
-            </div>
-            <div>
-              <div id="dash-chart-tasks" style="width:100%;height:130px"></div>
-              <div id="dash-taxa-entrega" style="text-align:center;margin-top:2px"></div>
-            </div>
-          </div>
+          <div id="dash-chart-tasks" style="width:100%;height:220px"></div>
           <button id="dash-btn-tarefas" class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;cursor:pointer">
             Ver todas as tarefas <i class="ti ti-arrow-right" style="font-size:10px"></i>
           </button>
@@ -3604,16 +3596,11 @@
 
         <!-- Bloco 2: Saúde da Esteira de Tráfego -->
         <div class="card" style="border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.03)">
-          <div class="card-header" style="margin-bottom:10px">
+          <div class="card-header" style="margin-bottom:8px">
             <div class="card-title" style="font-size:13px"><i class="ti ti-activity" style="color:#F59E0B"></i> Saúde da Esteira de Tráfego</div>
             <span id="dash-otim-badge" class="badge badge-gray" style="font-size:10px">0</span>
           </div>
-          <div class="dash-split">
-            <div id="dash-otim-list" style="display:flex;flex-direction:column;gap:5px;min-height:60px">
-              <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
-            </div>
-            <div id="dash-chart-otim" style="width:100%;height:150px"></div>
-          </div>
+          <div id="dash-chart-otim" style="width:100%;height:220px"></div>
           <button id="dash-btn-esteira" class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(245,158,11,0.3);color:#F59E0B;cursor:pointer">
             Ver Esteira <i class="ti ti-arrow-right" style="font-size:10px"></i>
           </button>
@@ -3621,16 +3608,11 @@
 
         <!-- Bloco 3: Análise de Desvio de Budget -->
         <div class="card" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.03)">
-          <div class="card-header" style="margin-bottom:10px">
+          <div class="card-header" style="margin-bottom:8px">
             <div class="card-title" style="font-size:13px"><i class="ti ti-chart-bar" style="color:var(--red)"></i> Análise de Desvio de Budget</div>
             <span id="dash-spend-badge" class="badge badge-gray" style="font-size:10px">0</span>
           </div>
-          <div class="dash-split">
-            <div id="dash-spend-list" style="display:flex;flex-direction:column;gap:5px;min-height:60px">
-              <div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">Carregando...</div>
-            </div>
-            <div id="dash-chart-spend" style="width:100%;height:150px"></div>
-          </div>
+          <div id="dash-chart-spend" style="width:100%;height:220px"></div>
           <button id="dash-btn-clientes" class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px;font-size:11px;border-color:rgba(239,68,68,0.3);color:var(--red);cursor:pointer">
             Ver Clientes <i class="ti ti-arrow-right" style="font-size:10px"></i>
           </button>
@@ -6039,7 +6021,7 @@ function navigate(page, el) {
   if (page === 'configuracoes') renderTeamPermissions();
   if (page === 'campanhas')     { popularSelectCampanhaCliente(); filtrarEExibirCampanhas(); }
   if (page === 'calendar')      { renderCalClientFilter(); renderCalendarMonth(); renderDetailsEmpty(); }
-  if (page === 'esteira')       { ESTEIRA_COLABORADOR = 'todos'; renderEsteira(); loadClientsFromDB().then(() => renderEsteira()); }
+  if (page === 'esteira')       { ESTEIRA_COLABORADOR = 'todos'; renderEsteira(); loadClientsFromDB().then(() => { renderEsteira(); _otimRefreshUltimaAll(); }); }
   if (page === 'crm')           _crmInitAndRender();
   if (page === 'creatives')     { _populateCreativesFilters(); renderCreatives(); loadCreativesFromDB(); }
   if (page === 'financeiro')    renderFinanceiro();
@@ -8278,6 +8260,32 @@ function setupRealtimeChannel() {
       }
     })
 
+    // ── HISTÓRICO DE OTIMIZAÇÕES ──────────────────────────────
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'historico_otimizacoes' }, async (payload) => {
+      // Ignora mudanças do próprio utilizador (já aplicadas otimisticamente)
+      const byMe = (payload.new?.colaborador_id || payload.old?.colaborador_id) === currentUser?.id;
+      if (byMe) return;
+
+      const clientId = payload.new?.client_id || payload.old?.client_id;
+      if (!clientId) return;
+      const c = CLIENTS.list.find(x => x.id === clientId);
+      if (!c) return;
+
+      // Recarrega histórico completo deste cliente
+      const hist = await _otimLoad(clientId);
+      if (hist !== null) {
+        c.historico_otimizacoes = hist;
+        c.ultima_otimizacao     = hist.length > 0 ? hist[0].data : '';
+      }
+
+      // Atualiza drawer se estiver aberto para este cliente
+      if (OTIM_CLIENT_ID === clientId) renderOtimHistory(c);
+
+      // Atualiza esteira e dashboard
+      if (document.querySelector('#page-esteira.active')) renderEsteira();
+      renderDashboard();
+    })
+
     .subscribe((status) => {
       setSyncStatus(status === 'SUBSCRIBED' ? 'ok' : 'error');
     });
@@ -8497,8 +8505,8 @@ function loginUser(user) {
   document.getElementById('login-screen').classList.add('hidden');
   updateSidebarUser(user);
   const filterWrap = document.getElementById('collab-filter-wrap');
-  // Todos os colaboradores veem o seletor — isolamento de dados removido
-  if (filterWrap) filterWrap.style.display = 'flex';
+  // Admins veem o seletor de colaborador; colaboradores padrão têm o filtro travado no próprio id
+  if (filterWrap) filterWrap.style.display = user.isAdmin ? 'flex' : 'none';
   const exportBtn = document.getElementById('topbar-export-btn');
   if (exportBtn) exportBtn.style.display = user.isAdmin ? '' : 'none';
   updateBackupLastInfo();
@@ -8507,14 +8515,20 @@ function loginUser(user) {
   // Popula as opções dinamicamente a partir de USERS
   const sel = document.getElementById('collab-filter');
   if (sel) {
-    sel.innerHTML = '<option value="all">Todos os Colaboradores</option>' +
-      USERS.filter(u => u.isActive !== false).map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
-    sel.value = 'all';
+    if (user.isAdmin) {
+      sel.innerHTML = '<option value="all">Todos os Colaboradores</option>' +
+        USERS.filter(u => u.isActive !== false).map(u => `<option value="${u.id}">${u.name}${u.isSuperAdmin ? ' 👑' : u.isAdmin ? ' ★' : ''}</option>`).join('');
+      sel.value = 'all';
+    } else {
+      // Trava o valor no próprio usuário para que _collabUid() retorne o id correto
+      sel.innerHTML = `<option value="${user.id}">${user.name}</option>`;
+      sel.value = user.id;
+    }
   }
   // Admins: dropdown de colaborador visível. Colaboradores: oculto (filtro travado no próprio usuário)
   const taskCollabWrap = document.getElementById('task-collab-filter-wrap');
   if (taskCollabWrap) taskCollabWrap.style.display = user.isAdmin ? '' : 'none';
-  filterByCollaborator('all');
+  filterByCollaborator(user.isAdmin ? 'all' : user.id);
   refreshTaskOwnerChips();
   resetTaskForm();
   showWelcomeToast(user);
@@ -11019,11 +11033,23 @@ function openOptimizationDrawer(clientId) {
   _otimSetEditMode(false);
   _otimClearContent();
 
+  // Renderiza imediatamente com cache em memória, depois carrega do DB
   renderOtimHistory(c);
 
   document.getElementById('otim-overlay').style.display = 'block';
   const drawer = document.getElementById('otim-drawer');
   if (drawer) drawer.style.transform = 'translateX(0)';
+
+  // Carrega histórico fresco do Supabase em background
+  if (db) {
+    _otimLoad(clientId).then(hist => {
+      if (hist === null) return;
+      c.historico_otimizacoes = hist;
+      if (hist.length > 0) c.ultima_otimizacao = hist[0].data;
+      else c.ultima_otimizacao = '';
+      if (OTIM_CLIENT_ID === clientId) renderOtimHistory(c);
+    });
+  }
 }
 
 function closeOptimizationDrawer() {
@@ -11085,61 +11111,195 @@ async function _syncOptimization(clientId, method, url, payload, attempt = 0) {
   }
 }
 
+/* ── SUPABASE: Histórico de Otimizações ─────────────────────────────────────── */
+
+async function _otimLoad(clientId) {
+  if (!db) return null;
+  try {
+    const { data, error } = await db
+      .from('historico_otimizacoes')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('data_otimizacao', { ascending: false });
+    if (error) throw error;
+    return data.map(row => ({
+      id:         row.id,
+      data:       row.data_otimizacao,
+      texto_nota: row.anotacao,
+      autor:      row.colaborador_nome || '',
+      colaborador_id: row.colaborador_id,
+      editado:    row.editado,
+      data_edicao: row.data_edicao,
+    }));
+  } catch(e) {
+    console.warn('[Esteira] _otimLoad:', e.message);
+    return null;
+  }
+}
+
+async function _otimInsert(c, nota) {
+  if (!db) return null;
+  try {
+    const nowISO = new Date().toISOString();
+    const { data: inserted, error: err1 } = await db
+      .from('historico_otimizacoes')
+      .insert({
+        client_id:        c.id,
+        colaborador_id:   currentUser?.id   || null,
+        colaborador_nome: currentUser?.name || 'Usuário',
+        anotacao:         nota,
+        data_otimizacao:  nowISO,
+      })
+      .select()
+      .single();
+    if (err1) throw err1;
+    // Atualiza ultima_otimizacao no data JSONB da tabela clients
+    const newData = { ...c, ultima_otimizacao: nowISO };
+    delete newData.historico_otimizacoes;
+    await db.from('clients').update({ data: newData, ultima_otimizacao: nowISO }).eq('id', c.id);
+    return inserted;
+  } catch(e) {
+    console.warn('[Esteira] _otimInsert:', e.message);
+    return null;
+  }
+}
+
+async function _otimEdit(histId, nota) {
+  if (!db) return false;
+  try {
+    const { error } = await db
+      .from('historico_otimizacoes')
+      .update({ anotacao: nota, editado: true, data_edicao: new Date().toISOString() })
+      .eq('id', histId);
+    if (error) throw error;
+    return true;
+  } catch(e) {
+    console.warn('[Esteira] _otimEdit:', e.message);
+    return false;
+  }
+}
+
+async function _otimDelete(histId, c) {
+  if (!db) return false;
+  try {
+    const { error: err1 } = await db.from('historico_otimizacoes').delete().eq('id', histId);
+    if (err1) throw err1;
+    // Recalcula ultima_otimizacao a partir das entradas restantes
+    const { data: remaining } = await db
+      .from('historico_otimizacoes')
+      .select('data_otimizacao')
+      .eq('client_id', c.id)
+      .order('data_otimizacao', { ascending: false })
+      .limit(1);
+    const newUltima = remaining?.[0]?.data_otimizacao || null;
+    const newData = { ...c, ultima_otimizacao: newUltima };
+    delete newData.historico_otimizacoes;
+    await db.from('clients').update({ data: newData, ultima_otimizacao: newUltima }).eq('id', c.id);
+    return true;
+  } catch(e) {
+    console.warn('[Esteira] _otimDelete:', e.message);
+    return false;
+  }
+}
+
+/* Atualiza ultima_otimizacao de todos os clientes a partir da tabela dedicada.
+   Chamado ao abrir a Esteira para garantir datas corretas sem depender do JSONB. */
+async function _otimRefreshUltimaAll() {
+  if (!db) return;
+  try {
+    const { data, error } = await db
+      .from('historico_otimizacoes')
+      .select('client_id, data_otimizacao')
+      .order('data_otimizacao', { ascending: false });
+    if (error || !data) return;
+    const latestByClient = {};
+    data.forEach(row => {
+      if (!latestByClient[row.client_id]) latestByClient[row.client_id] = row.data_otimizacao;
+    });
+    let changed = false;
+    CLIENTS.list.forEach(c => {
+      if (latestByClient[c.id] !== undefined && c.ultima_otimizacao !== latestByClient[c.id]) {
+        c.ultima_otimizacao = latestByClient[c.id];
+        changed = true;
+      }
+    });
+    if (changed) renderEsteira();
+  } catch(e) {
+    console.warn('[Esteira] _otimRefreshUltimaAll:', e.message);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────── */
+
 async function saveOptimization() {
   if (!OTIM_CLIENT_ID) return;
   const c = CLIENTS.list.find(x => x.id === OTIM_CLIENT_ID);
   if (!c) return;
 
   const nota = _otimGetContent();
+  if (!nota.trim()) return;
   if (!Array.isArray(c.historico_otimizacoes)) c.historico_otimizacoes = [];
 
-  if (OTIM_EDIT_ID !== null) {
-    /* ---- EDIT MODE: atualiza entrada existente via rota ATÔMICA dedicada ----
-       Antes usava saveClients() (bulk sync), mas o bulk não blinda o histórico:
-       outro colaborador/aba com lista stale apagava a nota. Agora PUT atômico. */
-    const editId = OTIM_EDIT_ID;
-    const entry = c.historico_otimizacoes.find(h => h.id === editId);
-    if (entry) {
-      entry.texto_nota  = nota;
-      entry.editado     = true;
-      entry.data_edicao = new Date().toISOString();
+  const saveBtn = document.getElementById('otim-save-btn');
+  const saveLbl = document.getElementById('otim-save-label');
+  if (saveBtn) saveBtn.disabled = true;
+  if (saveLbl) saveLbl.textContent = 'Salvando…';
+
+  try {
+    if (OTIM_EDIT_ID !== null) {
+      /* ── MODO EDIÇÃO ─────────────────────────────────────────── */
+      const editId = OTIM_EDIT_ID;
+      if (db) {
+        const ok = await _otimEdit(editId, nota);
+        if (!ok) throw new Error('falha ao editar');
+      } else {
+        _syncOptimization(c.id, 'PUT', `/api/clients/${c.id}/optimizations/${editId}`, { texto_nota: nota });
+      }
+      const entry = c.historico_otimizacoes.find(h => h.id === editId);
+      if (entry) { entry.texto_nota = nota; entry.editado = true; entry.data_edicao = new Date().toISOString(); }
+      OTIM_EDIT_ID = null;
+      _otimSetEditMode(false);
+      document.querySelectorAll('.otim-note-item.editing-active').forEach(el => el.classList.remove('editing-active'));
+      _recalcUltimaOtimizacao(c);
+
+    } else {
+      /* ── NOVA ENTRADA ────────────────────────────────────────── */
+      if (db) {
+        const inserted = await _otimInsert(c, nota);
+        if (!inserted) throw new Error('falha ao inserir');
+        c.historico_otimizacoes.unshift({
+          id:         inserted.id,
+          data:       inserted.data_otimizacao,
+          texto_nota: inserted.anotacao,
+          autor:      inserted.colaborador_nome || currentUser?.name || 'Usuário',
+          colaborador_id: inserted.colaborador_id,
+        });
+        c.ultima_otimizacao = inserted.data_otimizacao;
+      } else {
+        const nowISO = new Date().toISOString();
+        c.historico_otimizacoes.unshift({ id: Date.now(), data: nowISO, texto_nota: nota, autor: currentUser?.name || 'Usuário' });
+        _recalcUltimaOtimizacao(c);
+        localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+        _syncOptimization(c.id, 'POST', `/api/clients/${c.id}/optimizations`, { texto_nota: nota, autor: currentUser?.name || 'Usuário' });
+      }
+      showNotification('✅ Otimização registrada!', 'ok');
     }
-    OTIM_EDIT_ID = null;
-    _otimSetEditMode(false);
-    document.querySelectorAll('.otim-note-item.editing-active')
-      .forEach(el => el.classList.remove('editing-active'));
-    _recalcUltimaOtimizacao(c);
-    localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
 
-    _syncOptimization(c.id, 'PUT',
-      `/api/clients/${c.id}/optimizations/${editId}`,
-      { texto_nota: nota });
-  } else {
-    /* ---- NOVA ENTRADA: update otimista em memória + POST atômico ----
-       Salva via endpoint dedicado (/api/clients/:id/optimizations) para evitar
-       race condition do bulk sync: o POST é atômico no MongoDB via $push/$set,
-       enquanto o bulk sync pode chegar ao servidor com uma versão já stale.     */
-    const nowISO = new Date().toISOString();
-    c.historico_otimizacoes.unshift({
-      id:         Date.now(),
-      data:       nowISO,
-      texto_nota: nota,
-      autor:      currentUser?.name || 'Usuário'
-    });
-    _recalcUltimaOtimizacao(c);
-    // Persiste localStorage imediatamente (UX: dados não se perdem se fechar aba)
-    localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+    _otimClearContent();
+    renderOtimHistory(c);
+    renderEsteira();
+    renderDashboard();
 
-    // POST atômico com retry automático (Render free tier pode estar dormindo)
-    _syncOptimization(c.id, 'POST',
-      `/api/clients/${c.id}/optimizations`,
-      { texto_nota: nota, autor: currentUser?.name || 'Usuário' });
+  } catch(e) {
+    console.error('[Esteira] saveOptimization:', e.message);
+    showNotification('⚠️ Falha ao salvar — verifique sua conexão.', 'warn');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      const lbl = document.getElementById('otim-save-label');
+      if (lbl) lbl.textContent = OTIM_EDIT_ID !== null ? 'Salvar Edição' : 'Concluir Otimização';
+    }
   }
-
-  _otimClearContent();
-  renderOtimHistory(c);
-  renderEsteira();
-  renderDashboard(); // ← atualiza card "Otimizar Hoje" imediatamente
 }
 
 function editOtimEntry(entryId) {
@@ -11165,39 +11325,34 @@ function editOtimEntry(entryId) {
   if (itemEl) itemEl.classList.add('editing-active');
 }
 
-function deleteOtimEntry(entryId) {
+async function deleteOtimEntry(entryId) {
   if (!OTIM_CLIENT_ID) return;
   const c = CLIENTS.list.find(x => x.id === OTIM_CLIENT_ID);
   if (!c || !Array.isArray(c.historico_otimizacoes)) return;
   if (!confirm('Excluir esta anotação? Esta ação não pode ser desfeita.')) return;
 
+  // Atualização otimista em memória
   c.historico_otimizacoes = c.historico_otimizacoes.filter(h => h.id !== entryId);
-
-  /* if the entry being deleted was the one in edit mode, cancel */
-  if (OTIM_EDIT_ID === entryId) {
-    OTIM_EDIT_ID = null;
-    _otimSetEditMode(false);
-    _otimClearContent();
-  }
-
+  if (OTIM_EDIT_ID === entryId) { OTIM_EDIT_ID = null; _otimSetEditMode(false); _otimClearContent(); }
   _recalcUltimaOtimizacao(c);
-  localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
-
-  /* Exclusão ATÔMICA via rota dedicada — não passa pelo bulk sync (que
-     poderia ressuscitar a nota a partir de uma lista stale de outra aba). */
-  _apiFetch(`/api/clients/${c.id}/optimizations/${entryId}`, { method: 'DELETE' })
-    .then(updated => {
-      if (updated && updated.id) {
-        const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
-        if (idx !== -1) {
-          CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
-          localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
-        }
-      }
-    }).catch(() => saveClients()); // fallback: bulk sync se DELETE falhar
-
   renderOtimHistory(c);
   renderEsteira();
+
+  if (db) {
+    const ok = await _otimDelete(entryId, c);
+    if (!ok) showNotification('⚠️ Falha ao excluir — tente novamente.', 'warn');
+  } else {
+    _apiFetch(`/api/clients/${c.id}/optimizations/${entryId}`, { method: 'DELETE' })
+      .then(updated => {
+        if (updated && updated.id) {
+          const idx = CLIENTS.list.findIndex(x => x.id === updated.id);
+          if (idx !== -1) {
+            CLIENTS.list[idx] = { ...CLIENTS.list[idx], ...updated };
+            localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
+          }
+        }
+      }).catch(() => saveClients());
+  }
 }
 
 function cancelOtimEdit() {
@@ -12359,109 +12514,36 @@ function renderDashboardActionCards(clients) {
   });
 
   const taskBadge = document.getElementById('dash-tasks-badge');
-  const taskList  = document.getElementById('dash-tasks-list');
   if (taskBadge) {
     taskBadge.textContent = myTasks.length || '0';
     taskBadge.className   = myTasks.length > 0 ? 'badge badge-purple' : 'badge badge-gray';
   }
-  if (taskList) {
-    if (!myTasks.length) {
-      taskList.innerHTML = `<div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">✅ Nenhuma tarefa pendente hoje</div>`;
-    } else {
-      const PRIO_COLOR = { 'Crítica':'#EF4444','Alta':'#F59E0B','Média':'var(--accent2)','Baixa':'var(--text3)' };
-      taskList.innerHTML = myTasks.slice(0, 4).map(t => {
-        const dueDate   = (t.dueDate || t.deadline || '').slice(0,10);
-        const isOverdue = dueDate < todayStr;
-        const assignee  = USERS.find(u => u.id === t.assignedTo);
-        return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
-          <span style="width:6px;height:6px;border-radius:50%;background:${PRIO_COLOR[t.priority]||'var(--text3)'};flex-shrink:0"></span>
-          <span style="font-size:11px;color:var(--text1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.title}</span>
-          ${isOverdue ? `<span style="font-size:9px;color:#EF4444;font-weight:700;white-space:nowrap">ATRASADA</span>` : `<span style="font-size:9px;color:#F59E0B;white-space:nowrap">HOJE</span>`}
-          ${assignee ? `<span style="font-size:9px;color:var(--text3);white-space:nowrap">${assignee.initials}</span>` : ''}
-        </div>`;
-      }).join('');
-      if (myTasks.length > 4) {
-        taskList.innerHTML += `<div style="font-size:10px;color:var(--text3);text-align:center;padding:2px">+${myTasks.length - 4} mais</div>`;
-      }
-    }
-  }
 
-  // ── 2. Clientes para Otimizar Hoje ────────────────────────────────────────
+  // ── 2. Badge: Clientes para Otimizar ──────────────────────────────────────
   const otimClients = clients.filter(c => {
     const s = getOtimStatus(c);
     return s.cls === 'warning' || s.cls === 'overdue' || s.cls === 'never';
-  }).sort((a, b) => {
-    const ord = { never: 0, overdue: 1, warning: 2 };
-    return (ord[getOtimStatus(a).cls] ?? 3) - (ord[getOtimStatus(b).cls] ?? 3);
   });
-
   const otimBadge = document.getElementById('dash-otim-badge');
-  const otimList  = document.getElementById('dash-otim-list');
   if (otimBadge) {
-    otimBadge.textContent = otimClients.length || '0';
+    otimBadge.textContent = otimClients.length > 0 ? otimClients.length : '✅ 0';
     otimBadge.className   = otimClients.length > 0 ? 'badge badge-yellow' : 'badge badge-green';
-    if (otimClients.length === 0) otimBadge.textContent = '✅ 0';
-  }
-  if (otimList) {
-    if (!otimClients.length) {
-      otimList.innerHTML = `<div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">✅ Todos os clientes otimizados</div>`;
-    } else {
-      otimList.innerHTML = otimClients.slice(0, 4).map(c => {
-        const s = getOtimStatus(c);
-        const color  = s.cls === 'never' || s.cls === 'overdue' ? '#EF4444' : '#F59E0B';
-        const label  = s.cls === 'never' ? 'Nunca' : s.cls === 'overdue' ? `${s.days}d atraso` : 'Hoje';
-        return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
-          ${_clAvatar(c, 28, '7px')}
-          <span style="font-size:11px;color:var(--text1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
-          <span style="font-size:9px;font-weight:700;color:${color};white-space:nowrap">${label}</span>
-        </div>`;
-      }).join('');
-      if (otimClients.length > 4) {
-        otimList.innerHTML += `<div style="font-size:10px;color:var(--text3);text-align:center;padding:2px">+${otimClients.length - 4} mais</div>`;
-      }
-    }
   }
 
-  // ── 3. Clientes Acima do Spend (>15% acima do pacing) ─────────────────────
-  const daysInMonth  = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const timePct      = today.getDate() / daysInMonth;
-
-  const overspend = clients.filter(c => {
-    if (!c.budget || c.budget <= 0) return false;
-    const investPct = (c.investment || 0) / c.budget;
-    return (investPct - timePct) > 0.15;
-  }).map(c => {
-    const investPct = (c.investment || 0) / c.budget;
-    const devPct    = Math.round((investPct - timePct) * 100);
-    return { ...c, _devPct: devPct };
-  }).sort((a, b) => b._devPct - a._devPct);
-
+  // ── 3. Badge + dados categóricos de Budget ────────────────────────────────
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const timePct     = today.getDate() / daysInMonth;
+  let sAcima = 0, sProximo = 0, sAbaixo = 0;
+  clients.filter(c => c.budget > 0).forEach(c => {
+    const pct = (c.investment || 0) / c.budget;
+    if      (pct > timePct + 0.15) sAcima++;
+    else if (pct >= timePct - 0.15) sProximo++;
+    else                            sAbaixo++;
+  });
   const spendBadge = document.getElementById('dash-spend-badge');
-  const spendList  = document.getElementById('dash-spend-list');
   if (spendBadge) {
-    spendBadge.textContent = overspend.length || '0';
-    spendBadge.className   = overspend.length > 0 ? 'badge badge-red' : 'badge badge-green';
-    if (overspend.length === 0) spendBadge.textContent = '✅ 0';
-  }
-  if (spendList) {
-    if (!overspend.length) {
-      spendList.innerHTML = `<div style="color:var(--text3);font-size:11px;text-align:center;padding:12px 0">✅ Todos no ritmo de spend</div>`;
-    } else {
-      spendList.innerHTML = overspend.slice(0, 4).map(c => {
-        const investPct = Math.round((c.investment || 0) / c.budget * 100);
-        return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px">
-          ${_clAvatar(c, 28, '7px')}
-          <div style="flex:1;min-width:0">
-            <div style="font-size:11px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
-            <div style="font-size:9px;color:var(--text3)">${fmtBRL(c.investment)} / ${fmtBRL(c.budget)}</div>
-          </div>
-          <span style="font-size:9px;font-weight:700;color:#EF4444;white-space:nowrap">+${c._devPct}%</span>
-        </div>`;
-      }).join('');
-      if (overspend.length > 4) {
-        spendList.innerHTML += `<div style="font-size:10px;color:var(--text3);text-align:center;padding:2px">+${overspend.length - 4} mais</div>`;
-      }
-    }
+    spendBadge.textContent = sAcima + sProximo + sAbaixo;
+    spendBadge.className   = sAcima > 0 ? 'badge badge-red' : 'badge badge-green';
   }
 
   // ── Conecta os botões de navegação dos cards de ação ──────────────────────
@@ -12516,54 +12598,54 @@ function renderDashboardActionCards(clients) {
     { name: 'Em Dia',   value: oDone,              color: '#10B981' },
   ];
 
-  // Bar duplo — Budget Planejado vs Realizado (top 5 por budget)
-  const spendBarData = clients
-    .filter(c => c.budget > 0)
-    .sort((a, b) => b.budget - a.budget)
-    .slice(0, 5)
-    .map(c => ({
-      name:   c.name.length > 9 ? c.name.slice(0, 9) + '…' : c.name,
-      budget: Math.round(c.budget),
-      spend:  Math.round(c.investment || 0),
-    }));
+  // Categorias de desvio de budget (horizontal, mesmo estilo que Saúde da Esteira)
+  const spendBarData = [
+    { name: 'Acima do Budget',   value: sAcima,   color: '#EF4444' },
+    { name: 'Próximo ao Budget', value: sProximo, color: '#F59E0B' },
+    { name: 'Abaixo do Budget',  value: sAbaixo,  color: '#10B981' },
+  ];
 
-  setTimeout(() => _renderDashCharts(pieData, taxaEntrega, otimBarData, spendBarData), 0);
+  const otimMax  = Math.max(...otimBarData.map(d => d.value), 1);
+  const spendMax = Math.max(...spendBarData.map(d => d.value), 1);
+  setTimeout(() => _renderDashCharts(pieData, taxaEntrega, otimBarData, spendBarData, otimMax, spendMax), 0);
 }
 
 /* ── Recharts: raízes React persistentes por container ─────────────────── */
 const _DASH_ROOTS = {};
 
-function _renderDashCharts(pieData, taxaEntrega, otimBarData, spendBarData) {
+function _renderDashCharts(pieData, taxaEntrega, otimBarData, spendBarData, otimMax, spendMax) {
   if (typeof React === 'undefined' || typeof ReactDOM === 'undefined' || typeof Recharts === 'undefined') return;
   const e = React.createElement;
-  const { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, LabelList } = Recharts;
+  const { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
+          XAxis, YAxis, Tooltip, LabelList, Legend, Label } = Recharts;
 
   const ttStyle = {
     contentStyle: { background:'var(--bg2,#1a2236)', border:'1px solid var(--border,#2a3a5c)', borderRadius:8, fontSize:11, color:'var(--text1,#f1f5f9)', padding:'6px 10px' },
     cursor: { fill:'rgba(255,255,255,0.04)' },
   };
+  const legendStyle = { fontSize:'11px', color:'var(--text2,#94a3b8)' };
 
-  // ── 1. Pie donut — tarefas por status ────────────────────────────────────
+  // ── 1. Pie donut — tarefas por status com % no centro ────────────────────
   const c1 = document.getElementById('dash-chart-tasks');
   if (c1) {
     if (!_DASH_ROOTS.tasks) _DASH_ROOTS.tasks = ReactDOM.createRoot(c1);
+    const col = taxaEntrega >= 80 ? '#10B981' : taxaEntrega >= 50 ? '#F59E0B' : '#EF4444';
+    const legendPayload1 = pieData.map(d => ({ value: `${d.name} (${d.value})`, type:'circle', color: d.color }));
     _DASH_ROOTS.tasks.render(
-      e(ResponsiveContainer, { width:'100%', height:130 },
+      e(ResponsiveContainer, { width:'100%', height:220 },
         e(PieChart, null,
-          e(Pie, { data:pieData, dataKey:'value', nameKey:'name', cx:'50%', cy:'50%',
-                   innerRadius:33, outerRadius:54, paddingAngle: pieData.length > 1 ? 3 : 0,
-                   isAnimationActive:true },
-            ...pieData.map((d,i) => e(Cell, { key:i, fill:d.color }))
+          e(Pie, { data:pieData, dataKey:'value', nameKey:'name', cx:'50%', cy:'46%',
+                   innerRadius:58, outerRadius:86, paddingAngle: pieData.length > 1 ? 3 : 0, isAnimationActive:true },
+            ...pieData.map((d,i) => e(Cell, { key:i, fill:d.color })),
+            e(Label, { value:`${taxaEntrega}%`, position:'center',
+                       style:{ fill:col, fontSize:'22px', fontWeight:'700', dominantBaseline:'middle' } })
           ),
-          e(Tooltip, { ...ttStyle, formatter:(v,n) => [v + (v===1?' tarefa':' tarefas'), n] })
+          e(Tooltip, { ...ttStyle, formatter:(v,n) => [v + (v===1?' tarefa':' tarefas'), n] }),
+          e(Legend, { payload:legendPayload1, iconType:'circle', iconSize:8,
+                      wrapperStyle:{ ...legendStyle, paddingTop:'4px' }, verticalAlign:'bottom' })
         )
       )
     );
-    const meta = document.getElementById('dash-taxa-entrega');
-    if (meta) {
-      const col = taxaEntrega >= 80 ? '#10B981' : taxaEntrega >= 50 ? '#F59E0B' : '#EF4444';
-      meta.innerHTML = `<span style="font-size:17px;font-weight:700;color:${col}">${taxaEntrega}%</span>&nbsp;<span style="font-size:10px;color:var(--text3)">Taxa de Entrega</span>`;
-    }
   }
 
   // ── 2. Bar horizontal — saúde das otimizações ────────────────────────────
@@ -12571,35 +12653,42 @@ function _renderDashCharts(pieData, taxaEntrega, otimBarData, spendBarData) {
   if (c2) {
     if (!_DASH_ROOTS.otim) _DASH_ROOTS.otim = ReactDOM.createRoot(c2);
     _DASH_ROOTS.otim.render(
-      e(ResponsiveContainer, { width:'100%', height:150 },
-        e(BarChart, { data:otimBarData, layout:'vertical', margin:{ top:8, right:34, left:4, bottom:8 } },
-          e(XAxis, { type:'number', hide:true }),
-          e(YAxis, { type:'category', dataKey:'name', width:55,
-                     tick:{ fill:'var(--text2,#94a3b8)', fontSize:10 }, axisLine:false, tickLine:false }),
-          e(Tooltip, { ...ttStyle, formatter:v => [v + (v===1?' conta':' contas'), 'Total'] }),
-          e(Bar, { dataKey:'value', radius:[0,4,4,0], isAnimationActive:true, maxBarSize:22 },
+      e(ResponsiveContainer, { width:'100%', height:220 },
+        e(BarChart, { data:otimBarData, layout:'vertical', margin:{ top:20, right:52, left:10, bottom:20 } },
+          e(XAxis, { type:'number', hide:true, domain:[0, otimMax] }),
+          e(YAxis, { type:'category', dataKey:'name', width:62,
+                     tick:{ fill:'var(--text2,#94a3b8)', fontSize:12 }, axisLine:false, tickLine:false }),
+          e(Tooltip, { ...ttStyle, formatter:v => [v + (v===1?' conta':' contas'), 'Contas'] }),
+          e(Bar, { dataKey:'value', radius:[0,6,6,0], isAnimationActive:false, maxBarSize:34 },
             ...otimBarData.map((d,i) => e(Cell, { key:i, fill:d.color })),
-            e(LabelList, { dataKey:'value', position:'right', style:{ fill:'var(--text2,#94a3b8)', fontSize:10, fontWeight:600 } })
+            e(LabelList, { dataKey:'value', position:'right',
+                           style:{ fill:'var(--text2,#94a3b8)', fontSize:13, fontWeight:700 } })
           )
         )
       )
     );
   }
 
-  // ── 3. Bar duplo — Budget Planejado vs Realizado ─────────────────────────
+  // ── 3. Bar horizontal — categorias de desvio de budget ──────────────────
   const c3 = document.getElementById('dash-chart-spend');
   if (c3) {
-    if (!_DASH_ROOTS.spend) _DASH_ROOTS.spend = ReactDOM.createRoot(c3);
-    const fmtK = v => v >= 1000 ? 'R$' + (v/1000).toFixed(1) + 'k' : 'R$' + v;
+    // Recria root se vier de sessão anterior com dual-bar (tipo diferente)
+    if (_DASH_ROOTS.spend && !_DASH_ROOTS.spendHorizontal) {
+      try { _DASH_ROOTS.spend.unmount(); } catch(_){} delete _DASH_ROOTS.spend; c3.innerHTML = '';
+    }
+    if (!_DASH_ROOTS.spend) { _DASH_ROOTS.spend = ReactDOM.createRoot(c3); _DASH_ROOTS.spendHorizontal = true; }
     _DASH_ROOTS.spend.render(
-      e(ResponsiveContainer, { width:'100%', height:150 },
-        e(BarChart, { data:spendBarData, margin:{ top:6, right:4, left:4, bottom:24 }, barCategoryGap:'28%', barGap:2 },
-          e(XAxis, { dataKey:'name', tick:{ fill:'var(--text2,#94a3b8)', fontSize:9 },
-                     axisLine:false, tickLine:false, interval:0, angle:-20, textAnchor:'end' }),
-          e(YAxis, { hide:true }),
-          e(Tooltip, { ...ttStyle, formatter:(v,n) => [fmtK(v), n] }),
-          e(Bar, { dataKey:'budget', name:'Planejado', fill:'#10B981', radius:[4,4,0,0], isAnimationActive:true, maxBarSize:16 }),
-          e(Bar, { dataKey:'spend',  name:'Realizado', fill:'#EF4444', radius:[4,4,0,0], isAnimationActive:true, maxBarSize:16 })
+      e(ResponsiveContainer, { width:'100%', height:220 },
+        e(BarChart, { data:spendBarData, layout:'vertical', margin:{ top:20, right:52, left:10, bottom:20 } },
+          e(XAxis, { type:'number', hide:true, domain:[0, spendMax] }),
+          e(YAxis, { type:'category', dataKey:'name', width:88,
+                     tick:{ fill:'var(--text2,#94a3b8)', fontSize:11 }, axisLine:false, tickLine:false }),
+          e(Tooltip, { ...ttStyle, formatter:v => [v + (v===1?' conta':' contas'), 'Clientes'] }),
+          e(Bar, { dataKey:'value', radius:[0,6,6,0], isAnimationActive:false, maxBarSize:34 },
+            ...spendBarData.map((d,i) => e(Cell, { key:i, fill:d.color })),
+            e(LabelList, { dataKey:'value', position:'right',
+                           style:{ fill:'var(--text2,#94a3b8)', fontSize:13, fontWeight:700 } })
+          )
         )
       )
     );
