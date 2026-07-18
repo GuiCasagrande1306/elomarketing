@@ -1455,6 +1455,62 @@
   }
   .otim-note-item.editing-active    { border-color: var(--accent); background: rgba(108,99,255,0.05); }
 
+  /* ── Campos extras da gaveta (Relatório + Projeção) ──────────────────── */
+  .otim-extra-fields {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-top: 14px; margin-bottom: 14px;
+  }
+  .otim-rel-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 10px;
+    background: var(--bg3); border: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .otim-rel-row.checked {
+    border-color: rgba(16,185,129,0.4);
+    background: rgba(16,185,129,0.06);
+  }
+  .otim-toggle-track {
+    flex-shrink: 0; width: 34px; height: 18px;
+    background: var(--bg4); border-radius: 9px;
+    position: relative; transition: background 0.2s;
+  }
+  .otim-rel-row.checked .otim-toggle-track { background: #10B981; }
+  .otim-toggle-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; background: white; border-radius: 50%;
+    transition: left 0.2s;
+  }
+  .otim-rel-row.checked .otim-toggle-thumb { left: 18px; }
+  #otim-relatorio-enviado { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+  .otim-rel-text { font-size: 12px; color: var(--text2); flex: 1; }
+  .otim-rel-row.checked .otim-rel-text { color: #10B981; font-weight: 600; }
+  .otim-proj-wrap { display: flex; flex-direction: column; gap: 5px; }
+  .otim-proj-label {
+    font-size: 10px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .otim-proj-input {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 14px;
+    color: var(--text); font-size: 13px; width: 100%;
+    box-sizing: border-box; outline: none;
+    transition: border-color 0.15s;
+    font-family: var(--mono);
+  }
+  .otim-proj-input:focus { border-color: var(--accent); }
+  .otim-proj-input::placeholder { color: var(--text3); }
+
+  /* ── Badges nos itens do histórico ──────────────────────────────────── */
+  .otim-hist-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .otim-hist-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+  }
+  .otim-hist-badge-green { background: rgba(16,185,129,0.14); color: #10B981; border: 1px solid rgba(16,185,129,0.25); }
+  .otim-hist-badge-blue  { background: rgba(108,99,255,0.14); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); }
+
   /* ── Quill editor — dark mode override ───────────────────────────────── */
   .otim-quill-wrap .ql-toolbar.ql-snow {
     background: var(--bg4);
@@ -5026,6 +5082,21 @@
       <div class="otim-section-label" id="otim-section-label">O que foi otimizado?</div>
       <div class="otim-quill-wrap" id="otim-quill-wrap">
         <div id="otim-quill-editor"></div>
+      </div>
+    </div>
+    <!-- ── Campos extras: Relatório + Projeção ─────────────────────── -->
+    <div class="otim-extra-fields" id="otim-extra-fields">
+      <div class="otim-rel-row" id="otim-rel-row" onclick="_otimToggleRelatorio()">
+        <div class="otim-toggle-track">
+          <div class="otim-toggle-thumb"></div>
+        </div>
+        <input type="checkbox" id="otim-relatorio-enviado">
+        <span class="otim-rel-text">📊 Relatório Semanal Enviado?</span>
+      </div>
+      <div class="otim-proj-wrap">
+        <div class="otim-proj-label">📈 Projeção da Meta (%)</div>
+        <input type="number" id="otim-projecao-meta" class="otim-proj-input"
+          min="0" max="999" step="1" placeholder="ex: 110">
       </div>
     </div>
     <button class="otim-save-btn" id="otim-save-btn" onclick="saveOptimization()">
@@ -10848,6 +10919,25 @@ function _otimSetContent(html) {
 function _otimClearContent() {
   if (OTIM_QUILL) OTIM_QUILL.setContents([]);
 }
+
+/** Alterna o toggle de relatório semanal enviado. */
+function _otimToggleRelatorio() {
+  const cb  = document.getElementById('otim-relatorio-enviado');
+  const row = document.getElementById('otim-rel-row');
+  if (!cb || !row) return;
+  cb.checked = !cb.checked;
+  row.classList.toggle('checked', cb.checked);
+}
+
+/** Reseta os campos extras da gaveta (toggle + projeção). */
+function _otimResetExtras() {
+  const cb  = document.getElementById('otim-relatorio-enviado');
+  const row = document.getElementById('otim-rel-row');
+  const proj = document.getElementById('otim-projecao-meta');
+  if (cb)  cb.checked = false;
+  if (row) row.classList.remove('checked');
+  if (proj) proj.value = '';
+}
 let ESTEIRA_COLABORADOR = 'todos';
 let ESTEIRA_CATEGORIA   = 'todos';
 
@@ -11102,6 +11192,7 @@ function openOptimizationDrawer(clientId) {
   OTIM_EDIT_ID = null;
   _otimSetEditMode(false);
   _otimClearContent();
+  _otimResetExtras();
 
   // Renderiza imediatamente com cache em memória, depois carrega do DB
   renderOtimHistory(c);
@@ -11193,13 +11284,15 @@ async function _otimLoad(clientId) {
       .order('data_otimizacao', { ascending: false });
     if (error) throw error;
     return data.map(row => ({
-      id:         row.id,
-      data:       row.data_otimizacao,
-      texto_nota: row.anotacao,
-      autor:      row.colaborador_nome || '',
-      colaborador_id: row.colaborador_id,
-      editado:    row.editado,
-      data_edicao: row.data_edicao,
+      id:                row.id,
+      data:              row.data_otimizacao,
+      texto_nota:        row.anotacao,
+      autor:             row.colaborador_nome || '',
+      colaborador_id:    row.colaborador_id,
+      editado:           row.editado,
+      data_edicao:       row.data_edicao,
+      relatorio_enviado: row.relatorio_enviado ?? false,
+      projecao_meta:     row.projecao_meta     ?? null,
     }));
   } catch(e) {
     console.warn('[Esteira] _otimLoad:', e.message);
@@ -11207,29 +11300,39 @@ async function _otimLoad(clientId) {
   }
 }
 
-async function _otimInsert(c, nota) {
+async function _otimInsert(c, nota, extra = {}) {
   if (!db) return null;
   try {
     const nowISO = new Date().toISOString();
+    const payload = {
+      client_id:         c.id,
+      colaborador_id:    currentUser?.id   || null,
+      colaborador_nome:  currentUser?.name || 'Usuário',
+      anotacao:          nota,
+      data_otimizacao:   nowISO,
+      relatorio_enviado: extra.relatorio_enviado ?? false,
+      projecao_meta:     extra.projecao_meta != null ? Number(extra.projecao_meta) : null,
+    };
     const { data: inserted, error: err1 } = await db
       .from('historico_otimizacoes')
-      .insert({
-        client_id:        c.id,
-        colaborador_id:   currentUser?.id   || null,
-        colaborador_nome: currentUser?.name || 'Usuário',
-        anotacao:         nota,
-        data_otimizacao:  nowISO,
-      })
+      .insert(payload)
       .select()
       .single();
-    if (err1) throw err1;
-    // Atualiza ultima_otimizacao no data JSONB da tabela clients
+    if (err1) {
+      console.error('[Esteira] _otimInsert INSERT error:', JSON.stringify(err1));
+      throw err1;
+    }
+    // Atualiza ultima_otimizacao na tabela clients (coluna dedicada + JSONB data)
     const newData = { ...c, ultima_otimizacao: nowISO };
     delete newData.historico_otimizacoes;
-    await db.from('clients').update({ data: newData, ultima_otimizacao: nowISO }).eq('id', c.id);
+    const { error: err2 } = await db
+      .from('clients')
+      .update({ data: newData, ultima_otimizacao: nowISO })
+      .eq('id', c.id);
+    if (err2) console.warn('[Esteira] _otimInsert UPDATE clients:', JSON.stringify(err2));
     return inserted;
   } catch(e) {
-    console.warn('[Esteira] _otimInsert:', e.message);
+    console.error('[Esteira] _otimInsert exception:', e.message, e);
     return null;
   }
 }
@@ -11307,13 +11410,23 @@ async function saveOptimization() {
   if (!c) return;
 
   const nota = _otimGetContent();
-  if (!nota.trim()) return;
+  if (!nota.trim()) {
+    showNotification('⚠️ Escreva o que foi otimizado antes de salvar.', 'warn');
+    return;
+  }
   if (!Array.isArray(c.historico_otimizacoes)) c.historico_otimizacoes = [];
 
   const saveBtn = document.getElementById('otim-save-btn');
   const saveLbl = document.getElementById('otim-save-label');
-  if (saveBtn) saveBtn.disabled = true;
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.style.opacity = '0.7'; }
   if (saveLbl) saveLbl.textContent = 'Salvando…';
+
+  // Lê os novos campos extras
+  const relatorioEnviado = document.getElementById('otim-relatorio-enviado')?.checked ?? false;
+  const projecaoMetaRaw  = document.getElementById('otim-projecao-meta')?.value?.trim();
+  const projecaoMeta     = projecaoMetaRaw !== '' && projecaoMetaRaw != null
+    ? parseFloat(projecaoMetaRaw) || null
+    : null;
 
   try {
     if (OTIM_EDIT_ID !== null) {
@@ -11321,7 +11434,7 @@ async function saveOptimization() {
       const editId = OTIM_EDIT_ID;
       if (db) {
         const ok = await _otimEdit(editId, nota);
-        if (!ok) throw new Error('falha ao editar');
+        if (!ok) throw new Error('falha ao editar no Supabase');
       } else {
         _syncOptimization(c.id, 'PUT', `/api/clients/${c.id}/optimizations/${editId}`, { texto_nota: nota });
       }
@@ -11335,19 +11448,25 @@ async function saveOptimization() {
     } else {
       /* ── NOVA ENTRADA ────────────────────────────────────────── */
       if (db) {
-        const inserted = await _otimInsert(c, nota);
-        if (!inserted) throw new Error('falha ao inserir');
+        const inserted = await _otimInsert(c, nota, { relatorio_enviado: relatorioEnviado, projecao_meta: projecaoMeta });
+        if (!inserted) throw new Error('INSERT retornou null — veja o console para detalhes');
         c.historico_otimizacoes.unshift({
-          id:         inserted.id,
-          data:       inserted.data_otimizacao,
-          texto_nota: inserted.anotacao,
-          autor:      inserted.colaborador_nome || currentUser?.name || 'Usuário',
-          colaborador_id: inserted.colaborador_id,
+          id:                inserted.id,
+          data:              inserted.data_otimizacao,
+          texto_nota:        inserted.anotacao,
+          autor:             inserted.colaborador_nome || currentUser?.name || 'Usuário',
+          colaborador_id:    inserted.colaborador_id,
+          relatorio_enviado: inserted.relatorio_enviado ?? false,
+          projecao_meta:     inserted.projecao_meta     ?? null,
         });
         c.ultima_otimizacao = inserted.data_otimizacao;
       } else {
         const nowISO = new Date().toISOString();
-        c.historico_otimizacoes.unshift({ id: Date.now(), data: nowISO, texto_nota: nota, autor: currentUser?.name || 'Usuário' });
+        c.historico_otimizacoes.unshift({
+          id: Date.now(), data: nowISO, texto_nota: nota,
+          autor: currentUser?.name || 'Usuário',
+          relatorio_enviado: relatorioEnviado, projecao_meta: projecaoMeta,
+        });
         _recalcUltimaOtimizacao(c);
         localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
         _syncOptimization(c.id, 'POST', `/api/clients/${c.id}/optimizations`, { texto_nota: nota, autor: currentUser?.name || 'Usuário' });
@@ -11355,20 +11474,21 @@ async function saveOptimization() {
       showNotification('✅ Otimização registrada!', 'ok');
     }
 
+    // Limpa o formulário
     _otimClearContent();
+    _otimResetExtras();
+
     renderOtimHistory(c);
     renderEsteira();
     renderDashboard();
 
   } catch(e) {
-    console.error('[Esteira] saveOptimization:', e.message);
-    showNotification('⚠️ Falha ao salvar — verifique sua conexão.', 'warn');
+    console.error('[Esteira] saveOptimization:', e.message, e);
+    showNotification(`⚠️ Falha ao salvar: ${e.message}`, 'warn');
   } finally {
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      const lbl = document.getElementById('otim-save-label');
-      if (lbl) lbl.textContent = OTIM_EDIT_ID !== null ? 'Salvar Edição' : 'Concluir Otimização';
-    }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; }
+    const lbl = document.getElementById('otim-save-label');
+    if (lbl) lbl.textContent = OTIM_EDIT_ID !== null ? 'Salvar Edição' : 'Concluir Otimização';
   }
 }
 
@@ -11448,6 +11568,14 @@ function renderOtimHistory(c) {
     const editTag = h.editado
       ? `<span style="font-size:10px;color:var(--text3);font-style:italic;margin-left:4px">(editado)</span>`
       : '';
+    // Badges para relatório enviado e projeção de meta
+    const badgesHtml = (h.relatorio_enviado || h.projecao_meta != null) ? `
+      <div class="otim-hist-badges">
+        ${h.relatorio_enviado ? `<span class="otim-hist-badge otim-hist-badge-green"><i class="ti ti-send" style="font-size:9px"></i> Relatório enviado</span>` : ''}
+        ${h.projecao_meta != null ? `<span class="otim-hist-badge otim-hist-badge-blue"><i class="ti ti-trending-up" style="font-size:9px"></i> Projeção ${h.projecao_meta}%</span>` : ''}
+      </div>` : '';
+    // IDs do Supabase são UUIDs — precisam de aspas no onclick
+    const idStr = JSON.stringify(String(h.id));
     return `
       <div class="otim-note-item" data-entry-id="${h.id}">
         <div class="otim-note-header">
@@ -11456,15 +11584,16 @@ function renderOtimHistory(c) {
             <span>${dateStr} às ${timeStr}</span>
           </div>
           <div class="otim-note-actions">
-            <button class="otim-note-action-btn edit" onclick="editOtimEntry(${h.id})">
+            <button class="otim-note-action-btn edit" onclick="editOtimEntry(${idStr})">
               <i class="ti ti-pencil" style="font-size:11px"></i> Editar
             </button>
-            <button class="otim-note-action-btn del" onclick="deleteOtimEntry(${h.id})">
+            <button class="otim-note-action-btn del" onclick="deleteOtimEntry(${idStr})">
               <i class="ti ti-trash" style="font-size:11px"></i> Excluir
             </button>
           </div>
         </div>
         <div class="otim-note-text">${h.texto_nota || '<em style="color:var(--text3)">Sem anotação.</em>'}</div>
+        ${badgesHtml}
         <!-- texto_nota é HTML do Quill — renderiza negrito, listas, sublinhado etc. -->
       </div>`;
   }).join('');
