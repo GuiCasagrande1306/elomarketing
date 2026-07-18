@@ -519,6 +519,69 @@
     gap: 4px;
   }
 
+  /* ── Glassmorphism enhancement nos KPI cards ──────────────────── */
+  .metric-card {
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .metric-card:hover {
+    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    transform: translateY(-1px);
+  }
+
+  /* ── Alertas Críticos Operacionais ────────────────────────────── */
+  #dash-critical-alerts-wrap:empty { display: none; }
+  #dash-critical-alerts-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .dash-crit-section {
+    border-radius: 12px;
+    padding: 10px 14px 10px 14px;
+  }
+  .dash-crit-section-red {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.18);
+  }
+  .dash-crit-section-amber {
+    background: rgba(245,158,11,0.06);
+    border: 1px solid rgba(245,158,11,0.18);
+  }
+  .dash-crit-hdr {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .dash-crit-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .dash-crit-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .dash-crit-pill:hover { opacity: 0.82; transform: scale(1.03); }
+  .dash-crit-pill-red   { background: rgba(239,68,68,0.14); color: #F87171; border: 1px solid rgba(239,68,68,0.28); }
+  .dash-crit-pill-amber { background: rgba(245,158,11,0.14); color: #FCD34D; border: 1px solid rgba(245,158,11,0.28); }
+  @media (max-width: 768px) {
+    .dash-crit-pills { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  }
+
   .metric-change {
     font-size: 11px;
     font-weight: 600;
@@ -3578,6 +3641,9 @@
           <div class="metric-sub" id="dash-metric-budget-sub">do total orçado</div>
         </div>
       </div>
+
+      <!-- ── Alertas Críticos Operacionais ────────────────────────────────── -->
+      <div id="dash-critical-alerts-wrap"></div>
 
       <!-- ── Cards de Ação do Dia ─────────────────────────────────────────── -->
       <div class="grid-3" style="margin-bottom:16px" id="dash-action-row">
@@ -8920,6 +8986,7 @@ function _filterClientsByCollab(list, uid) {
 }
 
 function filterByCollaborator(uid) {
+  DASH_FILTERS.collaboratorId = uid;
   const match = el => uid === 'all' || el.dataset.owner === uid;
 
   // ── Dashboard: cards com data-owner ──────────────────────────────────────
@@ -10783,6 +10850,9 @@ function _otimClearContent() {
 }
 let ESTEIRA_COLABORADOR = 'todos';
 let ESTEIRA_CATEGORIA   = 'todos';
+
+// Estado global unificado do Dashboard — lido por renderDashboard e todos os sub-renderers
+let DASH_FILTERS = { dateRange: '7d', collaboratorId: 'all' };
 // Filtro de data da aba Concluídos — null = "ainda não inicializado" (será setado para hoje)
 let _completedDateFilter = null;
 function _getCompletedDateFilter() {
@@ -12495,6 +12565,58 @@ function renderPacingAlerts(filtro) {
 // Fonte única de verdade: CLIENTS.list (localStorage → hardcoded → supabase)
 // Chamado em: DOMContentLoaded, navigate('dashboard'), toda vez que CLIENTS muda.
 // ── Cards de Ação do Dia ──────────────────────────────────────────────────────
+function renderDashCriticalAlerts(clients) {
+  const wrap = document.getElementById('dash-critical-alerts-wrap');
+  if (!wrap) return;
+
+  // ── Overspending: spend > 110% do budget ──────────────────────────────────
+  const overspend = clients.filter(c => c.budget > 0 && (c.investment || 0) / c.budget > 1.10);
+
+  // ── Esteira parada: sem otimização há mais de 20 dias ────────────────────
+  const stale = clients.filter(c => {
+    const s = getOtimStatus(c);
+    if (s.cls === 'never') return true;
+    return s.days !== null && s.days > 20;
+  });
+
+  let html = '';
+
+  if (overspend.length > 0) {
+    html += `<div class="dash-crit-section dash-crit-section-red">
+      <div class="dash-crit-hdr" style="color:#F87171">
+        <i class="ti ti-alert-triangle"></i> Overspending crítico — spend acima de 110% do budget
+      </div>
+      <div class="dash-crit-pills">
+        ${overspend.map(c => {
+          const pct = Math.round((c.investment || 0) / c.budget * 100);
+          return `<span class="dash-crit-pill dash-crit-pill-red" onclick="openClientDetail('${c.id}')">
+            ${_clAvatar(c, 16, '50%')} ${c.name} <strong>${pct}%</strong>
+          </span>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (stale.length > 0) {
+    html += `<div class="dash-crit-section dash-crit-section-amber">
+      <div class="dash-crit-hdr" style="color:#FCD34D">
+        <i class="ti ti-clock-off"></i> Sem otimização há mais de 20 dias
+      </div>
+      <div class="dash-crit-pills">
+        ${stale.map(c => {
+          const s = getOtimStatus(c);
+          const daysLabel = s.days !== null ? `${s.days}d sem otimizar` : 'Nunca otimizado';
+          return `<span class="dash-crit-pill dash-crit-pill-amber" onclick="openClientDetail('${c.id}')">
+            ${_clAvatar(c, 16, '50%')} ${c.name} <strong style="margin-left:2px">${daysLabel}</strong>
+          </span>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  wrap.innerHTML = html;
+}
+
 function renderDashboardActionCards(clients) {
   const uid     = _collabUid();
   const today   = new Date();
@@ -12696,6 +12818,10 @@ function _renderDashCharts(pieData, taxaEntrega, otimBarData, spendBarData, otim
 }
 
 function renderDashboard() {
+  // Sincroniza estado global com seletores atuais
+  DASH_FILTERS.collaboratorId = _collabUid();
+  DASH_FILTERS.dateRange      = DR?.appliedPreset || '7d';
+
   const clients = _filterClientsByCollab(CLIENTS.list, _collabUid()).filter(c => c.status !== 'churn');
 
   // ── 1. Métricas agregadas ──────────────────────────────────────────────────
@@ -12934,6 +13060,9 @@ function renderDashboard() {
         ${s.text}
       </div>`).join('');
   }
+
+  // ── Alertas Críticos Operacionais ─────────────────────────────────────────
+  renderDashCriticalAlerts(clients);
 
   // ── Cards de Ação do Dia ─────────────────────────────────────────────────
   renderDashboardActionCards(clients);
