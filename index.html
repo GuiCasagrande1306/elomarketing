@@ -5559,7 +5559,7 @@
       </div>
       <!-- Linha: Prazo + Grupo -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
+        <div class="form-group" id="task-duedate-wrap">
           <label class="form-label" for="task-duedate">Prazo de Entrega</label>
           <input type="date" id="task-duedate" class="form-input">
         </div>
@@ -7532,6 +7532,8 @@ function resetTaskForm() {
   document.getElementById('task-modal-title').textContent = 'Nova Tarefa';
   const _delWrap = document.getElementById('task-delete-btn-wrap');
   if (_delWrap) _delWrap.style.display = 'none';
+  const _dueDateWrap = document.getElementById('task-duedate-wrap');
+  if (_dueDateWrap) _dueDateWrap.style.display = currentUser?.isAdmin ? '' : 'none';
   // Inicializa chips de responsáveis — admin pode atribuir a qualquer um, colaborador só a si
   _renderOwnerChips(currentUser ? [currentUser.id] : []);
   // Popula clientes no select
@@ -7573,7 +7575,7 @@ function openEditTaskModal(taskId) {
   document.getElementById('task-group').value       = task.group || 'semana';
   document.getElementById('task-edit-id').value     = taskId;
   const _delWrap2 = document.getElementById('task-delete-btn-wrap');
-  if (_delWrap2) _delWrap2.style.display = '';
+  if (_delWrap2) _delWrap2.style.display = currentUser?.isAdmin ? '' : 'none';
   openModal();
   setTimeout(() => document.getElementById('task-title').focus(), 50);
 }
@@ -7929,7 +7931,9 @@ async function loadTasksFromDB(extraParams = {}) {
         status:         localTask.status,
         group:          localTask.group,
         priority:       localTask.priority,
-        completed_at:   localTask.completed_at  || null,
+        dueDate:        localTask.dueDate        ?? localTask.deadline ?? null,
+        deadline:       localTask.dueDate        ?? localTask.deadline ?? null,
+        completed_at:   localTask.completed_at   || null,
         timerStartedAt: localTask.timerStartedAt || null,
         timeSpent:      localTask.timeSpent      || 0,
       });
@@ -8159,7 +8163,7 @@ function updateTaskInDB(id, updates, _attempt = 1, _onPermanentFail = null) {
   });
   // Supabase (legado — mantido se configurado)
   if (db && currentUser) {
-    (async () => { try { await db.from('tarefas').update({ ...updates, updated_by: currentUser.id }).eq('id', id); } catch(_) {} })();
+    (async () => { try { await db.from('tasks').update({ ...updates, updated_by: currentUser.id }).eq('id', id); } catch(_) {} })();
   }
 }
 
@@ -8303,7 +8307,7 @@ function setupRealtimeChannel() {
     })
 
     // ── TAREFAS ───────────────────────────────────────────────────
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tarefas' }, (payload) => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasks' }, (payload) => {
       if (payload.new?.updated_by === currentUser?.id) return;
       const task  = payload.new;
       // Colaboradores não-admin só recebem tarefas próprias via realtime
@@ -8321,7 +8325,7 @@ function setupRealtimeChannel() {
       }
       showNotification(`Nova tarefa criada por <strong>${task.updated_by || 'outro utilizador'}</strong>.`, 'success');
     })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tarefas' }, (payload) => {
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks' }, (payload) => {
       if (payload.new?.updated_by === currentUser?.id) return;
       const task  = payload.new;
       // Colaboradores não-admin só recebem atualizações de tarefas próprias
@@ -8343,7 +8347,7 @@ function setupRealtimeChannel() {
       renderTasksGrid();
       showNotification(`Tarefa actualizada por <strong>${task.updated_by || 'outro utilizador'}</strong>.`, 'success');
     })
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tarefas' }, (payload) => {
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tasks' }, (payload) => {
       const id = payload.old?.id;
       if (id) document.querySelector(`.task-item[data-task-id="${id}"]`)?.remove();
       updateCompletedCount();
@@ -20640,7 +20644,7 @@ function _buildTaskRow(task, groupKey = 'semana') {
     </td>
     <td class="monday-td">${lastDataColHtml}</td>
     <td class="monday-td" style="text-align:center">
-      <button onclick="deleteTaskRow('${task.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;border-radius:4px" title="Excluir"><i class="ti ti-trash" style="font-size:12px"></i></button>
+      ${currentUser?.isAdmin ? `<button onclick="deleteTaskRow('${task.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;border-radius:4px" title="Excluir"><i class="ti ti-trash" style="font-size:12px"></i></button>` : ''}
     </td>
   `;
   return tr;
