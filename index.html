@@ -5104,7 +5104,7 @@
       <span id="otim-save-label">Concluir Otimização</span>
     </button>
     <div class="otim-hist-divider">Histórico de otimizações</div>
-    <div id="otim-history"></div>
+    <div id="otim-history" style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px"></div>
   </div>
 </aside>
 
@@ -11326,14 +11326,14 @@ async function _otimInsert(c, nota, extra = {}) {
       console.error('[Esteira] _otimInsert INSERT error:', JSON.stringify(err1));
       throw err1;
     }
-    // Atualiza ultima_otimizacao na tabela clients (coluna dedicada + JSONB data)
+    // Atualiza ultima_otimizacao na tabela clientes (coluna dedicada + JSONB data)
     const newData = { ...c, ultima_otimizacao: nowISO };
     delete newData.historico_otimizacoes;
     const { error: err2 } = await db
-      .from('clients')
+      .from('clientes')
       .update({ data: newData, ultima_otimizacao: nowISO })
       .eq('id', c.id);
-    if (err2) console.warn('[Esteira] _otimInsert UPDATE clients:', JSON.stringify(err2));
+    if (err2) console.warn('[Esteira] _otimInsert UPDATE clientes:', JSON.stringify(err2));
     return inserted;
   } catch(e) {
     console.error('[Esteira] _otimInsert exception:', e.message, e);
@@ -11371,7 +11371,7 @@ async function _otimDelete(histId, c) {
     const newUltima = remaining?.[0]?.data_otimizacao || null;
     const newData = { ...c, ultima_otimizacao: newUltima };
     delete newData.historico_otimizacoes;
-    await db.from('clients').update({ data: newData, ultima_otimizacao: newUltima }).eq('id', c.id);
+    await db.from('clientes').update({ data: newData, ultima_otimizacao: newUltima }).eq('id', c.id);
     return true;
   } catch(e) {
     console.warn('[Esteira] _otimDelete:', e.message);
@@ -11454,16 +11454,25 @@ async function saveOptimization() {
       if (db) {
         const inserted = await _otimInsert(c, nota, { relatorio_enviado: relatorioEnviado, projecao_meta: projecaoMeta });
         if (!inserted) throw new Error('INSERT retornou null — veja o console para detalhes');
-        c.historico_otimizacoes.unshift({
-          id:                inserted.id,
-          data:              inserted.data_otimizacao,
-          texto_nota:        inserted.anotacao,
-          autor:             inserted.colaborador_nome || currentUser?.name || 'Usuário',
-          colaborador_id:    inserted.colaborador_id,
-          relatorio_enviado: inserted.relatorio_enviado ?? false,
-          projecao_meta:     inserted.projecao_meta     ?? null,
-        });
-        c.ultima_otimizacao = inserted.data_otimizacao;
+        // Recarrega histórico completo do banco para garantir acúmulo correto
+        // (evita sobrescrever com array vazio caso CLIENTS.list tenha sido recarregado)
+        const freshHist = await _otimLoad(c.id);
+        if (freshHist) {
+          c.historico_otimizacoes = freshHist;
+          c.ultima_otimizacao = freshHist[0]?.data || inserted.data_otimizacao;
+        } else {
+          if (!Array.isArray(c.historico_otimizacoes)) c.historico_otimizacoes = [];
+          c.historico_otimizacoes.unshift({
+            id:                inserted.id,
+            data:              inserted.data_otimizacao,
+            texto_nota:        inserted.anotacao,
+            autor:             inserted.colaborador_nome || currentUser?.name || 'Usuário',
+            colaborador_id:    inserted.colaborador_id,
+            relatorio_enviado: inserted.relatorio_enviado ?? false,
+            projecao_meta:     inserted.projecao_meta     ?? null,
+          });
+          c.ultima_otimizacao = inserted.data_otimizacao;
+        }
       } else {
         const nowISO = new Date().toISOString();
         c.historico_otimizacoes.unshift({
