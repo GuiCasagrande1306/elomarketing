@@ -20361,11 +20361,16 @@ function renderTasksGrid() {
 
 function _populateTaskFilters() {
   const ownerSel  = document.getElementById('task-filter-owner');
+  const filterWrap = document.getElementById('task-collab-filter-wrap');
   const clientSel = document.getElementById('task-filter-client');
+
+  // Mostra/oculta o bloco inteiro do filtro de colaborador conforme role
+  if (filterWrap) filterWrap.style.display = currentUser?.isAdmin ? '' : 'none';
+
   // Reconstrói owner options sempre (pode ter novos usuários desde o último render)
   if (ownerSel) {
     if (!currentUser?.isAdmin) {
-      // Colaborador: dropdown bloqueado no próprio usuário (sem opção de troca)
+      // Colaborador: select invisível, valor travado no próprio usuário
       ownerSel.innerHTML = '';
       const o = document.createElement('option');
       o.value = currentUser?.id || '';
