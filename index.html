@@ -3953,7 +3953,7 @@
                 onclick="sincronizarTodosMeta()">
           <i class="ti ti-refresh"></i> Sincronizar Todos
         </button>
-        <button class="btn btn-primary btn-sm" onclick="openNewClientModal()">
+        <button id="btn-novo-cliente" class="btn btn-primary btn-sm" onclick="openNewClientModal()" style="display:none">
           <i class="ti ti-plus"></i> Novo Cliente
         </button>
       </div>
@@ -6464,15 +6464,7 @@ const CAL = {
     linkedin:  { name: 'LinkedIn',  icon: 'ti-brand-linkedin',  tag: 'LI' },
     tiktok:    { name: 'TikTok',    icon: 'ti-brand-tiktok',    tag: 'TT' }
   },
-  posts: [
-    { id:1, clienteId:'cl-1', date:'2026-05-19', time:'09:00', network:'instagram', type:'Foto',      status:'agendado', caption:'Lançamento da nova consulta avaliativa — agende já pelo WhatsApp! #SaúdeMental', networks:['instagram','facebook'], midia_url:'' },
-    { id:2, clienteId:'cl-1', date:'2026-05-19', time:'18:00', network:'facebook',  type:'Vídeo',     status:'postado',  caption:'Conheça a equipe do Instituto Lara em 30 segundos.', networks:['facebook'], midia_url:'' },
-    { id:3, clienteId:'cl-2', date:'2026-05-20', time:'10:30', network:'instagram', type:'Reels',     status:'agendado', caption:'3 sinais de que você precisa cuidar da sua saúde mental — Dr. Gabriel explica.', networks:['instagram'], midia_url:'' },
-    { id:4, clienteId:'cl-2', date:'2026-05-22', time:'08:00', network:'linkedin',  type:'Artigo',    status:'rascunho', caption:'Como nossa clínica usa dados para melhorar o atendimento ao paciente.', networks:['linkedin'], midia_url:'' },
-    { id:5, clienteId:'cl-1', date:'2026-05-23', time:'11:00', network:'instagram', type:'Carrossel', status:'agendado', caption:'5 dicas para começar terapia com confiança — equipe Instituto Lara explica.', networks:['instagram'], midia_url:'' },
-    { id:6, clienteId:'cl-3', date:'2026-05-23', time:'16:00', network:'tiktok',    type:'Vídeo',     status:'aprovado', caption:'Brazzo Pizza na sua mesa em 30min 🍕 Peça já pelo app!', networks:['tiktok','instagram'], midia_url:'' },
-    { id:7, clienteId:'cl-3', date:'2026-05-27', time:'19:00', network:'instagram', type:'Story',     status:'rascunho', caption:'Bastidores da cozinha — equipe Brazzo Pizza em ação! 🔥', networks:['instagram'], midia_url:'' }
-  ]
+  posts: []
 };
 
 function calFmtDate(d) {
@@ -6963,38 +6955,7 @@ const CR = {
     { key: 'aprovacao',  label: 'Aprovação' },
     { key: 'finalizado', label: 'Finalizado' }
   ],
-  clients: [
-    {
-      clientId: 'cl-1',
-      name: 'Alpha Fitness', initials: 'AF', color: 'linear-gradient(135deg,#F97316,#EA580C)',
-      weeks: [
-        { status: 'finalizado', link: 'https://frame.io/p/alpha-sem01' },
-        { status: 'aprovacao',  link: 'https://drive.google.com/alpha-sem02' },
-        { status: 'edicao',     link: '' },
-        { status: 'aguardando', link: '' }
-      ]
-    },
-    {
-      clientId: 'cl-2',
-      name: 'Clínica Sorriso', initials: 'CS', color: 'linear-gradient(135deg,#06B6D4,#0891B2)',
-      weeks: [
-        { status: 'finalizado', link: 'https://frame.io/p/sorriso-sem01' },
-        { status: 'finalizado', link: 'https://frame.io/p/sorriso-sem02' },
-        { status: 'edicao',     link: '' },
-        { status: 'aguardando', link: '' }
-      ]
-    },
-    {
-      clientId: 'cl-3',
-      name: 'Tech Store', initials: 'TS', color: 'linear-gradient(135deg,#6366F1,#4F46E5)',
-      weeks: [
-        { status: 'aprovacao',  link: 'https://drive.google.com/tech-sem01' },
-        { status: 'edicao',     link: '' },
-        { status: 'aguardando', link: '' },
-        { status: 'aguardando', link: '' }
-      ]
-    }
-  ]
+  clients: []
 };
 
 function crStatusLabel(key) { return CR.statuses.find(s => s.key === key)?.label || key; }
@@ -7533,7 +7494,7 @@ function resetTaskForm() {
   const _delWrap = document.getElementById('task-delete-btn-wrap');
   if (_delWrap) _delWrap.style.display = 'none';
   const _dueDateWrap = document.getElementById('task-duedate-wrap');
-  if (_dueDateWrap) _dueDateWrap.style.display = currentUser?.isAdmin ? '' : 'none';
+  if (_dueDateWrap) _dueDateWrap.style.display = '';
   // Inicializa chips de responsáveis — admin pode atribuir a qualquer um, colaborador só a si
   _renderOwnerChips(currentUser ? [currentUser.id] : []);
   // Popula clientes no select
@@ -7786,7 +7747,7 @@ function clientToRow(client) {
 
 async function loadClientsFromDB() {
   if (!db) return false;
-  const { data: rows, error } = await db.from('clientes').select('*');
+  const { data: rows, error } = await db.from('clients').select('*');
   if (error) { console.warn('[DB] loadClientes:', error.message); return false; }
   if (rows && rows.length > 0) {
     const list = rows.map(rowToClient).filter(c => c.id && c.name);
@@ -7799,8 +7760,8 @@ async function loadClientsFromDB() {
       return true;
     }
   }
-  // Tabela vazia → primeira sincronização → push seed data
-  await pushAllClientsToDB();
+  // Tabela vazia → estado limpo, sem dados de exemplo
+  CLIENTS.list = [];
   return true;
 }
 
@@ -7808,7 +7769,7 @@ async function pushAllClientsToDB() {
   if (!db || !currentUser) return;
   setSyncStatus('syncing');
   const rows = CLIENTS.list.map(clientToRow);
-  const { error } = await db.from('clientes').upsert(rows, { ignoreDuplicates: false });
+  const { error } = await db.from('clients').upsert(rows, { ignoreDuplicates: false });
   setSyncStatus(error ? 'error' : 'ok');
   if (error) console.warn('[DB] pushClientes:', error.message);
 }
@@ -7816,7 +7777,7 @@ async function pushAllClientsToDB() {
 function saveClientToDB(client) {
   if (!db || !currentUser) return;
   setSyncStatus('syncing');
-  db.from('clientes')
+  db.from('clients')
     .upsert(clientToRow(client), { ignoreDuplicates: false })
     .then(({ error }) => {
       setSyncStatus(error ? 'error' : 'ok');
@@ -7826,7 +7787,7 @@ function saveClientToDB(client) {
 
 function deleteClientFromDB(id) {
   if (!db || !currentUser) return;
-  db.from('clientes').delete().eq('id', id)
+  db.from('clients').delete().eq('id', id)
     .then(({ error }) => { if (error) console.warn('[DB] deleteCliente:', error.message); });
 }
 
@@ -9171,14 +9132,8 @@ const CL_COLORS = [
 ];
 
 const CLIENTS = {
-  nextId: 6,
-  list: [
-    { id:'cl-1', name:'Instituto Lara',          segment:'infoproduto',   importance:4, categoria:'elo_marketing', objective:'Escalar vendas no direct e manter CPL abaixo de R$55',           owner:'guilherme', avatar:'IL', color:'linear-gradient(135deg,#6C63FF,#A78BFA)', budget:7500, investment:890.20,  meta_balance:0, meta_spend7d:48.92, metodo_pagamento:'pre_pago', ga4_property_id:'',            meta_ad_account_id:'', goal:{target:200,   realized:142},  investments:[{month:'2025-01',value:6800},{month:'2025-02',value:7000},{month:'2025-03',value:7200},{month:'2025-04',value:7200},{month:'2025-05',value:7200}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', dia_otimizacao:'segunda', ultima_otimizacao:'2026-05-16T10:30:00.000Z', historico_otimizacoes:[{id:1,data:'2026-05-18T10:30:00.000Z',texto_nota:'Ajustado orçamento para campanha de leads. CPL estava em R$72, pausamos o conjunto de anúncios com público frio e direcionamos budget para remarketing.',autor:'Guilherme'},{id:2,data:'2026-05-11T09:15:00.000Z',texto_nota:'Criados novos anúncios com depoimentos de pacientes. Taxa de cliques subiu 18%.',autor:'Guilherme'}] },
-    { id:'cl-2', name:'Clínica Medicina',         segment:'negocio-local', importance:3, categoria:'bagano',        objective:'Aumentar captação de novos pacientes via leads qualificados no Meta', owner:'henrique',  avatar:'CM', color:'linear-gradient(135deg,#22D3A0,#0D9488)', budget:5000, investment:1800,    meta_balance:3200,    meta_spend7d:0,    metodo_pagamento:'pre_pago',   ga4_property_id:'',            meta_ad_account_id:'', goal:{target:120,   realized:54},   investments:[{month:'2025-02',value:4500},{month:'2025-03',value:4800},{month:'2025-04',value:4800},{month:'2025-05',value:4800}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', dia_otimizacao:'quarta', ultima_otimizacao:'2026-05-13T14:00:00.000Z', historico_otimizacoes:[{id:3,data:'2026-05-13T14:00:00.000Z',texto_nota:'Testando 3 novos criativos de vídeo 15s. Frequência estava em 4.8 — rotacionamos públicos lookalike 1% e 2%.',autor:'Henrique'}] },
-    { id:'cl-3', name:'Brazzo Pizza',             segment:'delivery',     importance:4, categoria:'elo_marketing', objective:'🛵 Aumentar pedidos e alcance local via Meta + rastreamento GA4',   owner:'guilherme', avatar:'BP', color:'linear-gradient(135deg,#F59E0B,#D97706)', budget:2000, investment:1071.16, meta_balance:0,       meta_spend7d:0,    metodo_pagamento:'cartao',     ga4_property_id:'demo_ga4_brazzo', meta_ad_account_id:'', goal:{target:32000, realized:8002.78}, investments:[{month:'2025-03',value:1800},{month:'2025-04',value:1900},{month:'2025-05',value:2000}], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', faturamentoMetaAds:8002.78, metaCompras:66, metaAddToCart:113, metaSessoes:0, dia_otimizacao:'sexta', ultima_otimizacao:'', historico_otimizacoes:[] },
-    { id:'cl-4', name:'Istituto di Moda Burgo',  segment:'negocio-local', importance:3, categoria:'elo_marketing', objective:'',                                                                owner:'guilherme', avatar:'IM', color:'linear-gradient(135deg,#A855F7,#7C3AED)', budget:2000, investment:1036,    meta_balance:0, meta_spend7d:48.92, metodo_pagamento:'pre_pago',   ga4_property_id:'',            meta_ad_account_id:'act_1115165592789346', goal:{target:0, realized:0}, investments:[], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', faturamentoMetaAds:0, metaCompras:0, metaAddToCart:0, metaSessoes:0, dia_otimizacao:'', ultima_otimizacao:'', historico_otimizacoes:[] },
-    { id:'cl-5', name:'Estação Elite Barbearia', segment:'negocio-local', importance:3, categoria:'elo_marketing', objective:'',                                                                owner:'guilherme', avatar:'EE', color:'linear-gradient(135deg,#10B981,#059669)', budget:500,  investment:280,     meta_balance:220,     meta_spend7d:13.33, metodo_pagamento:'pre_pago',   ga4_property_id:'',            meta_ad_account_id:'',                    goal:{target:0, realized:0}, investments:[], fb_page_id:'', fb_page_access_token:'', instagram_business_id:'', ig_username:'', linkedin_access_token:'', tiktok_access_token:'', faturamentoMetaAds:0, metaCompras:0, metaAddToCart:0, metaSessoes:0, dia_otimizacao:'', ultima_otimizacao:'', historico_otimizacoes:[] }
-  ]
+  nextId: 1,
+  list: []
 };
 
 let clEditingId = null;
@@ -9521,22 +9476,10 @@ function fmtBRL(n) {
 /* ========== CONTAS DE ANÚNCIO DATA ========== */
 // Fonte de verdade para a página Contas de Anúncio.
 // Campos: nome, cliente, categoria (agência parceira), plataforma, accountId, budget (R$/mês), gasto (R$ mês atual), status
-const CONTAS_AD_DATA = [
-  { nome:'Istituto di Moda Burgo',  cliente:'Istituto di Moda Burgo',  clienteId:'cl-4', categoria:'elo_marketing', plataforma:'meta', accountId:'act_1115165592789346', budget:2000, gasto:1036,    status:'ativa' },
-  { nome:'Brazzo Pizza',            cliente:'Brazzo Pizza',            clienteId:'cl-3', categoria:'elo_marketing', plataforma:'meta', accountId:'',                    budget:2000, gasto:1068.82, status:'ativa' },
-  { nome:'Estação Elite Barbearia', cliente:'Estação Elite Barbearia', clienteId:'cl-5', categoria:'elo_marketing', plataforma:'meta', accountId:'',                    budget:500,  gasto:280,     status:'ativa' },
-];
+const CONTAS_AD_DATA = [];
 
 /* ========== CAMPANHAS DATA ========== */
-const CAMPANHAS = [
-  { id:'camp-1', nome:'Consultas — Drª Roberta',      subtitulo:'Mensagem — WhatsApp',     cliente_id:'cl-1', investimento:2400, alcance:48200, cliques:1842, ctr:3.82, cpc:1.30, resultado:'74 conv.', cpr:32.4, status:'Ativa'     },
-  { id:'camp-2', nome:'Captação Leads — Drª Roberta', subtitulo:'Geração de Cadastros',    cliente_id:'cl-1', investimento:1800, alcance:32100, cliques:960,  ctr:2.99, cpc:1.88, resultado:'41 conv.', cpr:43.9, status:'Ativa'     },
-  { id:'camp-3', nome:'Remarketing Pacientes',         subtitulo:'Conversão — Pixel',       cliente_id:'cl-1', investimento:600,  alcance:9400,  cliques:310,  ctr:3.30, cpc:1.94, resultado:'18 conv.', cpr:33.3, status:'Pausada'   },
-  { id:'camp-4', nome:'Brand — Instituto Lara',        subtitulo:'Reconhecimento de Marca', cliente_id:'cl-1', investimento:800,  alcance:71000, cliques:220,  ctr:0.31, cpc:3.64, resultado:'—',        cpr:null,  status:'Encerrada' },
-  { id:'camp-5', nome:'Captação Pacientes — Clínica',  subtitulo:'Mensagem — WhatsApp',     cliente_id:'cl-2', investimento:1800, alcance:24500, cliques:512,  ctr:2.09, cpc:3.52, resultado:'47 leads', cpr:38.3, status:'Ativa'     },
-  { id:'camp-6', nome:'Consulta Psico — Ansiedade',    subtitulo:'Tráfego — CPL Alto',      cliente_id:'cl-2', investimento:3220, alcance:64000, cliques:512,  ctr:0.80, cpc:6.29, resultado:'47 conv.', cpr:68.5, status:'Crítica'   },
-  { id:'camp-7', nome:'Saúde Mental — Retargeting',    subtitulo:'Conversão — Pixel',       cliente_id:'cl-2', investimento:420,  alcance:7800,  cliques:190,  ctr:2.44, cpc:2.21, resultado:'12 conv.', cpr:35.0, status:'Pausada'   },
-];
+const CAMPANHAS = [];
 
 function popularSelectCampanhaCliente() {
   const sel = document.getElementById('filtro_campanha_cliente');
@@ -10022,8 +9965,12 @@ function renderClients() {
 
   filtered.forEach(c => grid.appendChild(buildClientCard(c)));
 
-  // Card "Adicionar cliente" só na visão de ativos
-  if (_clientsView === 'active') {
+  // Botão "Novo Cliente" na toolbar — visível só para admins
+  const _btnNovo = document.getElementById('btn-novo-cliente');
+  if (_btnNovo) _btnNovo.style.display = currentUser?.isAdmin ? '' : 'none';
+
+  // Card "Adicionar cliente" só na visão de ativos e só para admins
+  if (_clientsView === 'active' && currentUser?.isAdmin) {
     const addCard = document.createElement('div');
     addCard.className = 'card';
     addCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;border-style:dashed;cursor:pointer;min-height:240px';
@@ -10463,6 +10410,10 @@ function _updateInvSummary() {
 }
 
 function openNewClientModal(id) {
+  if (!id && !currentUser?.isAdmin) {
+    showNotification('Apenas administradores podem cadastrar novos clientes.', 'warn');
+    return;
+  }
   clEditingId = id || null;
   window._editingClientId = id || null;
   document.getElementById('cl-modal-title').textContent = id ? 'Editar Cliente' : 'Novo Cliente';
@@ -11330,7 +11281,7 @@ async function _otimInsert(c, nota, extra = {}) {
     const newData = { ...c, ultima_otimizacao: nowISO };
     delete newData.historico_otimizacoes;
     const { error: err2 } = await db
-      .from('clientes')
+      .from('clients')
       .update({ data: newData, ultima_otimizacao: nowISO })
       .eq('id', c.id);
     if (err2) console.warn('[Esteira] _otimInsert UPDATE clientes:', JSON.stringify(err2));
@@ -11371,7 +11322,7 @@ async function _otimDelete(histId, c) {
     const newUltima = remaining?.[0]?.data_otimizacao || null;
     const newData = { ...c, ultima_otimizacao: newUltima };
     delete newData.historico_otimizacoes;
-    await db.from('clientes').update({ data: newData, ultima_otimizacao: newUltima }).eq('id', c.id);
+    await db.from('clients').update({ data: newData, ultima_otimizacao: newUltima }).eq('id', c.id);
     return true;
   } catch(e) {
     console.warn('[Esteira] _otimDelete:', e.message);
@@ -11613,6 +11564,10 @@ function renderOtimHistory(c) {
 }
 
 function saveNewClient() {
+  if (!clEditingId && !currentUser?.isAdmin) {
+    showNotification('Apenas administradores podem cadastrar novos clientes.', 'warn');
+    return;
+  }
   const name = document.getElementById('cl-form-name').value.trim();
   if (!name) { document.getElementById('cl-form-name').focus(); return; }
   const segment   = document.getElementById('cl-form-segment').value;
@@ -11670,7 +11625,7 @@ function saveNewClient() {
     if (idx >= 0) Object.assign(CLIENTS.list[idx], { name, segment, categoria, importance:clImportanceVal, objective, owner, goal, budget, investment, investments, avatar:initials, logoUrl, whatsapp_group_jid, whatsapp_group_name, meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id, dia_otimizacao, defaultMetrics: [..._clEditMetrics], ...socialFields });
   } else {
     CLIENTS.list.push({
-      id: `cl-${CLIENTS.nextId++}`,
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `cl-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
       name, segment, categoria, importance: clImportanceVal, objective, owner, goal, budget, investment,
       avatar: initials, logoUrl, whatsapp_group_jid, whatsapp_group_name,
       meta_ad_account_id, meta_balance, meta_spend7d, metodo_pagamento, ga4_property_id, google_ads_customer_id,
@@ -12988,7 +12943,7 @@ function renderDashboard() {
     if (!clients.length) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text3);font-size:12px">
         Nenhum cliente cadastrado ainda.
-        <a href="#" onclick="navigate('clientes', document.querySelector('[onclick*=clientes]'));openNewClientModal()" style="color:var(--accent);margin-left:4px">Adicionar →</a>
+        ${currentUser?.isAdmin ? `<a href="#" onclick="navigate('clientes', document.querySelector('[onclick*=clientes]'));openNewClientModal()" style="color:var(--accent);margin-left:4px">Adicionar →</a>` : ''}
       </td></tr>`;
     } else {
       const COLORS = ['var(--accent)', 'var(--green)', 'var(--amber)', 'var(--blue)', '#F472B6'];
@@ -15298,25 +15253,8 @@ const CLIENT_NAME_PAY_OVERRIDES = {
    Adicione uma entrada por cliente sempre que corrigir dados no Meta Ads.
 ════════════════════════════════════════════════════════════════ */
 const CLIENT_DATA_PATCHES = {
-  'cl-3': {  // Brazzo Pizza — valores auditados tabela Meta Ads (01–20 Mai/25)
-    investment:         1071.16,   // spend real do período
-    faturamentoMetaAds: 8002.78,   // action_values purchase
-    metaCompras:        66,        // actions purchase (pick-first, sem duplicação)
-    metaAddToCart:      113,       // actions add_to_cart (pick-first)
-    metaSessoes:        0,         // zera o 920 stale do GA4 — agora vem de landing_page_view via API
-    // goal.realized = faturamento real
-    _goalRealized:      8002.78,
-  },
-  'cl-4': {  // Istituto di Moda Burgo — pré-pago (PIX/Boleto)
-    metodo_pagamento:   'pre_pago',
-    // meta_balance e meta_spend7d removidos dos patches: são campos voláteis
-    // (mudam diariamente). Use o botão "Sincronizar Saldos" para atualizar.
-  },
-  'cl-5': {  // Estação Elite Barbearia — pré-pago (PIX/Boleto)
-    metodo_pagamento:   'pre_pago',
-    // meta_balance e meta_spend7d removidos dos patches: são campos voláteis.
-    // O valor stale R$220 estava mascarando o saldo real (caiu para R$26,10).
-  },
+  // Adicione patches de dados auditados aqui, usando o client_id real do Supabase.
+  // Exemplo: 'uuid-do-cliente': { investment: 1200, metodo_pagamento: 'pre_pago' }
 };
 
 /**
@@ -15349,9 +15287,7 @@ function _applyClientDataPatches() {
 // Clientes Delivery / E-commerce: se purchaseRevenue retornar 0 da API GA4,
 // usa este valor auditado como realizadoFinal. Remova a entrada quando a API
 // estiver ativa e enviando dados reais.
-const FALLBACK_GA4_REVENUE = {
-  'Brazzo Pizza': 8002.78,  // valor real auditado da tabela Meta Ads (action_values purchase)
-};
+const FALLBACK_GA4_REVENUE = {};
 
 // ── Classificador de método de pagamento ─────────────────────────────────────
 // Analisa dados já buscados da API (sem chamadas extras) e retorna 'pre_pago' | 'cartao'
@@ -15439,18 +15375,8 @@ function applyBalanceOverride(accountId, apiBalance, apiSpend7d) {
   return { balance, spend7d };
 }
 
-// Simulated account data for fallback / demo
-const BAL_SIM_DATA = {
-  // balance   = saldo pré-pago real da conta Meta (NUNCA usar budget-investment)
-  // dailySpend= investment_acumulado / dias_passados (média mensal)
-  // spend7d   = gasto médio dos últimos 7 dias (mais preciso — use quando disponível)
-  'Instituto Lara':         { meta: { balance: 0, dailySpend: 49.45, spend7d: 48.92, amountSpent: 890.20, status: 1, payType: 'prepaid'  }, ga4: { activeUsers: 1240, sessions: 1876, conversions: 38 } },
-  'Instituto di Moda Burgo':{ meta: { balance: 0, dailySpend: 49.45, spend7d: 48.92, amountSpent: 890.20, status: 1, payType: 'prepaid'  }, ga4: { activeUsers: 940,  sessions: 1320, conversions: 27 } },
-  'Clínica Medicina':       { meta: { balance: 3200,    dailySpend: 94.74, spend7d: 92.10, amountSpent: 1800,   status: 1, payType: 'prepaid'  }, ga4: null },
-  'Odonto Digital':         { meta: { balance: 0, dailySpend: 80,  amountSpent: 496.48, status: 2, payType: 'postpaid' }, ga4: null },
-  'Psicologia Saúde':       { meta: { balance: 0, dailySpend: 110, spend7d: 108, amountSpent: 890.20, status: 1, payType: 'postpaid' }, ga4: { activeUsers: 320, sessions: 490, conversions: 12 } },
-  'Brazzo Pizza':           { meta: { balance: 0, dailySpend: 53.56, spend7d: 374.09, amountSpent: 1071.16, status: 1, payType: 'postpaid', faturamentoMetaAds: 8002.78, purchaseCount: 66, addToCartCount: 113, landingPageViews: 0 }, ga4: { activeUsers: 680, conversions: 66, purchaseRevenue: 8002.78 }, segment: 'delivery' },
-};
+// Dados simulados de fallback — mantido vazio; métricas vêm exclusivamente da API Meta/GA4
+const BAL_SIM_DATA = {};
 
 // ── Sincronização forçada de saldos: chama backend → Meta API → atualiza MongoDB ──
 // Exibe notificação persistente (duração mais longa) com link de ação
@@ -19478,7 +19404,7 @@ function _saveNewClientToAPI(client, _attempt) {
   if (_attempt === undefined) _attempt = 1;
   _apiFetch('/api/clients', {
     method: 'POST',
-    body: JSON.stringify(client)
+    body: JSON.stringify({ ...client, requesterId: currentUser?.id || '' })
   }).then(function(r) {
     if (!r) {
       if (_attempt < 4) {
@@ -21706,7 +21632,7 @@ function saveClients() {
       updated_at: new Date().toISOString(),
       updated_by: currentUser.id
     }));
-    db.from('clientes').upsert(rows)
+    db.from('clients').upsert(rows)
       .then(({ error }) => setSyncStatus(error ? 'error' : 'ok'));
   }
   // Render API (se configurada)
@@ -21770,21 +21696,6 @@ async function loadClients() {
     }
     // Migra logos legadas pesadas (PNG / > 80 KB) para JPEG comprimido — melhora carregamento mobile
     _recompressLargeLogos();
-  }
-
-  // 3. Garante que todos os clientes de CONTAS_AD_DATA existem na lista
-  //    (evita que dados antigos do MongoDB apaguem clientes locais)
-  const _CLIENTS_DEFAULT = [
-    { id:'cl-4', name:'Istituto di Moda Burgo',  segment:'negocio-local', importance:3, categoria:'elo_marketing', objective:'', owner:'guilherme', avatar:'IM', color:'linear-gradient(135deg,#A855F7,#7C3AED)', budget:2000, investment:1036, meta_balance:0, meta_spend7d:48.92, metodo_pagamento:'pre_pago', ga4_property_id:'', meta_ad_account_id:'act_1115165592789346', goal:{target:0,realized:0}, investments:[], faturamentoMetaAds:0, metaCompras:0, metaAddToCart:0, metaSessoes:0, dia_otimizacao:'', ultima_otimizacao:'', historico_otimizacoes:[] },
-    { id:'cl-5', name:'Estação Elite Barbearia', segment:'negocio-local', importance:3, categoria:'elo_marketing', objective:'', owner:'guilherme', avatar:'EE', color:'linear-gradient(135deg,#10B981,#059669)', budget:500,  investment:280,  meta_balance:220,     meta_spend7d:13.33, metodo_pagamento:'pre_pago', ga4_property_id:'', meta_ad_account_id:'',                    goal:{target:0,realized:0}, investments:[], faturamentoMetaAds:0, metaCompras:0, metaAddToCart:0, metaSessoes:0, dia_otimizacao:'', ultima_otimizacao:'', historico_otimizacoes:[] }
-  ];
-  let _missingPushed = false;
-  for (const def of _CLIENTS_DEFAULT) {
-    if (!CLIENTS.list.find(c => c.id === def.id)) {
-      CLIENTS.list.push({...def});
-      _apiFetch('/api/clients', { method:'POST', body: JSON.stringify(def) }).catch(() => {});
-      _missingPushed = true;
-    }
   }
 
   localStorage.setItem('tp_clients', JSON.stringify(CLIENTS.list));
