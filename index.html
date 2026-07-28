@@ -7101,7 +7101,22 @@ function loadTasks() {
   // 1. Renderiza imediatamente com dados do localStorage (sem esperar servidor)
   const raw = localStorage.getItem('tp_tasks_v2');
   if (raw) {
-    try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) TASKS_DATA = parsed; } catch(e) {}
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Camada de segurança: não-admins NUNCA carregam tarefas de outros usuários do localStorage
+        if (!currentUser?.isAdmin && currentUser?.id) {
+          const uid = currentUser.id;
+          TASKS_DATA = parsed.filter(t =>
+            t.assignedTo === uid || t.owner === uid || t.created_by === uid ||
+            (Array.isArray(t.assignedToList) && t.assignedToList.includes(uid))
+          );
+          console.log(`[Tasks] loadTasks localStorage filtrado para "${uid}": ${TASKS_DATA.length}/${parsed.length} tarefa(s).`);
+        } else {
+          TASKS_DATA = parsed;
+        }
+      }
+    } catch(e) {}
   }
   renderTasksGrid();
   updateNavBadges();
@@ -8594,14 +8609,28 @@ async function doLogin() {
 function loginUser(user) {
   currentUser = user;
   localStorage.setItem('tp_current_user', user.id);
-  // Não-admins: purga do localStorage tarefas de outros usuários que possam
-  // ter ficado de uma sessão anterior (ex: admin logado antes no mesmo browser).
+  // Não-admins: purga obrigatória de tarefas de outros usuários.
+  // A purga atua em DOIS lugares para garantir que não haja vazamento:
+  //   1. TASKS_DATA (memória) — caso o admin tenha estado logado na mesma sessão
+  //   2. tp_tasks_v2 (localStorage) — caso TASKS_DATA estivesse vazio no login (página fresh)
   if (!user.isAdmin) {
     const uid = user.id;
-    TASKS_DATA = TASKS_DATA.filter(t =>
-      t.assignedTo === uid || t.owner === uid || t.created_by === uid
-    );
-    localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+    const _taskBelongsToUser = t =>
+      t.assignedTo === uid || t.owner === uid || t.created_by === uid ||
+      (Array.isArray(t.assignedToList) && t.assignedToList.includes(uid));
+    // Purge em memória
+    TASKS_DATA = TASKS_DATA.filter(_taskBelongsToUser);
+    // Purge diretamente no localStorage (caso TASKS_DATA estivesse [] na carga inicial)
+    try {
+      const _raw = localStorage.getItem('tp_tasks_v2');
+      if (_raw) {
+        const _all = JSON.parse(_raw);
+        if (Array.isArray(_all)) {
+          localStorage.setItem('tp_tasks_v2', JSON.stringify(_all.filter(_taskBelongsToUser)));
+        }
+      }
+    } catch(_e) { localStorage.removeItem('tp_tasks_v2'); }
+    console.log(`[Auth] Purge tasks para não-admin "${uid}". TASKS_DATA após purge: ${TASKS_DATA.length} tarefa(s).`);
   }
   document.body.classList.remove('pre-auth');
   document.getElementById('login-screen').classList.add('hidden');
@@ -9323,12 +9352,22 @@ async function _pollTasks() {
     });
 
     TASKS_DATA = [...mergedIncoming, ...localOnly];
-    localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+    // Camada 3: não-admins persistem no localStorage APENAS as próprias tarefas
+    if (!currentUser?.isAdmin && currentUser?.id) {
+      const uid = currentUser.id;
+      const toSave = TASKS_DATA.filter(t =>
+        t.assignedTo === uid || t.owner === uid || t.created_by === uid ||
+        (Array.isArray(t.assignedToList) && t.assignedToList.includes(uid))
+      );
+      localStorage.setItem('tp_tasks_v2', JSON.stringify(toSave));
+    } else {
+      localStorage.setItem('tp_tasks_v2', JSON.stringify(TASKS_DATA));
+    }
     if (_hasRunningTimers()) _startTimerTick();
     renderTasksGrid();
     updateNavBadges();
     if (currentUser) filterByCollaborator(_collabUid());
-    console.log(`[Polling] atualizado — ${incoming.length} tarefa(s) do servidor.`);
+    console.log(`[Polling] atualizado — ${incoming.length} tarefa(s) do servidor. User: ${currentUser?.id} (admin=${currentUser?.isAdmin}).`);
   } catch(e) {
     // Erros de polling são silenciosos — não interrompem o usuário
     console.warn('[Polling] erro silencioso:', e.message);
