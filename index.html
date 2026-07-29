@@ -7761,23 +7761,20 @@ function clientToRow(client) {
 }
 
 async function loadClientsFromDB() {
-  if (!db) return false;
-  const { data: rows, error } = await db.from('clients').select('*');
-  if (error) { console.warn('[DB] loadClientes:', error.message); return false; }
-  if (rows && rows.length > 0) {
-    const list = rows.map(rowToClient).filter(c => c.id && c.name);
-    if (list.length > 0) {
-      CLIENTS.list   = list;
-      CLIENTS.nextId = Math.max(
-        ...list.map(c => parseInt((c.id || '').replace('cl-', '')) || 0).map(n => n + 1),
-        CLIENTS.nextId
-      );
-      return true;
-    }
+  // Lê via backend API (usa rowToApp que mapeia client_id→id e todos os campos corretamente)
+  const apiData = await _apiFetch('/api/clients').catch(() => null);
+  if (!Array.isArray(apiData)) return false;
+  const list = apiData.filter(c => c.id && c.name);
+  if (list.length > 0) {
+    CLIENTS.list   = list;
+    CLIENTS.nextId = Math.max(
+      ...list.map(c => parseInt((c.id || '').replace('cl-', '')) || 0).map(n => n + 1),
+      CLIENTS.nextId
+    );
+    return true;
   }
-  // Tabela vazia → estado limpo, sem dados de exemplo
-  CLIENTS.list = [];
-  return true;
+  // API retornou vazio → mantém CLIENTS.list atual (evita apagar dados carregados do localStorage)
+  return false;
 }
 
 async function pushAllClientsToDB() {
@@ -11149,7 +11146,57 @@ function renderEsteira() {
           </div>
         </div>
       </div>`;
-  }).join('');
+  }).join('') + (() => {
+    // Seção para clientes sem dia de otimização definido
+    const semDia = baseList.filter(c => !c.dia_otimizacao);
+    if (semDia.length === 0) return '';
+    const semDiaRows = semDia.map(c => {
+      const ownerU   = USERS.find(u => u.id === c.owner);
+      const ownerLbl = ownerU ? ownerU.name : (c.owner || '—');
+      return `
+        <tr class="esteira-client-row">
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${_clAvatar(c, 28, '50%')}
+              <div>
+                <div style="font-weight:500;font-size:13px">${c.name}</div>
+                <div style="font-size:11px;color:var(--text3)">${(CL_SEGMENTS[c.segment]||{label:'—'}).label} · ${ownerLbl}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="esteira-status-pill never"><i class="ti ti-calendar-off" style="font-size:11px"></i> Sem rotina</span></td>
+          <td style="font-size:12px;color:var(--text3);font-style:italic">Dia não definido</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px" onclick="openNewClientModal('${c.id}')">
+              <i class="ti ti-calendar-plus"></i> Definir dia
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+    return `
+      <div class="esteira-day-block" id="esteira-day-sem-dia" style="opacity:0.75;margin-top:8px">
+        <div class="esteira-day-header" onclick="toggleEsteiraDay(this)"
+             role="button" aria-expanded="false" tabindex="0"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleEsteiraDay(this)}">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+            <i class="ti ti-calendar-off" style="font-size:14px;color:var(--text3)"></i>
+            <span style="font-weight:600;font-size:14px;color:var(--text2)">Sem dia atribuído</span>
+          </div>
+          <span class="esteira-day-count" style="background:var(--bg4);color:var(--text3)">${semDia.length} cliente${semDia.length !== 1 ? 's' : ''}</span>
+          <i class="ti ti-chevron-down esteira-chevron closed"></i>
+        </div>
+        <div class="esteira-day-body collapsed">
+          <div class="esteira-body-inner">
+            <table class="esteira-table">
+              <thead>
+                <tr><th>Cliente</th><th>Status</th><th>Observação</th><th></th></tr>
+              </thead>
+              <tbody>${semDiaRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  })();
 }
 
 function toggleEsteiraDay(header) {
